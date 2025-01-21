@@ -9,27 +9,27 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { Sale, SalesFilter, SalesSummary } from "../types/sales";
-
 import { salesService } from "../services/salesService";
-
 import ReasonModal from "../components/ReasonModal";
-
 import { useNavigate } from "react-router-dom";
+import { VatRate } from "../types/pos";
 
 const SalesHistoryPage: React.FC = () => {
-  // State tanımlamaları
   const navigate = useNavigate();
   const [sales, setSales] = useState<Sale[]>([]);
   const [filteredSales, setFilteredSales] = useState<Sale[]>([]);
   const [filter, setFilter] = useState<SalesFilter>({});
   const [summary, setSummary] = useState<SalesSummary>({
     totalSales: 0,
+    subtotal: 0,
+    vatAmount: 0,
     totalAmount: 0,
     cancelledCount: 0,
     refundedCount: 0,
     cashSales: 0,
     cardSales: 0,
     averageAmount: 0,
+    vatBreakdown: [],
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilter, setShowFilter] = useState(false);
@@ -38,7 +38,6 @@ const SalesHistoryPage: React.FC = () => {
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
-  // Verileri yükle
   useEffect(() => {
     const loadSales = () => {
       try {
@@ -52,17 +51,13 @@ const SalesHistoryPage: React.FC = () => {
     };
 
     loadSales();
-
-    // 30 saniyede bir verileri yenile
     const interval = setInterval(loadSales, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Filtreli satışları hesapla
   useEffect(() => {
     let result = [...sales];
 
-    // Arama filtresi
     if (searchTerm) {
       result = result.filter(
         (sale) =>
@@ -71,7 +66,6 @@ const SalesHistoryPage: React.FC = () => {
       );
     }
 
-    // Tarih filtresi
     if (filter.startDate) {
       result = result.filter((sale) => sale.date >= filter.startDate!);
     }
@@ -79,12 +73,10 @@ const SalesHistoryPage: React.FC = () => {
       result = result.filter((sale) => sale.date <= filter.endDate!);
     }
 
-    // Durum filtresi
     if (filter.status) {
       result = result.filter((sale) => sale.status === filter.status);
     }
 
-    // Tutar filtresi
     if (filter.minAmount) {
       result = result.filter((sale) => sale.total >= filter.minAmount!);
     }
@@ -92,7 +84,6 @@ const SalesHistoryPage: React.FC = () => {
       result = result.filter((sale) => sale.total <= filter.maxAmount!);
     }
 
-    // Ödeme yöntemi filtresi
     if (filter.paymentMethod) {
       result = result.filter(
         (sale) => sale.paymentMethod === filter.paymentMethod
@@ -102,10 +93,28 @@ const SalesHistoryPage: React.FC = () => {
     setFilteredSales(result);
   }, [sales, filter, searchTerm]);
 
-  // Özeti hesapla
   useEffect(() => {
     const newSummary: SalesSummary = {
       totalSales: filteredSales.length,
+      subtotal: filteredSales.reduce(
+        (sum, sale) =>
+          sum +
+          sale.items.reduce(
+            (itemSum, item) => itemSum + item.price * item.quantity,
+            0
+          ),
+        0
+      ),
+      vatAmount: filteredSales.reduce(
+        (sum, sale) =>
+          sum +
+          sale.items.reduce(
+            (itemSum, item) =>
+              itemSum + item.price * item.quantity * (item.vatRate / 100),
+            0
+          ),
+        0
+      ),
       totalAmount: filteredSales.reduce((sum, sale) => sum + sale.total, 0),
       cancelledCount: filteredSales.filter(
         (sale) => sale.status === "cancelled"
@@ -120,11 +129,36 @@ const SalesHistoryPage: React.FC = () => {
         ? filteredSales.reduce((sum, sale) => sum + sale.total, 0) /
           filteredSales.length
         : 0,
+      vatBreakdown: filteredSales.reduce((breakdown, sale) => {
+        sale.items.forEach((item) => {
+          const vatRate = item.vatRate as VatRate;
+          const itemBaseAmount = item.price * item.quantity;
+          const itemVatAmount = itemBaseAmount * (vatRate / 100);
+
+          const vatRateEntry = breakdown.find(
+            (entry) => entry.rate === vatRate
+          );
+
+          if (vatRateEntry) {
+            vatRateEntry.baseAmount += itemBaseAmount;
+            vatRateEntry.vatAmount += itemVatAmount;
+            vatRateEntry.totalAmount += itemBaseAmount + itemVatAmount;
+          } else {
+            breakdown.push({
+              rate: vatRate,
+              baseAmount: itemBaseAmount,
+              vatAmount: itemVatAmount,
+              totalAmount: itemBaseAmount + itemVatAmount,
+            });
+          }
+        });
+        return breakdown;
+      }, [] as { rate: VatRate; baseAmount: number; vatAmount: number; totalAmount: number }[]),
     };
+
     setSummary(newSummary);
   }, [filteredSales]);
 
-  // Satış işlemleri
   const handleCancelSale = (saleId: string) => {
     setSelectedSaleId(saleId);
     setShowCancelModal(true);
@@ -215,7 +249,6 @@ const SalesHistoryPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Filtre Paneli */}
           {showFilter && (
             <div className="p-4 border rounded-lg bg-white">
               <h3 className="font-medium mb-4">Filtreler</h3>

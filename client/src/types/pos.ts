@@ -1,55 +1,36 @@
-// Ürün için tip tanımı
+// Temel type'lar
+export type PaymentMethod = 'nakit' | 'kart';
+export type VatRate = 0 | 1 | 8 | 18 | 20;
+
 export interface Product {
   id: number;
   name: string;
-  price: number; // KDV hariç fiyat
-  priceWithVat?: number; // KDV dahil fiyat (hesaplanacak)
-  vatRate: VatRate;
+  price: number;        // KDV'siz fiyat
+  vatRate: VatRate;     // KDV oranı
+  priceWithVat: number; // KDV'li fiyat
   category: string;
   stock: number;
   barcode: string;
 }
 
-// Sepet öğesi için tip tanımı (ürüne ek olarak quantity içerir)
 export interface CartItem extends Product {
   quantity: number;
+  totalWithoutVat?: number; // Toplam KDV'siz tutar (hesaplanacak)
+  totalVatAmount?: number;  // Toplam KDV tutarı (hesaplanacak)
+  totalWithVat?: number;    // Toplam KDV'li tutar (hesaplanacak)
 }
 
-// Kategori için tip tanımı
 export interface Category {
   id: number;
   name: string;
   icon: string;
 }
 
-// Ödeme Modal Props için tip tanımı
 export interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   total: number;
+  subtotal: number;    // KDV'siz toplam
+  vatAmount: number;   // Toplam KDV tutarı
   onComplete: (paymentMethod: PaymentMethod, cashReceived?: number) => void;
-}
-
-// Ödeme yöntemi için tip tanımı
-export type PaymentMethod = "nakit" | "kart";
-
-// KDV Oranları için type
-export type VatRate = 0 | 1 | 8 | 18 | 20;
-
-// KDV Raporlaması için tipler
-export interface VatSummary {
-  rate: VatRate;
-  baseAmount: number; // KDV matrahı
-  vatAmount: number; // KDV tutarı
-  totalAmount: number; // Toplam tutar
-  count: number; // İşlem sayısı
-}
-
-export interface VatReport {
-  summaries: VatSummary[];
-  totalBaseAmount: number;
-  totalVatAmount: number;
-  totalAmount: number;
-  startDate: Date;
-  endDate: Date;
 }

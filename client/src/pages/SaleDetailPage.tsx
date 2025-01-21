@@ -1,23 +1,30 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  Printer, 
-  Clock, 
-  CreditCard, 
-  User, 
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft,
+  Printer,
+  Clock,
+  CreditCard,
+  User,
   XCircle,
   RotateCcw,
-  FileText 
-} from 'lucide-react';
+  FileText,
+} from "lucide-react";
 
-import { Sale } from '../types/sales';
-import { ReceiptInfo } from '../types/receipt';
+import { Sale } from "../types/sales";
+import { ReceiptInfo } from "../types/receipt";
 
-import { salesService } from '../services/salesService';
-import { receiptService } from '../services/receiptService';
+import { salesService } from "../services/salesService";
+import { receiptService } from "../services/receiptService";
 
-import ReasonModal from '../components/ReasonModal';
+import {
+  calculateCartTotals,
+  calculateCartItemTotals,
+  formatCurrency,
+  formatVatRate,
+} from "../utils/vatUtils";
+
+import ReasonModal from "../components/ReasonModal";
 
 const SaleDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -46,16 +53,16 @@ const SaleDetailPage: React.FC = () => {
         ...sale,
         subtotal: sale.total, // KDV hesaplaması eklendiğinde güncellenecek
       };
-      
+
       const result = await receiptService.printReceipt(receiptData);
       if (result) {
-        console.log('Fiş yazdırıldı');
+        console.log("Fiş yazdırıldı");
       } else {
-        alert('Fiş yazdırılırken bir hata oluştu!');
+        alert("Fiş yazdırılırken bir hata oluştu!");
       }
     } catch (error) {
-      console.error('Yazdırma hatası:', error);
-      alert('Fiş yazdırılırken bir hata oluştu!');
+      console.error("Yazdırma hatası:", error);
+      alert("Fiş yazdırılırken bir hata oluştu!");
     }
   };
 
@@ -65,9 +72,9 @@ const SaleDetailPage: React.FC = () => {
     const updatedSale = salesService.cancelSale(sale.id, reason);
     if (updatedSale) {
       setSale(updatedSale);
-      alert('Satış başarıyla iptal edildi.');
+      alert("Satış başarıyla iptal edildi.");
     } else {
-      alert('Satış iptal edilirken bir hata oluştu!');
+      alert("Satış iptal edilirken bir hata oluştu!");
     }
     setShowCancelModal(false);
   };
@@ -78,9 +85,9 @@ const SaleDetailPage: React.FC = () => {
     const updatedSale = salesService.refundSale(sale.id, reason);
     if (updatedSale) {
       setSale(updatedSale);
-      alert('İade işlemi başarıyla tamamlandı.');
+      alert("İade işlemi başarıyla tamamlandı.");
     } else {
-      alert('İade işlemi sırasında bir hata oluştu!');
+      alert("İade işlemi sırasında bir hata oluştu!");
     }
     setShowRefundModal(false);
   };
@@ -94,7 +101,7 @@ const SaleDetailPage: React.FC = () => {
       <div className="p-8 text-center">
         <div className="text-gray-500 mb-4">Satış bulunamadı</div>
         <button
-          onClick={() => navigate('/reports')}
+          onClick={() => navigate("/history")}
           className="text-primary-600 hover:text-primary-700"
         >
           Satış Listesine Dön
@@ -108,7 +115,7 @@ const SaleDetailPage: React.FC = () => {
       {/* Üst Bar */}
       <div className="flex justify-between items-center mb-6">
         <button
-          onClick={() => navigate('/reports')}
+          onClick={() => navigate("/history")}
           className="flex items-center text-gray-600 hover:text-gray-800"
         >
           <ArrowLeft className="mr-2" size={20} />
@@ -137,27 +144,35 @@ const SaleDetailPage: React.FC = () => {
               </div>
               <div>
                 <div className="text-sm text-gray-500">Tarih</div>
-                <div className="font-medium">{sale.date.toLocaleString('tr-TR')}</div>
+                <div className="font-medium">
+                  {sale.date.toLocaleString("tr-TR")}
+                </div>
               </div>
               <div>
                 <div className="text-sm text-gray-500">Toplam Tutar</div>
-                <div className="font-medium text-lg">₺{sale.total.toFixed(2)}</div>
+                <div className="font-medium text-lg">
+                  {formatCurrency(sale.total)}
+                </div>
               </div>
               <div>
                 <div className="text-sm text-gray-500">Ödeme Yöntemi</div>
                 <div className="font-medium">
-                  {sale.paymentMethod === 'nakit' ? '💵 Nakit' : '💳 Kart'}
+                  {sale.paymentMethod === "nakit" ? "💵 Nakit" : "💳 Kart"}
                 </div>
               </div>
-              {sale.paymentMethod === 'nakit' && sale.cashReceived && (
+              {sale.paymentMethod === "nakit" && sale.cashReceived && (
                 <>
                   <div>
                     <div className="text-sm text-gray-500">Alınan</div>
-                    <div className="font-medium">₺{sale.cashReceived.toFixed(2)}</div>
+                    <div className="font-medium">
+                      {formatCurrency(sale.cashReceived || 0)}
+                    </div>
                   </div>
                   <div>
                     <div className="text-sm text-gray-500">Para Üstü</div>
-                    <div className="font-medium">₺{sale.changeAmount?.toFixed(2)}</div>
+                    <div className="font-medium">
+                      {formatCurrency(sale.changeAmount || 0)}
+                    </div>
                   </div>
                 </>
               )}
@@ -183,6 +198,9 @@ const SaleDetailPage: React.FC = () => {
                       Miktar
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      KDV
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                       Toplam
                     </th>
                   </tr>
@@ -191,28 +209,39 @@ const SaleDetailPage: React.FC = () => {
                   {sale.items.map((item) => (
                     <tr key={item.id}>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium text-gray-900">{item.name}</div>
-                        <div className="text-sm text-gray-500">{item.category}</div>
+                        <div className="font-medium text-gray-900">
+                          {item.name}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {item.category}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        ₺{item.price.toFixed(2)}
+                        {formatCurrency(item.price)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         {item.quantity}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                        {formatVatRate(item.vatRate)}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        ₺{(item.price * item.quantity).toFixed(2)}
+                        {formatCurrency(item.price)} +{" "}
+                        {formatVatRate(item.vatRate)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="bg-gray-50">
                   <tr>
-                    <td colSpan={3} className="px-6 py-4 text-right font-medium">
+                    <td
+                      colSpan={3}
+                      className="px-6 py-4 text-right font-medium"
+                    >
                       Toplam
                     </td>
                     <td className="px-6 py-4 text-right text-lg font-bold">
-                      ₺{sale.total.toFixed(2)}
+                      {formatCurrency(sale.total)}
                     </td>
                   </tr>
                 </tfoot>
@@ -227,15 +256,19 @@ const SaleDetailPage: React.FC = () => {
           <div className="bg-white p-6 rounded-lg border">
             <h2 className="text-lg font-semibold mb-4">Durum Bilgisi</h2>
             <div className="space-y-4">
-              <div className={`p-3 rounded-lg ${
-                sale.status === 'completed' ? 'bg-green-50 text-green-700' :
-                sale.status === 'cancelled' ? 'bg-red-50 text-red-700' :
-                'bg-orange-50 text-orange-700'
-              }`}>
+              <div
+                className={`p-3 rounded-lg ${
+                  sale.status === "completed"
+                    ? "bg-green-50 text-green-700"
+                    : sale.status === "cancelled"
+                    ? "bg-red-50 text-red-700"
+                    : "bg-orange-50 text-orange-700"
+                }`}
+              >
                 <div className="font-medium">
-                  {sale.status === 'completed' && 'Tamamlandı'}
-                  {sale.status === 'cancelled' && 'İptal Edildi'}
-                  {sale.status === 'refunded' && 'İade Edildi'}
+                  {sale.status === "completed" && "Tamamlandı"}
+                  {sale.status === "cancelled" && "İptal Edildi"}
+                  {sale.status === "refunded" && "İade Edildi"}
                 </div>
                 {(sale.cancelReason || sale.refundReason) && (
                   <div className="text-sm mt-1">
@@ -245,7 +278,7 @@ const SaleDetailPage: React.FC = () => {
                 )}
               </div>
 
-              {sale.status === 'completed' && (
+              {sale.status === "completed" && (
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowCancelModal(true)}
@@ -277,21 +310,23 @@ const SaleDetailPage: React.FC = () => {
                 <div>
                   <div className="text-sm font-medium">Satış Yapıldı</div>
                   <div className="text-xs text-gray-500">
-                    {sale.date.toLocaleString('tr-TR')}
+                    {sale.date.toLocaleString("tr-TR")}
                   </div>
                 </div>
               </div>
-              {sale.status !== 'completed' && (
+              {sale.status !== "completed" && (
                 <div className="flex gap-3">
                   <div className="text-red-600">
                     <XCircle size={20} />
                   </div>
                   <div>
                     <div className="text-sm font-medium">
-                      {sale.status === 'cancelled' ? 'Satış İptal Edildi' : 'Ürün İade Edildi'}
+                      {sale.status === "cancelled"
+                        ? "Satış İptal Edildi"
+                        : "Ürün İade Edildi"}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {sale.refundDate?.toLocaleString('tr-TR')}
+                      {sale.refundDate?.toLocaleString("tr-TR")}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
                       {sale.cancelReason || sale.refundReason}

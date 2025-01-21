@@ -9,121 +9,21 @@ import {
   Tag,
   AlertTriangle,
 } from "lucide-react";
-
 import { useHotkeys, HotkeysHelper } from "../hooks/useHotkeys";
-
-import { Product, CartItem, Category, PaymentMethod } from "../types/pos";
+import { CartItem, PaymentMethod, Product } from "../types/pos";
 import { ReceiptInfo } from "../types/receipt";
-
-import ReceiptModal from "../components/ReceiptModal";
+import { categories, sampleProducts } from "../data/sampleProducts";
+import {
+  calculateCartTotals,
+  calculateCartItemTotals,
+  formatCurrency,
+  formatVatRate,
+} from "../utils/vatUtils";
 import PaymentModal from "../components/PaymentModal";
-import PrinterDebug from "../components/PrinterDebug";
-
-import { receiptService } from "../services/receiptService";
+import ReceiptModal from "../components/ReceiptModal";
 import { salesService } from "../services/salesService";
 
-import { 
-  calculateCartTotals, 
-  calculateCartItemTotals,
-  formatCurrency, 
-  formatVatRate 
-} from "../utils/vatUtils";
-
-// Örnek kategori ve ürün verileri
-const categories: Category[] = [
-  { id: 1, name: "Tümü", icon: "🏪" },
-  { id: 2, name: "İçecekler", icon: "🥤" },
-  { id: 3, name: "Atıştırmalık", icon: "🍪" },
-  { id: 4, name: "Süt Ürünleri", icon: "🥛" },
-  { id: 5, name: "Temel Gıda", icon: "🥖" },
-  { id: 6, name: "Şarküteri", icon: "🧀" },
-];
-
-export const sampleProducts: Product[] = [
-  {
-    id: 1,
-    name: "Cola 1L",
-    price: 13.55,        // KDV'siz fiyat
-    vatRate: 18,         // %18 KDV
-    priceWithVat: 15.99, // KDV'li fiyat
-    category: "İçecekler",
-    stock: 24,
-    barcode: "8690000000001"
-  },
-  {
-    id: 2,
-    name: "Ekmek",
-    price: 7.43,        // KDV'siz fiyat
-    vatRate: 1,         // %1 KDV
-    priceWithVat: 7.50, // KDV'li fiyat
-    category: "Temel Gıda",
-    stock: 50,
-    barcode: "8690000000002"
-  },
-  {
-    id: 3,
-    name: "Süt 1L",
-    price: 23.06,        // KDV'siz fiyat
-    vatRate: 8,          // %8 KDV
-    priceWithVat: 24.90, // KDV'li fiyat
-    category: "Süt Ürünleri",
-    stock: 15,
-    barcode: "8690000000003"
-  },
-  {
-    id: 4,
-    name: "Çikolata",
-    price: 10.59,        // KDV'siz fiyat
-    vatRate: 18,         // %18 KDV
-    priceWithVat: 12.50, // KDV'li fiyat
-    category: "Atıştırmalık",
-    stock: 30,
-    barcode: "8690000000004"
-  },
-  {
-    id: 5,
-    name: "Peynir 500g",
-    price: 51.76,        // KDV'siz fiyat
-    vatRate: 8,          // %8 KDV
-    priceWithVat: 55.90, // KDV'li fiyat
-    category: "Şarküteri",
-    stock: 8,
-    barcode: "8690000000005"
-  },
-  {
-    id: 6,
-    name: "Maden Suyu",
-    price: 5.08,        // KDV'siz fiyat
-    vatRate: 18,        // %18 KDV
-    priceWithVat: 5.99, // KDV'li fiyat
-    category: "İçecekler",
-    stock: 3,
-    barcode: "8690000000006"
-  },
-  {
-    id: 7,
-    name: "Cips",
-    price: 15.68,        // KDV'siz fiyat
-    vatRate: 18,         // %18 KDV
-    priceWithVat: 18.50, // KDV'li fiyat
-    category: "Atıştırmalık",
-    stock: 45,
-    barcode: "8690000000007"
-  },
-  {
-    id: 8,
-    name: "Yoğurt 1kg",
-    price: 30.46,        // KDV'siz fiyat
-    vatRate: 8,          // %8 KDV
-    priceWithVat: 32.90, // KDV'li fiyat
-    category: "Süt Ürünleri",
-    stock: 12,
-    barcode: "8690000000008"
-  }
-];
-
 const POSPage: React.FC = () => {
-  const [isVisible, setIsVisible] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("Tümü");
@@ -133,9 +33,11 @@ const POSPage: React.FC = () => {
   const [currentReceipt, setCurrentReceipt] = useState<ReceiptInfo | null>(
     null
   );
-  const [printerLogs, setPrinterLogs] = useState<string[]>([]);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Sepet hesaplamaları
+  const cartTotals = calculateCartTotals(cart);
 
   // Sepeti temizle
   const clearCart = (): void => {
@@ -176,46 +78,132 @@ const POSPage: React.FC = () => {
     }
   };
 
-  // Fiş yazdırma işlemi
-  const handlePrintReceipt = async (): Promise<void> => {
-    if (!currentReceipt) return;
-
-    try {
-      setPrinterLogs((prev) => [...prev, "Yazdırma işlemi başlatılıyor..."]);
-      const result = await receiptService.printReceipt(currentReceipt);
-
-      if (result) {
-        setPrinterLogs((prev) => [...prev, "✅ İşlem başarılı"]);
-      } else {
-        setPrinterLogs((prev) => [...prev, "❌ Yazdırma hatası!"]);
-        alert("Fiş yazdırılırken bir hata oluştu!");
-      }
-    } catch (error: unknown) {
-      let errorMessage = "Bilinmeyen bir hata oluştu";
-
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === "string") {
-        errorMessage = error;
-      } else if (error && typeof error === "object" && "message" in error) {
-        errorMessage = String(error.message);
-      }
-
-      setPrinterLogs((prev) => [...prev, `❌ Hata: ${errorMessage}`]);
-      console.error("Yazdırma hatası:", error);
-      alert("Fiş yazdırılırken bir hata oluştu!");
+  // Ürün ekleme
+  const addToCart = (product: Product): void => {
+    if (product.stock === 0) {
+      return;
     }
+
+    setCart((prevCart) => {
+      const existingItem = prevCart.find((item) => item.id === product.id);
+      if (existingItem) {
+        if (existingItem.quantity >= product.stock) {
+          return prevCart;
+        }
+        const updatedItem = {
+          ...existingItem,
+          quantity: existingItem.quantity + 1,
+        };
+        const itemWithTotals = calculateCartItemTotals(updatedItem);
+
+        return prevCart.map((item) =>
+          item.id === product.id ? itemWithTotals : item
+        );
+      }
+      const newItem = calculateCartItemTotals({ ...product, quantity: 1 });
+      return [...prevCart, newItem];
+    });
+  };
+
+  // Miktar güncelleme
+  const updateQuantity = (productId: number, change: number): void => {
+    setCart((prevCart) =>
+      prevCart.map((item) => {
+        if (item.id === productId) {
+          const product = sampleProducts.find((p) => p.id === productId);
+          if (!product) return item;
+
+          const newQuantity = item.quantity + change;
+          if (newQuantity > product.stock || newQuantity <= 0) return item;
+
+          const updatedItem = {
+            ...item,
+            quantity: newQuantity,
+          };
+          return calculateCartItemTotals(updatedItem);
+        }
+        return item;
+      })
+    );
+  };
+
+  // Ürün kaldırma
+  const removeFromCart = (productId: number): void => {
+    setCart((prevCart) => prevCart.filter((item) => item.id !== productId));
+  };
+
+  // Stok güncelleme fonksiyonu
+  const updateStock = (): void => {
+    cart.forEach((cartItem) => {
+      const productIndex = sampleProducts.findIndex(
+        (product) => product.id === cartItem.id
+      );
+      if (productIndex !== -1) {
+        // Stok miktarını düşür
+        sampleProducts[productIndex].stock -= cartItem.quantity;
+      }
+    });
+  };
+
+  // Ödeme tamamlama
+  const handlePaymentComplete = (
+    paymentMethod: PaymentMethod,
+    cashReceived?: number
+  ): void => {
+    // KDV oranı hesaplaması için cart üzerinden subtotal ve vatAmount hesapla
+    const subtotal = cart.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    ); // KDV'siz toplam
+    const vatAmount = cart.reduce(
+      (sum, item) => sum + item.price * item.quantity * (item.vatRate / 100),
+      0
+    ); // KDV toplamı
+
+    // Toplam tutar
+    const totalAmount = subtotal + vatAmount;
+
+    // Stokları güncelle
+    updateStock();
+
+    // Yeni satışı ekle
+    const sale = salesService.addSale({
+      items: cart,
+      subtotal,
+      vatAmount,
+      total: totalAmount,
+      paymentMethod,
+      cashReceived,
+      changeAmount: cashReceived ? cashReceived - totalAmount : undefined,
+      date: new Date(),
+    });
+
+    // Fiş verilerini ayarla
+    const receiptData: ReceiptInfo = {
+      receiptNo: sale.receiptNo,
+      date: sale.date,
+      items: sale.items,
+      subtotal: sale.subtotal,
+      vatAmount: sale.vatAmount,
+      total: sale.total,
+      paymentMethod: sale.paymentMethod,
+      cashReceived: sale.cashReceived,
+      changeAmount: sale.changeAmount,
+    };
+
+    setCurrentReceipt(receiptData);
+    setShowReceiptModal(true);
+    setShowPaymentModal(false);
   };
 
   // Fiş modalını kapat
   const handleReceiptClose = (): void => {
     setShowReceiptModal(false);
-    setCart([]); // Sepeti temizle
+    setCart([]);
   };
 
-  // Kısayol tuşlarını tanımla
+  // Kısayol tuşları
   useHotkeys([
-    // Yeni Satış (Ctrl/Cmd + N)
     {
       key: "n",
       ctrlKey: true,
@@ -224,7 +212,6 @@ const POSPage: React.FC = () => {
         startNewSale();
       },
     },
-    // Ödeme (Ctrl/Cmd + P)
     {
       key: "p",
       ctrlKey: true,
@@ -233,7 +220,6 @@ const POSPage: React.FC = () => {
         if (cart.length > 0) setShowPaymentModal(true);
       },
     },
-    // İptal/Kapat (ESC)
     {
       key: "Escape",
       callback: () => {
@@ -246,12 +232,10 @@ const POSPage: React.FC = () => {
         }
       },
     },
-    // Barkod Arama (Enter)
     {
       key: "Enter",
       callback: handleBarcodeSearch,
     },
-    // Ürün Arama (Ctrl/Cmd + K)
     {
       key: "k",
       ctrlKey: true,
@@ -260,7 +244,6 @@ const POSPage: React.FC = () => {
         searchInputRef.current?.focus();
       },
     },
-    // Kısayol Yardımı (Ctrl/Cmd + /)
     {
       key: "/",
       ctrlKey: true,
@@ -269,18 +252,9 @@ const POSPage: React.FC = () => {
         setShowHotkeysHelper((prev) => !prev);
       },
     },
-    // Debug modu (Ctrl/Cmd + D)
-    {
-      key: "d",
-      ctrlKey: true,
-      callback: (e?: KeyboardEvent) => {
-        e?.preventDefault();
-        setShowHotkeysHelper((prev) => !prev);
-        setPrinterLogs([]);
-      },
-    },
   ]);
 
+  // Ürün filtreleme
   const filteredProducts = sampleProducts.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -289,94 +263,6 @@ const POSPage: React.FC = () => {
       selectedCategory === "Tümü" || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
-
-  const addToCart = (product: Product): void => {
-    if (product.stock === 0) {
-      return;
-    }
-  
-    setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.id === product.id);
-      if (existingItem) {
-        if (existingItem.quantity >= product.stock) {
-          return prevCart;
-        }
-        const updatedItem = {
-          ...existingItem,
-          quantity: existingItem.quantity + 1
-        };
-        // KDV dahil hesaplamaları yap
-        const itemWithTotals = calculateCartItemTotals(updatedItem);
-        
-        return prevCart.map((item) =>
-          item.id === product.id ? itemWithTotals : item
-        );
-      }
-      // Yeni ürün için KDV dahil hesaplamaları yap
-      const newItem = calculateCartItemTotals({ ...product, quantity: 1 });
-      return [...prevCart, newItem];
-    });
-  };
-
-  const removeFromCart = (productId: number): void => {
-    setCart((prevCart) => prevCart.filter((item) => item.id !== productId));
-  };
-
-  const updateQuantity = (productId: number, change: number): void => {
-    setCart((prevCart) =>
-      prevCart.map((item) => {
-        if (item.id === productId) {
-          const product = sampleProducts.find((p) => p.id === productId);
-          if (!product) return item;
-          
-          const newQuantity = item.quantity + change;
-          if (newQuantity > product.stock) return item;
-          if (newQuantity <= 0) return item;
-  
-          const updatedItem = {
-            ...item,
-            quantity: newQuantity
-          };
-          // KDV dahil hesaplamaları yap
-          return calculateCartItemTotals(updatedItem);
-        }
-        return item;
-      })
-    );
-  };
-
-  const handlePaymentComplete = (paymentMethod: PaymentMethod, cashReceived?: number): void => {
-    // Yeni satışı kaydet
-    const sale = salesService.addSale({
-      items: cart,
-      total: totalAmount,
-      paymentMethod,
-      cashReceived,
-      changeAmount: cashReceived ? cashReceived - totalAmount : undefined,
-      date: new Date()
-    });
-  
-    // Fiş için mevcut satış verisini kullan
-    const receiptData: ReceiptInfo = {
-      receiptNo: sale.receiptNo,
-      date: sale.date,
-      items: sale.items,
-      subtotal: sale.total,
-      total: sale.total,
-      paymentMethod: sale.paymentMethod,
-      cashReceived: sale.cashReceived,
-      changeAmount: sale.changeAmount
-    };
-  
-    setCurrentReceipt(receiptData);
-    setShowReceiptModal(true);
-    setShowPaymentModal(false);
-  };
-
-  const totalAmount = cart.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
 
   return (
     <div className="flex h-[calc(100vh-7rem)] gap-6">
@@ -432,17 +318,24 @@ const POSPage: React.FC = () => {
               <button
                 key={product.id}
                 onClick={() => addToCart(product)}
-                className={`p-4 border rounded-lg hover:shadow-md transition-shadow text-left relative ${
-                  product.stock === 0 ? "opacity-50" : ""
-                }`}
+                disabled={product.stock === 0}
+                className={`p-4 border rounded-lg hover:shadow-md transition-shadow text-left relative 
+                  ${product.stock === 0 ? "opacity-50 cursor-not-allowed" : ""}
+                `}
               >
                 <div className="font-medium text-gray-900">{product.name}</div>
                 <div className="text-sm text-gray-500 flex items-center gap-1">
                   <Tag size={14} />
                   {product.category}
                 </div>
-                <div className="mt-2 font-semibold text-primary-600">
-                  ₺{product.price.toFixed(2)}
+                {/* Fiyat Bilgisi */}
+                <div className="mt-2">
+                  <div className="font-semibold text-primary-600">
+                    {formatCurrency(product.priceWithVat)}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    +{formatVatRate(product.vatRate)} KDV
+                  </div>
                 </div>
                 {/* Stok Durumu */}
                 <div
@@ -479,8 +372,14 @@ const POSPage: React.FC = () => {
             >
               <div className="flex-1">
                 <div className="font-medium">{item.name}</div>
-                <div className="text-sm text-gray-500">
-                  ₺{item.price.toFixed(2)}
+                <div className="text-sm space-y-0.5">
+                  <div className="text-gray-500">
+                    {formatCurrency(item.price)} + {formatVatRate(item.vatRate)}{" "}
+                    KDV
+                  </div>
+                  <div className="text-gray-900 font-medium">
+                    Toplam: {formatCurrency(item.totalWithVat || 0)}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -510,12 +409,23 @@ const POSPage: React.FC = () => {
 
         {/* Toplam ve Ödeme */}
         <div className="border-t p-4">
-          <div className="flex justify-between items-center mb-4">
-            <span className="font-semibold text-gray-900">Toplam</span>
-            <span className="text-2xl font-bold text-primary-600">
-              ₺{totalAmount.toFixed(2)}
-            </span>
+          <div className="space-y-2 mb-4">
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Ara Toplam:</span>
+              <span>{formatCurrency(cartTotals.subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>KDV:</span>
+              <span>{formatCurrency(cartTotals.vatAmount)}</span>
+            </div>
+            <div className="flex justify-between font-semibold text-lg">
+              <span>Toplam:</span>
+              <span className="text-primary-600">
+                {formatCurrency(cartTotals.total)}
+              </span>
+            </div>
           </div>
+
           <button
             onClick={() => setShowPaymentModal(true)}
             disabled={cart.length === 0}
@@ -531,7 +441,9 @@ const POSPage: React.FC = () => {
       <PaymentModal
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
-        total={totalAmount}
+        total={cartTotals.total}
+        subtotal={cartTotals.subtotal}
+        vatAmount={cartTotals.vatAmount}
         onComplete={handlePaymentComplete}
       />
 
@@ -541,21 +453,11 @@ const POSPage: React.FC = () => {
           isOpen={showReceiptModal}
           onClose={handleReceiptClose}
           receiptData={currentReceipt}
-          onPrint={handlePrintReceipt}
         />
       )}
 
       {/* Klavye Kısayolları Yardımcısı */}
       {showHotkeysHelper && <HotkeysHelper />}
-
-      {/* Debug Panel */}
-      {printerLogs.length > 0 && (
-        <PrinterDebug 
-        isVisible={isVisible} 
-        logs={printerLogs} 
-        onClose={() => setIsVisible(false)} 
-      />
-      )}
     </div>
   );
 };
