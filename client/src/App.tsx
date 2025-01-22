@@ -4,10 +4,8 @@ import POSPage from './pages/POSPage'
 import SalesHistoryPage from './pages/SalesHistoryPage'
 import SaleDetailPage from './pages/SaleDetailPage'
 import DashboardPage from './pages/DashboardPage'
-
-// Geçici sayfa componentleri
-const ProductsPage = () => <div className="p-4">Ürünler Sayfası</div>
-const CreditPage = () => <div className="p-4">Veresiye Sayfası</div>
+import ProductsPage from './pages/ProductsPage'
+import CreditPage from './pages/CreditPage'
 
 function App() {
   return (
