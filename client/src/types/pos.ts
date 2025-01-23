@@ -13,6 +13,12 @@ export interface Product {
   barcode: string;
 }
 
+export interface CartTab {
+  id: string;
+  cart: CartItem[];
+  title: string;
+}
+
 export interface CartItem extends Product {
   quantity: number;
   totalWithoutVat?: number; // Toplam KDV'siz tutar (hesaplanacak)
