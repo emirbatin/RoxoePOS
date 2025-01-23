@@ -1,3 +1,5 @@
+import { Customer } from "./credit";
+
 // Temel type'lar
 export type PaymentMethod = 'nakit' | 'kart' | 'veresiye' | 'nakitpos';
 export type VatRate = 0 | 1 | 8 | 18 | 20;
@@ -13,6 +15,12 @@ export interface Product {
   barcode: string;
 }
 
+export interface Category {
+  id: number;
+  name: string;
+  icon: string;
+}
+
 export interface CartTab {
   id: string;
   cart: CartItem[];
@@ -26,17 +34,14 @@ export interface CartItem extends Product {
   totalWithVat?: number;    // Toplam KDV'li tutar (hesaplanacak)
 }
 
-export interface Category {
-  id: number;
-  name: string;
-  icon: string;
-}
-
 export interface PaymentModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  total: number;
-  subtotal: number;    // KDV'siz toplam
-  vatAmount: number;   // Toplam KDV tutarı
-  onComplete: (paymentMethod: PaymentMethod, cashReceived?: number) => void;
+  isOpen: boolean; // Modal açık mı?
+  onClose: () => void; // Modal kapatma işlemi
+  total: number; // Toplam tutar
+  subtotal: number; // KDV'siz toplam tutar
+  vatAmount: number; // KDV tutarı
+  onComplete: (paymentMethod: PaymentMethod, cashReceived?: number) => void; // Ödeme tamamlandığında çalışacak fonksiyon
+  customers: Customer[]; // Müşteri listesi
+  selectedCustomer: Customer | null; // Seçilen müşteri (null olabilir)
+  setSelectedCustomer: (customer: Customer | null) => void; // Seçilen müşteriyi güncellemek için fonksiyon
 }

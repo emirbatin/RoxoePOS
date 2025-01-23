@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "better-sqlite3": "^11.8.1",
     "escpos": "^3.0.0-alpha.6",
     "escpos-usb": "^3.0.0-alpha.4",
     "exceljs": "^4.4.0",
@@ -23,6 +24,7 @@
     "recharts": "^2.15.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
     "@types/papaparse": "^5.3.15",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
@@ -37,7 +39,7 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.2.2",
+    "typescript": "^5.7.3",
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",
     "vite-plugin-electron-renderer": "^0.14.5"

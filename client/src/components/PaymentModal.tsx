@@ -9,6 +9,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   subtotal,
   vatAmount,
   onComplete,
+  customers,
+  selectedCustomer,
+  setSelectedCustomer,
 }) => {
   const [paymentMethod, setPaymentMethod] = useState<
     "nakit" | "kart" | "veresiye" | "nakitpos"
@@ -27,6 +30,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     if (!isOpen) {
       setPaymentMethod("nakit");
       setReceivedAmount("");
+      setSelectedCustomer(null); // Müşteri seçimini sıfırla
     }
   }, [isOpen]);
 
@@ -106,7 +110,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           </div>
 
-          {/* Nakit Ödeme Detayları */}
+          {/* Nakit ve Nakit POS Ödeme Detayları */}
           {(paymentMethod === "nakit" || paymentMethod === "nakitpos") && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -135,9 +139,36 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
           {/* Veresiye Detayları */}
           {paymentMethod === "veresiye" && (
-            <div className="mt-2 p-2 bg-blue-50 text-blue-700 rounded-lg">
-              Veresiye satış seçildi. Bu işlem kaydedilecektir ve müşteriden
-              daha sonra tahsil edilecektir.
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Müşteri Seç
+              </label>
+              <select
+                value={selectedCustomer?.id || ""}
+                onChange={(e) =>
+                  setSelectedCustomer(
+                    customers.find(
+                      (customer) => customer.id.toString() === e.target.value
+                    ) || null
+                  )
+                }
+                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="" disabled>
+                  Müşteri Seçin
+                </option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name} - Kalan Bakiye:{" "}
+                    {formatCurrency(customer.creditLimit - customer.currentDebt)}
+                  </option>
+                ))}
+              </select>
+              {selectedCustomer && (
+                <div className="mt-2 p-2 bg-blue-50 text-blue-700 rounded-lg">
+                  Seçilen Müşteri: <strong>{selectedCustomer.name}</strong>
+                </div>
+              )}
             </div>
           )}
 
@@ -151,6 +182,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </button>
             <button
               onClick={() => {
+                if (
+                  paymentMethod === "veresiye" &&
+                  !selectedCustomer // Eğer veresiye seçilmişse müşteri seçilmiş olmalı
+                ) {
+                  alert("Lütfen bir müşteri seçin!");
+                  return;
+                }
+
                 if (
                   paymentMethod === "kart" ||
                   (paymentMethod === "nakit" && changeAmount >= 0) ||

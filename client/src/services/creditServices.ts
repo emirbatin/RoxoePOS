@@ -1,51 +1,57 @@
-import { Customer, CreditTransaction, CustomerSummary } from '../types/credit';
+import { Customer, CreditTransaction, CustomerSummary } from "../types/credit";
 
-const CUSTOMERS_STORAGE_KEY = 'pos_customers';
-const TRANSACTIONS_STORAGE_KEY = 'pos_credit_transactions';
+const CUSTOMERS_STORAGE_KEY = "pos_customers";
+const TRANSACTIONS_STORAGE_KEY = "pos_credit_transactions";
 
 class CreditService {
   // Müşteri işlemleri
   getAllCustomers(): Customer[] {
     const customersJson = localStorage.getItem(CUSTOMERS_STORAGE_KEY);
-    if (!customersJson) return [];
+    if (!customersJson || customersJson === "null") return [];
 
     try {
       const customers = JSON.parse(customersJson);
       return customers.map((customer: any) => ({
         ...customer,
-        createdAt: new Date(customer.createdAt)
+        createdAt: new Date(customer.createdAt),
       }));
     } catch (error) {
-      console.error('Müşteri verilerini okuma hatası:', error);
+      console.error("Müşteri verilerini okuma hatası:", error);
       return [];
     }
   }
 
   getCustomerById(id: number): Customer | null {
     const customers = this.getAllCustomers();
-    const customer = customers.find(c => c.id === id);
+    const customer = customers.find((c) => c.id === id);
     return customer || null;
   }
 
-  addCustomer(customerData: Omit<Customer, 'id' | 'currentDebt' | 'createdAt'>): Customer {
+  addCustomer(
+    customerData: Omit<Customer, "id" | "currentDebt" | "createdAt">
+  ): Customer {
     const customers = this.getAllCustomers();
-    
+
     const newCustomer: Customer = {
       ...customerData,
-      id: Math.max(...customers.map(c => c.id), 0) + 1,
+      id:
+        customers.length > 0 ? Math.max(...customers.map((c) => c.id)) + 1 : 1,
       currentDebt: 0,
-      createdAt: new Date()
+      createdAt: new Date(),
     };
 
     customers.push(newCustomer);
     localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(customers));
-    
+
     return newCustomer;
   }
 
-  updateCustomer(customerId: number, updates: Partial<Customer>): Customer | null {
+  updateCustomer(
+    customerId: number,
+    updates: Partial<Customer>
+  ): Customer | null {
     const customers = this.getAllCustomers();
-    const index = customers.findIndex(c => c.id === customerId);
+    const index = customers.findIndex((c) => c.id === customerId);
 
     if (index === -1) return null;
 
@@ -61,12 +67,17 @@ class CreditService {
     const transactions = this.getTransactionsByCustomerId(customerId);
 
     // Müşterinin aktif borcu varsa silmeye izin verme
-    if (transactions.some(t => t.status === 'active' || t.status === 'overdue')) {
+    if (
+      transactions.some((t) => t.status === "active" || t.status === "overdue")
+    ) {
       return false;
     }
 
-    const filteredCustomers = customers.filter(c => c.id !== customerId);
-    localStorage.setItem(CUSTOMERS_STORAGE_KEY, JSON.stringify(filteredCustomers));
+    const filteredCustomers = customers.filter((c) => c.id !== customerId);
+    localStorage.setItem(
+      CUSTOMERS_STORAGE_KEY,
+      JSON.stringify(filteredCustomers)
+    );
     return true;
   }
 
@@ -80,60 +91,74 @@ class CreditService {
       return transactions.map((transaction: any) => ({
         ...transaction,
         date: new Date(transaction.date),
-        dueDate: transaction.dueDate ? new Date(transaction.dueDate) : undefined
+        dueDate: transaction.dueDate
+          ? new Date(transaction.dueDate)
+          : undefined,
       }));
     } catch (error) {
-      console.error('İşlem verilerini okuma hatası:', error);
+      console.error("İşlem verilerini okuma hatası:", error);
       return [];
     }
   }
 
   getTransactionsByCustomerId(customerId: number): CreditTransaction[] {
     return this.getAllTransactions()
-      .filter(t => t.customerId === customerId)
+      .filter((t) => t.customerId === customerId)
       .sort((a, b) => b.date.getTime() - a.date.getTime());
   }
 
-  addTransaction(transaction: Omit<CreditTransaction, 'id' | 'status'>): CreditTransaction {
+  addTransaction(
+    transaction: Omit<CreditTransaction, "id" | "status">
+  ): CreditTransaction {
     const transactions = this.getAllTransactions();
     const customer = this.getCustomerById(transaction.customerId);
 
-    if (!customer) throw new Error('Müşteri bulunamadı');
+    if (!customer) throw new Error("Müşteri bulunamadı");
 
     // Borç ekleme işlemi için limit kontrolü
-    if (transaction.type === 'debt') {
+    if (transaction.type === "debt") {
       const newTotalDebt = customer.currentDebt + transaction.amount;
       if (newTotalDebt > customer.creditLimit) {
-        throw new Error('Kredi limiti aşılıyor');
+        throw new Error("Kredi limiti aşılıyor");
       }
     }
 
     const newTransaction: CreditTransaction = {
       ...transaction,
-      id: Math.max(...transactions.map(t => t.id), 0) + 1,
-      status: 'active'
+      id: Math.max(...transactions.map((t) => t.id), 0) + 1,
+      status: "active",
     };
 
     // Müşteri borç durumunu güncelle
-    const debtChange = transaction.type === 'debt' ? transaction.amount : -transaction.amount;
+    const debtChange =
+      transaction.type === "debt" ? transaction.amount : -transaction.amount;
     this.updateCustomer(customer.id, {
-      currentDebt: customer.currentDebt + debtChange
+      currentDebt: customer.currentDebt + debtChange,
     });
 
     transactions.push(newTransaction);
-    localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
+    localStorage.setItem(
+      TRANSACTIONS_STORAGE_KEY,
+      JSON.stringify(transactions)
+    );
 
     return newTransaction;
   }
 
-  updateTransactionStatus(transactionId: number, status: CreditTransaction['status']): CreditTransaction | null {
+  updateTransactionStatus(
+    transactionId: number,
+    status: CreditTransaction["status"]
+  ): CreditTransaction | null {
     const transactions = this.getAllTransactions();
-    const index = transactions.findIndex(t => t.id === transactionId);
+    const index = transactions.findIndex((t) => t.id === transactionId);
 
     if (index === -1) return null;
 
     transactions[index] = { ...transactions[index], status };
-    localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
+    localStorage.setItem(
+      TRANSACTIONS_STORAGE_KEY,
+      JSON.stringify(transactions)
+    );
 
     return transactions[index];
   }
@@ -141,17 +166,23 @@ class CreditService {
   // Özet istatistikler
   getCustomerSummary(customerId: number): CustomerSummary {
     const transactions = this.getTransactionsByCustomerId(customerId);
-    const activeTransactions = transactions.filter(t => t.status === 'active' || t.status === 'overdue');
-    
+    const activeTransactions = transactions.filter(
+      (t) => t.status === "active" || t.status === "overdue"
+    );
+
     const summary: CustomerSummary = {
-      totalDebt: activeTransactions.reduce((sum, t) => 
-        sum + (t.type === 'debt' ? t.amount : -t.amount), 0),
+      totalDebt: activeTransactions.reduce(
+        (sum, t) => sum + (t.type === "debt" ? t.amount : -t.amount),
+        0
+      ),
       totalOverdue: activeTransactions
-        .filter(t => t.status === 'overdue')
+        .filter((t) => t.status === "overdue")
         .reduce((sum, t) => sum + t.amount, 0),
       lastTransactionDate: transactions[0]?.date,
       activeTransactions: activeTransactions.length,
-      overdueTransactions: activeTransactions.filter(t => t.status === 'overdue').length
+      overdueTransactions: activeTransactions.filter(
+        (t) => t.status === "overdue"
+      ).length,
     };
 
     return summary;
@@ -162,9 +193,13 @@ class CreditService {
     const transactions = this.getAllTransactions();
     const today = new Date();
 
-    transactions.forEach(transaction => {
-      if (transaction.status === 'active' && transaction.dueDate && transaction.dueDate < today) {
-        this.updateTransactionStatus(transaction.id, 'overdue');
+    transactions.forEach((transaction) => {
+      if (
+        transaction.status === "active" &&
+        transaction.dueDate &&
+        transaction.dueDate < today
+      ) {
+        this.updateTransactionStatus(transaction.id, "overdue");
       }
     });
   }

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Search,
   ShoppingCart,
@@ -23,6 +23,8 @@ import {
 import PaymentModal from "../components/PaymentModal";
 import ReceiptModal from "../components/ReceiptModal";
 import { salesService } from "../services/salesService";
+import { creditService } from "../services/creditServices";
+import { Customer } from "../types/credit";
 
 const POSPage: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -37,6 +39,13 @@ const POSPage: React.FC = () => {
   const [cartTabs, setCartTabs] = useState<CartTab[]>([
     { id: "1", cart: [], title: "Sepet 1" },
   ]);
+
+  const [customers, setCustomers] = useState<Customer[]>([]);
+
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null
+  ); // Müşteri seçimi state'i
+
   const [activeTabId, setActiveTabId] = useState<string>("1");
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -227,6 +236,17 @@ const POSPage: React.FC = () => {
     );
     const totalAmount = subtotal + vatAmount;
 
+    if (paymentMethod === "veresiye" && selectedCustomer) {
+      // Borcu müşteriye ekle
+      creditService.addTransaction({
+        customerId: selectedCustomer.id,
+        type: "debt",
+        amount: totalAmount,
+        date: new Date(),
+        description: "POS Veresiye Satış",
+      });
+    }
+
     updateStock();
 
     const sale = salesService.addSale({
@@ -252,7 +272,6 @@ const POSPage: React.FC = () => {
       changeAmount: sale.changeAmount,
     };
 
-    // Sadece aktif sepeti temizle
     setCartTabs((prevTabs) =>
       prevTabs.map((tab) =>
         tab.id === activeTabId ? { ...tab, cart: [] } : tab
@@ -370,6 +389,11 @@ const POSPage: React.FC = () => {
       selectedCategory === "Tümü" || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  useEffect(() => {
+    const allCustomers = creditService.getAllCustomers();
+    setCustomers(allCustomers);
+  }, []);
 
   return (
     <div className="flex h-[calc(100vh-7rem)] gap-6">
@@ -630,6 +654,9 @@ const POSPage: React.FC = () => {
         subtotal={cartTotals.subtotal}
         vatAmount={cartTotals.vatAmount}
         onComplete={handlePaymentComplete}
+        customers={customers} // Müşteri listesi burada aktarılıyor
+        selectedCustomer={selectedCustomer}
+        setSelectedCustomer={setSelectedCustomer}
       />
 
       {/* Fiş Modal */}
