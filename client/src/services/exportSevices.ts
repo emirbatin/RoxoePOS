@@ -178,28 +178,56 @@ class ExportService {
     doc.save(`Satış_Raporu_${dateRange}.pdf`);
   }
 
-  getDateRange(period: 'day' | 'week' | 'month' | 'year'): [Date, Date] {
+  getDateRange(
+    period: "day" | "week" | "month" | "year",
+    isPrevious: boolean = false
+  ): [Date, Date] {
     const end = new Date();
     const start = new Date();
-
-    switch (period) {
-      case 'day':
-        start.setHours(0, 0, 0, 0);
-        break;
-      case 'week':
-        start.setDate(start.getDate() - start.getDay());
-        start.setHours(0, 0, 0, 0);
-        break;
-      case 'month':
-        start.setDate(1);
-        start.setHours(0, 0, 0, 0);
-        break;
-      case 'year':
-        start.setMonth(0, 1);
-        start.setHours(0, 0, 0, 0);
-        break;
+  
+    if (isPrevious) {
+      switch (period) {
+        case "day":
+          start.setDate(start.getDate() - 1);
+          end.setDate(end.getDate() - 1);
+          break;
+        case "week":
+          start.setDate(start.getDate() - 7 - start.getDay());
+          end.setDate(end.getDate() - 7 - end.getDay());
+          break;
+        case "month":
+          start.setMonth(start.getMonth() - 1);
+          start.setDate(1);
+          end.setMonth(end.getMonth() - 1);
+          end.setDate(new Date(end.getFullYear(), end.getMonth() + 1, 0).getDate());
+          break;
+        case "year":
+          start.setFullYear(start.getFullYear() - 1);
+          start.setMonth(0, 1);
+          end.setFullYear(end.getFullYear() - 1);
+          end.setMonth(11, 31);
+          break;
+      }
+    } else {
+      switch (period) {
+        case "day":
+          start.setHours(0, 0, 0, 0);
+          break;
+        case "week":
+          start.setDate(start.getDate() - start.getDay());
+          start.setHours(0, 0, 0, 0);
+          break;
+        case "month":
+          start.setDate(1);
+          start.setHours(0, 0, 0, 0);
+          break;
+        case "year":
+          start.setMonth(0, 1);
+          start.setHours(0, 0, 0, 0);
+          break;
+      }
     }
-
+  
     return [start, end];
   }
 

@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { PaymentModalProps } from '../types/pos';
-import { formatCurrency } from '../utils/vatUtils';
+import React, { useState, useRef, useEffect } from "react";
+import { PaymentModalProps } from "../types/pos";
+import { formatCurrency } from "../utils/vatUtils";
 
 const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
@@ -8,10 +8,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   total,
   subtotal,
   vatAmount,
-  onComplete
+  onComplete,
 }) => {
-  const [paymentMethod, setPaymentMethod] = useState<'nakit' | 'kart'>('nakit');
-  const [receivedAmount, setReceivedAmount] = useState<string>('');
+  const [paymentMethod, setPaymentMethod] = useState<
+    "nakit" | "kart" | "veresiye" | "nakitpos"
+  >("nakit");
+  const [receivedAmount, setReceivedAmount] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -23,8 +25,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   useEffect(() => {
     // Modal kapandığında state'i temizle
     if (!isOpen) {
-      setPaymentMethod('nakit');
-      setReceivedAmount('');
+      setPaymentMethod("nakit");
+      setReceivedAmount("");
     }
   }, [isOpen]);
 
@@ -37,7 +39,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-96">
         <h2 className="text-xl font-semibold mb-4">Ödeme</h2>
-        
+
         {/* Toplam Bilgileri */}
         <div className="bg-gray-50 p-4 rounded-lg mb-4 space-y-2">
           <div className="flex justify-between text-sm text-gray-600">
@@ -63,29 +65,49 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <button
                 className={`p-3 border rounded-lg ${
-                  paymentMethod === 'nakit'
-                    ? 'bg-primary-50 border-primary-500 text-primary-700'
-                    : 'hover:bg-gray-50'
+                  paymentMethod === "nakit"
+                    ? "bg-primary-50 border-primary-500 text-primary-700"
+                    : "hover:bg-gray-50"
                 } transition-colors`}
-                onClick={() => setPaymentMethod('nakit')}
+                onClick={() => setPaymentMethod("nakit")}
               >
                 💵 Nakit
               </button>
               <button
                 className={`p-3 border rounded-lg ${
-                  paymentMethod === 'kart'
-                    ? 'bg-primary-50 border-primary-500 text-primary-700'
-                    : 'hover:bg-gray-50'
+                  paymentMethod === "kart"
+                    ? "bg-primary-50 border-primary-500 text-primary-700"
+                    : "hover:bg-gray-50"
                 } transition-colors`}
-                onClick={() => setPaymentMethod('kart')}
+                onClick={() => setPaymentMethod("kart")}
               >
                 💳 Kredi Kartı
+              </button>
+              <button
+                className={`p-3 border rounded-lg ${
+                  paymentMethod === "veresiye"
+                    ? "bg-primary-50 border-primary-500 text-primary-700"
+                    : "hover:bg-gray-50"
+                } transition-colors`}
+                onClick={() => setPaymentMethod("veresiye")}
+              >
+                📝 Veresiye
+              </button>
+              <button
+                className={`p-3 border rounded-lg ${
+                  paymentMethod === "nakitpos"
+                    ? "bg-primary-50 border-primary-500 text-primary-700"
+                    : "hover:bg-gray-50"
+                } transition-colors`}
+                onClick={() => setPaymentMethod("nakitpos")}
+              >
+                💵 POS (Nakit)
               </button>
             </div>
           </div>
 
           {/* Nakit Ödeme Detayları */}
-          {paymentMethod === 'nakit' && (
+          {(paymentMethod === "nakit" || paymentMethod === "nakitpos") && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Alınan Tutar
@@ -111,6 +133,14 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           )}
 
+          {/* Veresiye Detayları */}
+          {paymentMethod === "veresiye" && (
+            <div className="mt-2 p-2 bg-blue-50 text-blue-700 rounded-lg">
+              Veresiye satış seçildi. Bu işlem kaydedilecektir ve müşteriden
+              daha sonra tahsil edilecektir.
+            </div>
+          )}
+
           {/* Onay Butonları */}
           <div className="flex gap-2 mt-6">
             <button
@@ -121,11 +151,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </button>
             <button
               onClick={() => {
-                if (paymentMethod === 'kart' || (paymentMethod === 'nakit' && changeAmount >= 0)) {
+                if (
+                  paymentMethod === "kart" ||
+                  (paymentMethod === "nakit" && changeAmount >= 0) ||
+                  paymentMethod === "veresiye" ||
+                  paymentMethod === "nakitpos"
+                ) {
                   onComplete(paymentMethod, parsedReceived);
                 }
               }}
-              disabled={paymentMethod === 'nakit' && changeAmount < 0}
+              disabled={paymentMethod === "nakit" && changeAmount < 0}
               className="flex-1 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 
                 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >

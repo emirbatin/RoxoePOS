@@ -355,6 +355,8 @@ const SalesHistoryPage: React.FC = () => {
                         paymentMethod: e.target.value as
                           | "nakit"
                           | "kart"
+                          | "veresiye"
+                          | "nakitpos"
                           | undefined,
                       }))
                     }
@@ -363,6 +365,8 @@ const SalesHistoryPage: React.FC = () => {
                     <option value="">Tümü</option>
                     <option value="nakit">Nakit</option>
                     <option value="kart">Kredi Kartı</option>
+                    <option value="veresiye">Veresiye</option>
+                    <option value="nakitpos">POS (Nakit)</option>
                   </select>
                 </div>
               </div>
@@ -460,7 +464,10 @@ const SalesHistoryPage: React.FC = () => {
                       ₺{sale.total.toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {sale.paymentMethod === "nakit" ? "💵 Nakit" : "💳 Kart"}
+                      {sale.paymentMethod === "nakit" && "💵 Nakit"}
+                      {sale.paymentMethod === "kart" && "💳 Kart"}
+                      {sale.paymentMethod === "veresiye" && "📝 Veresiye"}
+                      {sale.paymentMethod === "nakitpos" && "💵 POS (Nakit)"}
                       {sale.paymentMethod === "nakit" && sale.cashReceived && (
                         <div className="text-xs text-gray-400">
                           Alınan: ₺{sale.cashReceived.toFixed(2)}

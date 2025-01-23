@@ -1,5 +1,5 @@
 // Temel type'lar
-export type PaymentMethod = 'nakit' | 'kart';
+export type PaymentMethod = 'nakit' | 'kart' | 'veresiye' | 'nakitpos';
 export type VatRate = 0 | 1 | 8 | 18 | 20;
 
 export interface Product {
