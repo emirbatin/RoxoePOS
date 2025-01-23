@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, AlertTriangle } from 'lucide-react';
 import { Category } from '../types/pos';
+import { productService } from '../services/productDB';
 
 interface CategoryManagementProps {
   categories: Category[];
@@ -26,7 +27,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
   const [error, setError] = useState<string>('');
   const [showForm, setShowForm] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -35,7 +36,6 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
       return;
     }
 
-    // İsim benzersizlik kontrolü
     const nameExists = categories.some(
       cat => cat.name.toLowerCase() === newCategory.name?.toLowerCase() &&
       (!editingCategory || cat.id !== editingCategory.id)
@@ -47,23 +47,21 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     }
 
     if (editingCategory) {
-      // Güncelleme
+      const updatedCategory = { ...editingCategory, ...newCategory };
+      await productService.updateCategory(updatedCategory);
       onUpdate(
         categories.map(cat =>
-          cat.id === editingCategory.id
-            ? { ...cat, ...newCategory as Category }
-            : cat
+          cat.id === editingCategory.id ? updatedCategory : cat
         )
       );
     } else {
-      // Yeni ekleme
+      const id = await productService.addCategory({
+        name: newCategory.name!,
+        icon: newCategory.icon || '🏷️',
+      });
       onUpdate([
         ...categories,
-        {
-          id: Math.max(...categories.map(c => c.id), 0) + 1,
-          name: newCategory.name,
-          icon: newCategory.icon || '🏷️'
-        } as Category
+        { id, name: newCategory.name!, icon: newCategory.icon || '🏷️' },
       ]);
     }
 
@@ -72,7 +70,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     setShowForm(false);
   };
 
-  const handleDelete = (category: Category) => {
+  const handleDelete = async (category: Category) => {
     if (category.name === 'Tümü') {
       setError('Varsayılan kategori silinemez');
       return;
@@ -80,10 +78,17 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
 
     const confirmed = window.confirm(
       `"${category.name}" kategorisini silmek istediğinize emin misiniz?\n` +
-      'Bu kategorideki ürünler "Genel" kategorisine taşınacaktır.'
+      'Bu kategorideki ürünler "Tümü" kategorisine taşınacaktır.'
     );
 
     if (confirmed) {
+      const defaultCategory = categories.find(cat => cat.name === 'Tümü');
+      if (!defaultCategory) {
+        setError('Varsayılan kategori bulunamadı.');
+        return;
+      }
+
+      await productService.deleteCategory(category.id, defaultCategory.id);
       onUpdate(categories.filter(c => c.id !== category.id));
     }
   };
@@ -111,7 +116,6 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                 Kategori Yönetimi
               </h3>
 
-              {/* Kategori Listesi */}
               <div className="mt-4 grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
                 {categories.map(category => (
                   <div
@@ -147,7 +151,6 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                 ))}
               </div>
 
-              {/* Yeni Kategori Butonu */}
               {!showForm && (
                 <button
                   onClick={() => setShowForm(true)}
@@ -158,7 +161,6 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                 </button>
               )}
 
-              {/* Kategori Formu */}
               {showForm && (
                 <form onSubmit={handleSubmit} className="mt-4 space-y-4">
                   <div>

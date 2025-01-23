@@ -1,7 +1,7 @@
 {
-  "name": "client",
+  "name": "roxoepos",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,9 +11,11 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
+    "crypto-js": "^4.2.0",
     "escpos": "^3.0.0-alpha.6",
     "escpos-usb": "^3.0.0-alpha.4",
     "exceljs": "^4.4.0",
+    "idb": "^8.0.1",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
     "lucide-react": "^0.473.0",
@@ -25,6 +27,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
+    "@types/crypto-js": "^4.2.2",
     "@types/papaparse": "^5.3.15",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
@@ -37,6 +40,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "javascript-obfuscator": "^4.1.1",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",

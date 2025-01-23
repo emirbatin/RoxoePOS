@@ -9,7 +9,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { Sale, SalesFilter, SalesSummary } from "../types/sales";
-import { salesService } from "../services/salesService";
+import { salesDB } from "../services/salesDB";
 import ReasonModal from "../components/ReasonModal";
 import { useNavigate } from "react-router-dom";
 import { VatRate } from "../types/pos";
@@ -39,18 +39,19 @@ const SalesHistoryPage: React.FC = () => {
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadSales = () => {
+    const loadSales = async () => {
       try {
-        const allSales = salesService.getAllSales();
+        const allSales = await salesDB.getAllSales();
         setSales(allSales);
-        setIsLoading(false);
       } catch (error) {
         console.error("Satış verileri yüklenirken hata:", error);
+      } finally {
         setIsLoading(false);
       }
     };
 
     loadSales();
+
     const interval = setInterval(loadSales, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -169,9 +170,11 @@ const SalesHistoryPage: React.FC = () => {
     setShowRefundModal(true);
   };
 
-  const handleCancelConfirm = (reason: string) => {
-    if (selectedSaleId) {
-      const updatedSale = salesService.cancelSale(selectedSaleId, reason);
+  const handleCancelConfirm = async (reason: string) => {
+    if (!selectedSaleId) return;
+
+    try {
+      const updatedSale = await salesDB.cancelSale(selectedSaleId, reason);
       if (updatedSale) {
         setSales((prevSales) =>
           prevSales.map((sale) =>
@@ -182,14 +185,20 @@ const SalesHistoryPage: React.FC = () => {
       } else {
         alert("Satış iptal edilirken bir hata oluştu!");
       }
+    } catch (error) {
+      console.error("Satış iptali sırasında hata:", error);
+      alert("Satış iptali sırasında bir hata oluştu!");
+    } finally {
+      setShowCancelModal(false);
+      setSelectedSaleId(null);
     }
-    setShowCancelModal(false);
-    setSelectedSaleId(null);
   };
 
-  const handleRefundConfirm = (reason: string) => {
-    if (selectedSaleId) {
-      const updatedSale = salesService.refundSale(selectedSaleId, reason);
+  const handleRefundConfirm = async (reason: string) => {
+    if (!selectedSaleId) return;
+
+    try {
+      const updatedSale = await salesDB.refundSale(selectedSaleId, reason);
       if (updatedSale) {
         setSales((prevSales) =>
           prevSales.map((sale) =>
@@ -200,9 +209,13 @@ const SalesHistoryPage: React.FC = () => {
       } else {
         alert("İade işlemi sırasında bir hata oluştu!");
       }
+    } catch (error) {
+      console.error("İade işlemi sırasında hata:", error);
+      alert("İade işlemi sırasında bir hata oluştu!");
+    } finally {
+      setShowRefundModal(false);
+      setSelectedSaleId(null);
     }
-    setShowRefundModal(false);
-    setSelectedSaleId(null);
   };
 
   const resetFilters = () => {

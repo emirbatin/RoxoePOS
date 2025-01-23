@@ -60,45 +60,48 @@ const CreditPage: React.FC = () => {
     customersWithOverdue: 0,
   });
 
-  // Verileri yükle
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = async () => {
     setLoading(true);
     try {
       // Müşterileri yükle
-      const allCustomers = creditService.getAllCustomers();
+      const allCustomers = await creditService.getAllCustomers();
       setCustomers(allCustomers);
 
-      // Müşteri özetlerini yükle
+      // Müşteri özetlerini hesapla
       const summaryData: Record<number, CustomerSummary> = {};
-      allCustomers.forEach((customer) => {
-        summaryData[customer.id] = creditService.getCustomerSummary(
+      for (const customer of allCustomers) {
+        summaryData[customer.id] = await creditService.getCustomerSummary(
           customer.id
         );
-      });
+      }
       setSummaries(summaryData);
 
       // İstatistikleri hesapla
-      const stats = {
-        totalCustomers: allCustomers.length,
-        totalDebt: allCustomers.reduce((sum, c) => sum + c.currentDebt, 0),
-        totalOverdue: Object.values(summaryData).reduce(
-          (sum, s) => sum + s.totalOverdue,
-          0
-        ),
-        customersWithOverdue: Object.values(summaryData).filter(
-          (s) => s.overdueTransactions > 0
-        ).length,
-      };
-      setStats(stats);
+      const totalCustomers = allCustomers.length;
+      const totalDebt = allCustomers.reduce((sum, c) => sum + c.currentDebt, 0);
+      const totalOverdue = Object.values(summaryData).reduce(
+        (sum, s) => sum + s.totalOverdue,
+        0
+      );
+      const customersWithOverdue = Object.values(summaryData).filter(
+        (s) => s.overdueTransactions > 0
+      ).length;
+
+      setStats({
+        totalCustomers,
+        totalDebt,
+        totalOverdue,
+        customersWithOverdue,
+      });
     } catch (error) {
       console.error("Veri yükleme hatası:", error);
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   // Filtreleme
   useEffect(() => {
@@ -132,34 +135,44 @@ const CreditPage: React.FC = () => {
   }, [customers, searchQuery, filters, summaries]);
 
   // Müşteri ekleme/düzenleme
-  const handleSaveCustomer = (
+  const handleSaveCustomer = async (
     customerData: Omit<Customer, "id" | "currentDebt" | "createdAt">
   ) => {
-    if (selectedCustomer) {
-      const updatedCustomer = creditService.updateCustomer(
-        selectedCustomer.id,
-        customerData
-      );
-      if (updatedCustomer) {
-        setCustomers((prev) =>
-          prev.map((c) => (c.id === selectedCustomer.id ? updatedCustomer : c))
+    try {
+      if (selectedCustomer) {
+        const updatedCustomer = await creditService.updateCustomer(
+          selectedCustomer.id,
+          customerData
         );
+        if (updatedCustomer) {
+          setCustomers((prev) =>
+            prev.map((c) =>
+              c.id === selectedCustomer.id ? updatedCustomer : c
+            )
+          );
+        }
+      } else {
+        const newCustomer = await creditService.addCustomer(customerData);
+        setCustomers((prev) => [...prev, newCustomer]);
       }
-    } else {
-      const newCustomer = creditService.addCustomer(customerData);
-      setCustomers((prev) => [...prev, newCustomer]);
+    } catch (error) {
+      console.error("Müşteri kaydedilemedi:", error);
     }
     setShowCustomerModal(false);
     setSelectedCustomer(undefined);
   };
 
   // Müşteri silme
-  const handleDeleteCustomer = (customerId: number) => {
-    const success = creditService.deleteCustomer(customerId);
-    if (success) {
-      setCustomers((prev) => prev.filter((c) => c.id !== customerId));
-    } else {
-      alert("Borcu olan müşteri silinemez!");
+  const handleDeleteCustomer = async (customerId: number) => {
+    try {
+      const success = await creditService.deleteCustomer(customerId);
+      if (success) {
+        setCustomers((prev) => prev.filter((c) => c.id !== customerId));
+      } else {
+        alert("Borcu olan müşteri silinemez!");
+      }
+    } catch (error) {
+      console.error("Müşteri silinemedi:", error);
     }
   };
 
@@ -184,7 +197,7 @@ const CreditPage: React.FC = () => {
     if (!selectedTransactionCustomer) return;
 
     try {
-      const transaction = creditService.addTransaction({
+      await creditService.addTransaction({
         customerId: selectedTransactionCustomer.id,
         type: transactionType,
         amount: data.amount,
@@ -193,12 +206,10 @@ const CreditPage: React.FC = () => {
         description: data.description,
       });
 
-      // Verileri yeniden yükle
       loadData();
       setShowTransactionModal(false);
       setSelectedTransactionCustomer(null);
     } catch (error) {
-      // Hata mesajını göster
       alert(error instanceof Error ? error.message : "Bir hata oluştu");
     }
   };
@@ -432,9 +443,7 @@ const CreditPage: React.FC = () => {
             setSelectedDetailCustomer(null);
           }}
           customer={selectedDetailCustomer}
-          transactions={creditService.getTransactionsByCustomerId(
-            selectedDetailCustomer.id
-          )}
+          transactions={[]}
           onAddDebt={handleAddDebt}
           onAddPayment={handleAddPayment}
         />

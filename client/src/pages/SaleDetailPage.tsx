@@ -14,7 +14,7 @@ import {
 import { Sale } from "../types/sales";
 import { ReceiptInfo } from "../types/receipt";
 
-import { salesService } from "../services/salesService";
+import { salesDB } from "../services/salesDB";
 import { receiptService } from "../services/receiptService";
 
 import {
@@ -35,25 +35,35 @@ const SaleDetailPage: React.FC = () => {
   const [showRefundModal, setShowRefundModal] = useState(false);
 
   useEffect(() => {
-    if (id) {
-      const saleData = salesService.getSaleById(id);
-      if (saleData) {
-        setSale(saleData);
+    const fetchSale = async () => {
+      if (id) {
+        try {
+          const saleData = await salesDB.getSaleById(id);
+          setSale(saleData);
+        } catch (error) {
+          console.error("Satış verisi yüklenirken hata:", error);
+        } finally {
+          setIsLoading(false);
+        }
       }
-      setIsLoading(false);
-    }
+    };
+  
+    fetchSale();
   }, [id]);
 
   const handlePrint = async () => {
     if (!sale) return;
-
+  
     try {
-      // Sale'i ReceiptInfo'ya dönüştür
       const receiptData: ReceiptInfo = {
         ...sale,
-        subtotal: sale.total, // KDV hesaplaması eklendiğinde güncellenecek
+        subtotal: sale.subtotal,
+        vatAmount: sale.vatAmount,
+        total: sale.total,
+        items: sale.items,
+        date: sale.date,
       };
-
+  
       const result = await receiptService.printReceipt(receiptData);
       if (result) {
         console.log("Fiş yazdırıldı");
@@ -66,30 +76,42 @@ const SaleDetailPage: React.FC = () => {
     }
   };
 
-  const handleCancelConfirm = (reason: string) => {
+  const handleCancelConfirm = async (reason: string) => {
     if (!sale) return;
-
-    const updatedSale = salesService.cancelSale(sale.id, reason);
-    if (updatedSale) {
-      setSale(updatedSale);
-      alert("Satış başarıyla iptal edildi.");
-    } else {
+  
+    try {
+      const updatedSale = await salesDB.cancelSale(sale.id, reason);
+      if (updatedSale) {
+        setSale(updatedSale);
+        alert("Satış başarıyla iptal edildi.");
+      } else {
+        alert("Satış iptal edilirken bir hata oluştu!");
+      }
+    } catch (error) {
+      console.error("Satış iptali sırasında hata:", error);
       alert("Satış iptal edilirken bir hata oluştu!");
+    } finally {
+      setShowCancelModal(false);
     }
-    setShowCancelModal(false);
   };
 
-  const handleRefundConfirm = (reason: string) => {
+  const handleRefundConfirm = async (reason: string) => {
     if (!sale) return;
-
-    const updatedSale = salesService.refundSale(sale.id, reason);
-    if (updatedSale) {
-      setSale(updatedSale);
-      alert("İade işlemi başarıyla tamamlandı.");
-    } else {
+  
+    try {
+      const updatedSale = await salesDB.refundSale(sale.id, reason);
+      if (updatedSale) {
+        setSale(updatedSale);
+        alert("İade işlemi başarıyla tamamlandı.");
+      } else {
+        alert("İade işlemi sırasında bir hata oluştu!");
+      }
+    } catch (error) {
+      console.error("İade işlemi sırasında hata:", error);
       alert("İade işlemi sırasında bir hata oluştu!");
+    } finally {
+      setShowRefundModal(false);
     }
-    setShowRefundModal(false);
   };
 
   if (isLoading) {

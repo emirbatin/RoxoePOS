@@ -12,9 +12,17 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 let win;
 function createWindow() {
   win = new BrowserWindow({
+    width: 800,
+    // Initial width (will be resized to fullscreen)
+    height: 600,
+    // Initial height (will be resized to fullscreen)
+    fullscreen: true,
+    // Opens in fullscreen mode
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     webPreferences: {
-      preload: path.join(__dirname, "preload.mjs")
+      preload: path.join(__dirname, "preload.mjs"),
+      devTools: true
+      // Disable developer tools
     }
   });
   win.webContents.on("did-finish-load", () => {
@@ -25,6 +33,17 @@ function createWindow() {
   } else {
     win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
+  win.webContents.on("context-menu", (event) => {
+    event.preventDefault();
+  });
+  win.webContents.on("before-input-event", (event, input) => {
+    if ((input.control || input.meta) && (input.key.toLowerCase() === "i" || input.key.toLowerCase() === "j" || input.key.toLowerCase() === "c")) {
+      event.preventDefault();
+    }
+    if (input.key === "F12") {
+      event.preventDefault();
+    }
+  });
 }
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

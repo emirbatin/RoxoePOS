@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Search,
   Plus,
@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Category, Product } from "../types/pos";
 import { formatCurrency, formatVatRate } from "../utils/vatUtils";
-import { sampleProducts, categories } from "../data/sampleProducts";
+import { productService } from "../services/productDB";
 import ProductModal from "../components/ProductModal";
 import BulkProductOperations from "../components/BulkProductOperations";
 import BatchPriceUpdate from "../components/BatchPriceUpdate";
@@ -23,11 +23,12 @@ import StockManagement from "../components/StockManagement";
 import BarcodeGenerator from "../components/BarcodeGenerator";
 
 const ProductsPage: React.FC = () => {
-  // Temel state'ler
+  // State tanımlamaları
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Tümü");
   const [showFilters, setShowFilters] = useState(false);
-  const [products, setProducts] = useState<Product[]>(sampleProducts);
   const [showProductModal, setShowProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>();
   const [showCategoryManagement, setShowCategoryManagement] = useState(false);
@@ -35,144 +36,164 @@ const ProductsPage: React.FC = () => {
     useState<Product | null>(null);
   const [selectedBarcodeProduct, setSelectedBarcodeProduct] =
     useState<Product | null>(null);
-
-  // Toplu işlem state'leri
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [showBatchUpdate, setShowBatchUpdate] = useState(false);
 
-  // Toplu seçim işlemleri
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedProductIds(filteredProducts.map((p) => p.id));
-    } else {
-      setSelectedProductIds([]);
+  // İlk yükleme
+  useEffect(() => {
+    loadData();
+  }, [products]);
+
+  const loadData = async () => {
+    try {
+      const dbProducts = await productService.getAllProducts();
+      const dbCategories = await productService.getCategories();
+      setProducts(dbProducts);
+      setCategories(dbCategories);
+    } catch (error) {
+      console.error("Veri yüklenirken hata:", error);
     }
   };
 
-  const handleStockUpdate = (productId: number, newStock: number) => {
-    setProducts((prev) =>
-      prev.map((product) =>
-        product.id === productId ? { ...product, stock: newStock } : product
-      )
-    );
-  };
-
-  const handleSelectProduct = (productId: number, checked: boolean) => {
-    if (checked) {
-      setSelectedProductIds((prev) => [...prev, productId]);
-    } else {
-      setSelectedProductIds((prev) => prev.filter((id) => id !== productId));
+  // CRUD İşlemleri
+  const handleAddProduct = async (productData: Omit<Product, "id">) => {
+    try {
+      await productService.addProduct(productData);
+      await loadData();
+      setShowProductModal(false);
+    } catch (error) {
+      console.error("Ürün eklenirken hata:", error);
     }
   };
 
-  const handleCategoryUpdate = (updatedCategories: Category[]) => {
-    // Kategorileri güncelle
-    categories.splice(0, categories.length, ...updatedCategories);
-
-    // Silinen kategorilere ait ürünleri "Genel" kategorisine taşı
-    const categoryNames = updatedCategories.map((c) => c.name);
-    setProducts((prevProducts) =>
-      prevProducts.map((product) => ({
-        ...product,
-        category: categoryNames.includes(product.category)
-          ? product.category
-          : "Genel",
-      }))
-    );
-  };
-
-  // Toplu silme işlemi
-  const handleBatchDelete = () => {
-    if (selectedProductIds.length === 0) return;
-
-    const confirmed = window.confirm(
-      `Seçili ${selectedProductIds.length} ürünü silmek istediğinize emin misiniz?`
-    );
-
-    if (confirmed) {
-      setProducts((prev) =>
-        prev.filter((product) => !selectedProductIds.includes(product.id))
-      );
-      setSelectedProductIds([]);
-    }
-  };
-
-  // Bulk import handler
-  const handleBulkImport = (importedProducts: Product[]) => {
-    setProducts((prevProducts) => {
-      const productsMap = new Map(prevProducts.map((p) => [p.barcode, p]));
-
-      // Yeni ürünlerin ID'lerini belirle
-      const maxId = Math.max(...prevProducts.map((p) => p.id), 0);
-      let nextId = maxId + 1;
-
-      importedProducts.forEach((product) => {
-        if (productsMap.has(product.barcode)) {
-          // Mevcut ürünü güncelle
-          const existingProduct = productsMap.get(product.barcode)!;
-          productsMap.set(product.barcode, {
-            ...product,
-            id: existingProduct.id,
-          });
-        } else {
-          // Yeni ürün ekle
-          productsMap.set(product.barcode, {
-            ...product,
-            id: nextId++,
-          });
-        }
-      });
-
-      return Array.from(productsMap.values());
-    });
-  };
-
-  // Toplu fiyat güncelleme
-  const handleBatchPriceUpdate = (updatedProducts: Product[]) => {
-    setProducts(updatedProducts);
-    setSelectedProductIds([]);
-    setShowBatchUpdate(false);
-  };
-
-  // Ürün ekleme işlemi
-  const handleAddProduct = (productData: Omit<Product, "id">) => {
-    const newProduct: Product = {
-      ...productData,
-      id: Math.max(...products.map((p) => p.id)) + 1,
-    };
-    setProducts((prev) => [...prev, newProduct]);
-    setShowProductModal(false);
-  };
-
-  // Ürün düzenleme işlemi
-  const handleEditProduct = (productData: Omit<Product, "id">) => {
+  const handleEditProduct = async (productData: Omit<Product, "id">) => {
     if (!selectedProduct) return;
-
-    const updatedProduct: Product = {
-      ...productData,
-      id: selectedProduct.id,
-    };
-
-    setProducts((prev) =>
-      prev.map((product) =>
-        product.id === selectedProduct.id ? updatedProduct : product
-      )
-    );
-    setShowProductModal(false);
-    setSelectedProduct(undefined);
+    try {
+      await productService.updateProduct({
+        ...productData,
+        id: selectedProduct.id,
+      });
+      await loadData();
+      setShowProductModal(false);
+      setSelectedProduct(undefined);
+    } catch (error) {
+      console.error("Ürün güncellenirken hata:", error);
+    }
   };
 
-  // Ürün silme işlemi
-  const handleDeleteProduct = (productId: number) => {
+  const handleDeleteProduct = async (productId: number) => {
     const confirmed = window.confirm(
       "Bu ürünü silmek istediğinize emin misiniz?"
     );
     if (confirmed) {
-      setProducts((prev) => prev.filter((product) => product.id !== productId));
+      try {
+        await productService.deleteProduct(productId);
+        await loadData();
+      } catch (error) {
+        console.error("Ürün silinirken hata:", error);
+      }
     }
   };
 
-  // Ürün filtreleme
+  // Toplu işlemler
+  const handleSelectAll = (checked: boolean) => {
+    setSelectedProductIds(checked ? filteredProducts.map((p) => p.id) : []);
+  };
+
+  const handleSelectProduct = (productId: number, checked: boolean) => {
+    setSelectedProductIds((prev) =>
+      checked ? [...prev, productId] : prev.filter((id) => id !== productId)
+    );
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedProductIds.length === 0) return;
+    const confirmed = window.confirm(
+      `Seçili ${selectedProductIds.length} ürünü silmek istediğinize emin misiniz?`
+    );
+    if (confirmed) {
+      try {
+        for (const id of selectedProductIds) {
+          await productService.deleteProduct(id);
+        }
+        await loadData();
+        setSelectedProductIds([]);
+      } catch (error) {
+        console.error("Toplu silme işlemi sırasında hata:", error);
+      }
+    }
+  };
+
+  const handleBatchPriceUpdate = async (updatedProducts: Product[]) => {
+    try {
+      for (const product of updatedProducts) {
+        await productService.updateProduct(product);
+      }
+      await loadData();
+      setSelectedProductIds([]);
+      setShowBatchUpdate(false);
+    } catch (error) {
+      console.error("Toplu fiyat güncelleme sırasında hata:", error);
+    }
+  };
+
+  const handleBulkImport = async (importedProducts: Product[]) => {
+    try {
+      for (const product of importedProducts) {
+        const existingProduct = products.find(
+          (p) => p.barcode === product.barcode
+        );
+        if (existingProduct) {
+          await productService.updateProduct({
+            ...product,
+            id: existingProduct.id,
+          });
+        } else {
+          await productService.addProduct(product);
+        }
+      }
+      await loadData();
+    } catch (error) {
+      console.error("Toplu içe aktarma sırasında hata:", error);
+    }
+  };
+
+  // Stok işlemleri
+  const handleStockUpdate = async (productId: number, newStock: number) => {
+    try {
+      const product = products.find((p) => p.id === productId);
+      if (product) {
+        await productService.updateProduct({ ...product, stock: newStock });
+        await loadData();
+      }
+    } catch (error) {
+      console.error("Stok güncellenirken hata:", error);
+    }
+  };
+
+  // Kategori işlemleri
+  const handleCategoryUpdate = async (updatedCategories: Category[]) => {
+    try {
+      // Kategori güncellemesi için productService'e yeni metodlar eklenmeli
+      const categoryNames = updatedCategories.map((c) => c.name);
+      const productsToUpdate = products.filter(
+        (p) => !categoryNames.includes(p.category)
+      );
+
+      for (const product of productsToUpdate) {
+        await productService.updateProduct({
+          ...product,
+          category: "Genel",
+        });
+      }
+
+      await loadData();
+    } catch (error) {
+      console.error("Kategori güncelleme sırasında hata:", error);
+    }
+  };
+
+  // Filtreleme
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

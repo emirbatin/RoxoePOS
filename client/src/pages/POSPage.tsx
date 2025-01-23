@@ -11,9 +11,16 @@ import {
   Trash2,
 } from "lucide-react";
 import { useHotkeys, HotkeysHelper } from "../hooks/useHotkeys";
-import { CartItem, CartTab, PaymentMethod, Product } from "../types/pos";
+import {
+  CartItem,
+  CartTab,
+  Category,
+  PaymentMethod,
+  Product,
+} from "../types/pos";
 import { ReceiptInfo } from "../types/receipt";
-import { categories, sampleProducts } from "../data/sampleProducts";
+import { Customer } from "../types/credit";
+import { productService } from "../services/productDB";
 import {
   calculateCartTotals,
   calculateCartItemTotals,
@@ -22,11 +29,14 @@ import {
 } from "../utils/vatUtils";
 import PaymentModal from "../components/PaymentModal";
 import ReceiptModal from "../components/ReceiptModal";
-import { salesService } from "../services/salesService";
+import { salesDB } from "../services/salesDB";
 import { creditService } from "../services/creditServices";
-import { Customer } from "../types/credit";
+import { Sale } from "../types/sales";
 
 const POSPage: React.FC = () => {
+  // Temel state'ler
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("Tümü");
@@ -36,23 +46,40 @@ const POSPage: React.FC = () => {
   const [currentReceipt, setCurrentReceipt] = useState<ReceiptInfo | null>(
     null
   );
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null
+  );
+
+  // Sepet sekmeleri için state'ler
   const [cartTabs, setCartTabs] = useState<CartTab[]>([
     { id: "1", cart: [], title: "Sepet 1" },
   ]);
-
-  const [customers, setCustomers] = useState<Customer[]>([]);
-
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null
-  ); // Müşteri seçimi state'i
-
   const [activeTabId, setActiveTabId] = useState<string>("1");
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-
   const activeTab = cartTabs.find((tab) => tab.id === activeTabId);
 
-  // Yeni sekme ekleme
+  // Veri yükleme
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const dbProducts = await productService.getAllProducts();
+      const dbCategories = await productService.getCategories();
+      const dbCustomers = await creditService.getAllCustomers();
+
+      setProducts(dbProducts);
+      setCategories(dbCategories);
+      setCustomers(dbCustomers);
+    } catch (error) {
+      console.error("Veri yüklenirken hata:", error);
+    }
+  };
+
+  // Sepet işlemleri
   const addNewTab = () => {
     const newId = (
       Math.max(...cartTabs.map((tab) => parseInt(tab.id))) + 1
@@ -68,30 +95,20 @@ const POSPage: React.FC = () => {
     setActiveTabId(newId);
   };
 
-  // Sekme silme
   const removeTab = (tabId: string) => {
     if (cartTabs.length === 1) return;
-
     setCartTabs((prev) => prev.filter((tab) => tab.id !== tabId));
     if (activeTabId === tabId) {
       setActiveTabId(cartTabs[0].id);
     }
   };
 
-  // Sepet hesaplamaları
   const cartTotals = activeTab
     ? calculateCartTotals(activeTab.cart)
-    : {
-        subtotal: 0,
-        vatAmount: 0,
-        total: 0,
-        vatBreakdown: [],
-      };
+    : { subtotal: 0, vatAmount: 0, total: 0, vatBreakdown: [] };
 
-  // Sepeti temizle
   const clearCart = (): void => {
     if (!activeTab || activeTab.cart.length === 0) return;
-
     const confirmed = window.confirm(
       "Sepeti temizlemek istediğinize emin misiniz?"
     );
@@ -126,9 +143,9 @@ const POSPage: React.FC = () => {
   };
 
   // Barkod arama işlemi
-  const handleBarcodeSearch = (): void => {
+  const handleBarcodeSearch = async (): Promise<void> => {
     if (searchQuery) {
-      const product = sampleProducts.find((p) => p.barcode === searchQuery);
+      const product = products.find((p) => p.barcode === searchQuery);
       if (product) {
         addToCart(product);
         setSearchQuery("");
@@ -136,8 +153,7 @@ const POSPage: React.FC = () => {
     }
   };
 
-  // Sepete ürün ekleme
-  const addToCart = (product: Product): void => {
+  const addToCart = async (product: Product): Promise<void> => {
     if (product.stock === 0) return;
 
     setCartTabs((prevTabs) =>
@@ -170,7 +186,6 @@ const POSPage: React.FC = () => {
     );
   };
 
-  // Miktar güncelleme
   const updateQuantity = (productId: number, change: number): void => {
     setCartTabs((prevTabs) =>
       prevTabs.map((tab) => {
@@ -179,7 +194,7 @@ const POSPage: React.FC = () => {
         const updatedCart = tab.cart.map((item) => {
           if (item.id !== productId) return item;
 
-          const product = sampleProducts.find((p) => p.id === productId);
+          const product = products.find((p) => p.id === productId);
           if (!product) return item;
 
           const newQuantity = item.quantity + change;
@@ -193,7 +208,6 @@ const POSPage: React.FC = () => {
     );
   };
 
-  // Ürün kaldırma
   const removeFromCart = (productId: number): void => {
     setCartTabs((prevTabs) =>
       prevTabs.map((tab) => {
@@ -206,26 +220,27 @@ const POSPage: React.FC = () => {
     );
   };
 
-  // Stok güncelleme fonksiyonu
-  const updateStock = (): void => {
-    cart.forEach((cartItem) => {
-      const productIndex = sampleProducts.findIndex(
-        (product) => product.id === cartItem.id
-      );
-      if (productIndex !== -1) {
-        // Stok miktarını düşür
-        sampleProducts[productIndex].stock -= cartItem.quantity;
+  // Stok güncelleme
+  const updateStock = async (): Promise<void> => {
+    if (!activeTab) return;
+
+    try {
+      for (const cartItem of activeTab.cart) {
+        await productService.updateStock(cartItem.id, -cartItem.quantity);
       }
-    });
+      await loadData(); // Güncellenmiş ürünleri yeniden yükle
+    } catch (error) {
+      console.error("Stok güncellenirken hata:", error);
+    }
   };
 
   // Ödeme tamamlama
-  const handlePaymentComplete = (
+  const handlePaymentComplete = async (
     paymentMethod: PaymentMethod,
     cashReceived?: number
-  ): void => {
+  ): Promise<void> => {
     if (!activeTab) return;
-
+  
     const subtotal = activeTab.cart.reduce(
       (sum, item) => sum + item.price * item.quantity,
       0
@@ -235,21 +250,9 @@ const POSPage: React.FC = () => {
       0
     );
     const totalAmount = subtotal + vatAmount;
-
-    if (paymentMethod === "veresiye" && selectedCustomer) {
-      // Borcu müşteriye ekle
-      creditService.addTransaction({
-        customerId: selectedCustomer.id,
-        type: "debt",
-        amount: totalAmount,
-        date: new Date(),
-        description: "POS Veresiye Satış",
-      });
-    }
-
-    updateStock();
-
-    const sale = salesService.addSale({
+  
+    // Satış verilerini oluştur
+    const saleData: Omit<Sale, "id"> = {
       items: activeTab.cart,
       subtotal,
       vatAmount,
@@ -258,29 +261,44 @@ const POSPage: React.FC = () => {
       cashReceived,
       changeAmount: cashReceived ? cashReceived - totalAmount : undefined,
       date: new Date(),
-    });
-
-    const receiptData: ReceiptInfo = {
-      receiptNo: sale.receiptNo,
-      date: sale.date,
-      items: sale.items,
-      subtotal: sale.subtotal,
-      vatAmount: sale.vatAmount,
-      total: sale.total,
-      paymentMethod: sale.paymentMethod,
-      cashReceived: sale.cashReceived,
-      changeAmount: sale.changeAmount,
+      status: "completed", // Sabit türde bir değer
+      receiptNo: salesDB.generateReceiptNo(),
     };
-
-    setCartTabs((prevTabs) =>
-      prevTabs.map((tab) =>
-        tab.id === activeTabId ? { ...tab, cart: [] } : tab
-      )
-    );
-
-    setCurrentReceipt(receiptData);
-    setShowReceiptModal(true);
-    setShowPaymentModal(false);
+  
+    try {
+      // Satışı veritabanına ekle
+      const newSale = await salesDB.addSale(saleData);
+      console.log("Satış tamamlandı:", newSale);
+  
+      // Veresiye satışta müşteri borcunu güncelle
+      if (paymentMethod === "veresiye" && selectedCustomer) {
+        await creditService.addTransaction({
+          customerId: selectedCustomer.id,
+          type: "debt",
+          amount: totalAmount,
+          date: new Date(),
+          description: `Fiş No: ${newSale.receiptNo}`,
+        });
+      }
+  
+      // Stoktan düşme işlemini çağır
+      await updateStock();
+  
+      // Sepeti temizle
+      setCartTabs((prevTabs) =>
+        prevTabs.map((tab) =>
+          tab.id === activeTabId ? { ...tab, cart: [] } : tab
+        )
+      );
+  
+      // Modalı kapat
+      setShowPaymentModal(false);
+  
+      alert(`Satış başarıyla tamamlandı! Fiş No: ${newSale.receiptNo}`);
+    } catch (error) {
+      console.error("Satış tamamlama sırasında hata:", error);
+      alert("Satış tamamlanırken bir hata oluştu.");
+    }
   };
 
   // Fiş modalını kapat
@@ -381,7 +399,7 @@ const POSPage: React.FC = () => {
   });
 
   // Ürün filtreleme
-  const filteredProducts = sampleProducts.filter((product) => {
+  const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.barcode.includes(searchQuery);
@@ -391,8 +409,16 @@ const POSPage: React.FC = () => {
   });
 
   useEffect(() => {
-    const allCustomers = creditService.getAllCustomers();
-    setCustomers(allCustomers);
+    const fetchCustomers = async () => {
+      try {
+        const allCustomers = await creditService.getAllCustomers();
+        setCustomers(allCustomers);
+      } catch (error) {
+        console.error("Müşteriler yüklenirken bir hata oluştu:", error);
+      }
+    };
+  
+    fetchCustomers();
   }, []);
 
   return (
