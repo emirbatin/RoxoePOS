@@ -15,6 +15,7 @@ import CustomerList from "../components/CustomerList";
 import CustomerModal from "../components/CustomerModal";
 import TransactionModal from "../components/TransactionModal";
 import CustomerDetailModal from "../components/CustomerDetailModal";
+import Button from "../components/Button";
 
 const CreditPage: React.FC = () => {
   // State tanımlamaları
@@ -219,16 +220,18 @@ const CreditPage: React.FC = () => {
       {/* Üst Bar */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold text-gray-800">Veresiye</h1>
-        <button
-          onClick={() => {
-            setSelectedCustomer(undefined);
-            setShowCustomerModal(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-        >
-          <Plus size={20} />
-          Yeni Müşteri
-        </button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => {
+              setSelectedCustomer(undefined);
+              setShowCustomerModal(true);
+            }}
+            variant="primary"
+            icon={Plus} // İkonu buradan ekliyoruz
+          >
+            Müşteri Ekle
+          </Button>
+        </div>
       </div>
 
       {/* İstatistik Kartları */}

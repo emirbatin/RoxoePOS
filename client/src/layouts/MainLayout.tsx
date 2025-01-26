@@ -81,106 +81,93 @@ const Sidebar = ({
   };
 
   return (
-    <>
-      {/* Mobile backdrop */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-20 bg-black bg-opacity-50 lg:hidden"
-          onClick={() => setIsOpen(false)}
-        ></div>
-      )}
-
-      <aside
-        className={`
-        fixed lg:static inset-y-0 left-0 z-30
-        transform ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0
-        transition duration-200 ease-in-out
+    <aside
+      className={`
+        fixed inset-y-0 left-0 z-30
         bg-white border-r w-64 flex flex-col
+        lg:static lg:h-screen
       `}
-      >
-        <div className="flex items-center justify-between h-16 px-6 border-b lg:border-none">
-          <span className="text-lg font-semibold text-primary-600">ROXOE</span>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="lg:hidden p-2 hover:bg-gray-100 rounded-full"
-          >
-            <X size={20} className="text-gray-600" />
-          </button>
-        </div>
+    >
+      <div className="flex items-center justify-between h-16 px-6 border-b lg:border-none">
+        <span className="text-lg font-semibold text-primary-600">ROXOE</span>
+        <button
+          onClick={() => setIsOpen(false)}
+          className="lg:hidden p-2 hover:bg-gray-100 rounded-full"
+        >
+          <X size={20} className="text-gray-600" />
+        </button>
+      </div>
 
-        <div className="flex flex-col flex-1 overflow-y-auto">
-          <nav className="flex-1 px-4 pt-4">
-            {menuItems.map((item, index) => (
-              <button
-                key={index}
-                onClick={() => {
-                  navigate(item.path);
-                  setIsOpen(false);
-                }}
-                className={`
-                  w-full flex items-center px-4 py-3 mb-2 rounded-lg
-                  transition-colors duration-150 ease-in-out
-                  ${
-                    isActivePath(item.path)
-                      ? "bg-primary-50 text-primary-600"
-                      : "text-gray-600 hover:bg-gray-50"
-                  }
-                `}
-              >
-                {item.icon}
-                <span className="mx-3 font-medium">{item.label}</span>
-                {isActivePath(item.path) && (
-                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary-500"></span>
-                )}
-              </button>
-            ))}
-          </nav>
-
-          {/* Bağlantı Durumu */}
-          <div className="flex flex-col items-start justify-between px-6 py-4 border-t">
-            {/* İnternet Durumu */}
-            <div className="flex items-center gap-2 py-2">
-              {navigator.onLine ? (
-                <>
-                  <Wifi className="text-green-500" size={20} />
-                  <span className="text-sm font-medium text-gray-600">
-                    İnternete Bağlı
-                  </span>
-                </>
-              ) : (
-                <>
-                  <WifiOff className="text-red-500" size={20} />
-                  <span className="text-sm font-medium text-gray-600">
-                    İnternet Bağlantısı Yok
-                  </span>
-                </>
+      <div className="flex flex-col flex-1 overflow-y-auto">
+        <nav className="flex-1 px-4 pt-4">
+          {menuItems.map((item, index) => (
+            <button
+              key={index}
+              onClick={() => {
+                navigate(item.path);
+                setIsOpen(false);
+              }}
+              className={`
+                w-full flex items-center px-4 py-3 mb-2 rounded-lg
+                transition-colors duration-150 ease-in-out
+                ${
+                  isActivePath(item.path)
+                    ? "bg-primary-50 text-primary-600"
+                    : "text-gray-600 hover:bg-gray-50"
+                }
+              `}
+            >
+              {item.icon}
+              <span className="mx-3 font-medium">{item.label}</span>
+              {isActivePath(item.path) && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary-500"></span>
               )}
-            </div>
+            </button>
+          ))}
+        </nav>
 
-            {/* Sunucu Durumu */}
-            <div className="flex items-center gap-2 py-2">
-              {serverStatus ? (
-                <>
-                  <Server className="text-green-500" size={20} />
-                  <span className="text-sm font-medium text-gray-600">
-                    Sunucuya Bağlı
-                  </span>
-                </>
-              ) : (
-                <>
-                  <ServerOff className="text-red-500" size={20} />
-                  <span className="text-sm font-medium text-gray-600">
-                    Sunucu Bağlantısı Yok
-                  </span>
-                </>
-              )}
-            </div>
+        {/* Bağlantı Durumu */}
+        <div className="flex flex-col items-start justify-between px-6 py-4 border-t">
+          {/* İnternet Durumu */}
+          <div className="flex items-center gap-2 py-2">
+            {navigator.onLine ? (
+              <>
+                <Wifi className="text-green-500" size={20} />
+                <span className="text-sm font-medium text-gray-600">
+                  İnternete Bağlı
+                </span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="text-red-500" size={20} />
+                <span className="text-sm font-medium text-gray-600">
+                  İnternet Bağlantısı Yok
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Sunucu Durumu */}
+          <div className="flex items-center gap-2 py-2">
+            {serverStatus ? (
+              <>
+                <Server className="text-green-500" size={20} />
+                <span className="text-sm font-medium text-gray-600">
+                  Sunucuya Bağlı
+                </span>
+              </>
+            ) : (
+              <>
+                <ServerOff className="text-red-500" size={20} />
+                <span className="text-sm font-medium text-gray-600">
+                  Sunucu Bağlantısı Yok
+                </span>
+              </>
+            )}
           </div>
         </div>
-      </aside>
-    </>
+      </div>
+    </aside>
   );
 };
 

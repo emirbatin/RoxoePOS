@@ -25,6 +25,7 @@ import {
 } from "../utils/vatUtils";
 
 import ReasonModal from "../components/ReasonModal";
+import Button from "../components/Button";
 
 const SaleDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -47,13 +48,13 @@ const SaleDetailPage: React.FC = () => {
         }
       }
     };
-  
+
     fetchSale();
   }, [id]);
 
   const handlePrint = async () => {
     if (!sale) return;
-  
+
     try {
       const receiptData: ReceiptInfo = {
         ...sale,
@@ -63,7 +64,7 @@ const SaleDetailPage: React.FC = () => {
         items: sale.items,
         date: sale.date,
       };
-  
+
       const result = await receiptService.printReceipt(receiptData);
       if (result) {
         console.log("Fiş yazdırıldı");
@@ -78,7 +79,7 @@ const SaleDetailPage: React.FC = () => {
 
   const handleCancelConfirm = async (reason: string) => {
     if (!sale) return;
-  
+
     try {
       const updatedSale = await salesDB.cancelSale(sale.id, reason);
       if (updatedSale) {
@@ -97,7 +98,7 @@ const SaleDetailPage: React.FC = () => {
 
   const handleRefundConfirm = async (reason: string) => {
     if (!sale) return;
-  
+
     try {
       const updatedSale = await salesDB.refundSale(sale.id, reason);
       if (updatedSale) {
@@ -143,13 +144,11 @@ const SaleDetailPage: React.FC = () => {
           <ArrowLeft className="mr-2" size={20} />
           Satış Listesine Dön
         </button>
-        <button
-          onClick={handlePrint}
-          className="flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-        >
-          <Printer className="mr-2" size={20} />
-          Fişi Yazdır
-        </button>
+        <div className="flex gap-2">
+          <Button onClick={handlePrint} icon={Printer}>
+            Fişi Yazdır
+          </Button>
+        </div>
       </div>
 
       {/* Ana İçerik */}

@@ -29,6 +29,7 @@ import {
 } from "../utils/vatUtils";
 import PaymentModal from "../components/PaymentModal";
 import ReceiptModal from "../components/ReceiptModal";
+import Button from "../components/Button";
 import { salesDB } from "../services/salesDB";
 import { creditService } from "../services/creditServices";
 import { Sale } from "../types/sales";
@@ -684,14 +685,14 @@ const POSPage: React.FC = () => {
                 </div>
               </div>
 
-              <button
+              <Button
                 onClick={() => setShowPaymentModal(true)}
                 disabled={!activeTab.cart.length}
-                className="w-full py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                variant="primary"
+                icon={CreditCard} // İkonu buradan ekliyoruz
               >
-                <CreditCard size={20} />
                 Ödeme Yap
-              </button>
+              </Button>
             </div>
           </>
         )}
