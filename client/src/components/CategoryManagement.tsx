@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, AlertTriangle } from 'lucide-react';
-import { Category } from '../types/pos';
-import { productService } from '../services/productDB';
+import React, { useState } from "react";
+import { Plus, Edit2, Trash2, AlertTriangle, X } from "lucide-react";
+import { Category } from "../types/pos";
+import { productService } from "../services/productDB";
 
 interface CategoryManagementProps {
   categories: Category[];
@@ -10,39 +10,56 @@ interface CategoryManagementProps {
 }
 
 const EMOJI_LIST = [
-  '🏪', '🥤', '🍪', '🥛', '🥖', '🧀', '🍎', '🥩', '🥗', 
-  '🥘', '🍜', '🍱', '🥫', '🍬', '📦', '🧻', '🧼', '🧴'
+  "🏪",
+  "🥤",
+  "🍪",
+  "🥛",
+  "🥖",
+  "🧀",
+  "🍎",
+  "🥩",
+  "🥗",
+  "🥘",
+  "🍜",
+  "🍱",
+  "🥫",
+  "🍬",
+  "📦",
+  "🧻",
+  "🧼",
+  "🧴",
 ];
 
 const CategoryManagement: React.FC<CategoryManagementProps> = ({
   categories,
   onUpdate,
-  onClose
+  onClose,
 }) => {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [newCategory, setNewCategory] = useState<Partial<Category>>({
-    name: '',
-    icon: '🏷️'
+    name: "",
+    icon: "🏷️",
   });
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     if (!newCategory.name?.trim()) {
-      setError('Kategori adı boş olamaz');
+      setError("Kategori adı boş olamaz");
       return;
     }
 
     const nameExists = categories.some(
-      cat => cat.name.toLowerCase() === newCategory.name?.toLowerCase() &&
-      (!editingCategory || cat.id !== editingCategory.id)
+      (cat) =>
+        cat.name.toLowerCase() === newCategory.name?.toLowerCase() &&
+        (!editingCategory || cat.id !== editingCategory.id)
     );
 
     if (nameExists) {
-      setError('Bu isimde bir kategori zaten var');
+      setError("Bu isimde bir kategori zaten var");
       return;
     }
 
@@ -50,46 +67,45 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
       const updatedCategory = { ...editingCategory, ...newCategory };
       await productService.updateCategory(updatedCategory);
       onUpdate(
-        categories.map(cat =>
+        categories.map((cat) =>
           cat.id === editingCategory.id ? updatedCategory : cat
         )
       );
     } else {
       const id = await productService.addCategory({
         name: newCategory.name!,
-        icon: newCategory.icon || '🏷️',
+        icon: newCategory.icon || "🏷️",
       });
       onUpdate([
         ...categories,
-        { id, name: newCategory.name!, icon: newCategory.icon || '🏷️' },
+        { id, name: newCategory.name!, icon: newCategory.icon || "🏷️" },
       ]);
     }
 
-    setNewCategory({ name: '', icon: '🏷️' });
+    setNewCategory({ name: "", icon: "🏷️" });
     setEditingCategory(null);
     setShowForm(false);
   };
 
   const handleDelete = async (category: Category) => {
-    if (category.name === 'Tümü') {
-      setError('Varsayılan kategori silinemez');
+    if (category.name === "Tümü" || category.name === "Genel") {
+      setError("Varsayılan kategori silinemez");
       return;
     }
 
     const confirmed = window.confirm(
       `"${category.name}" kategorisini silmek istediğinize emin misiniz?\n` +
-      'Bu kategorideki ürünler "Tümü" kategorisine taşınacaktır.'
+        'Bu kategorideki ürünler "Genel" kategorisine taşınacaktır.'
     );
 
     if (confirmed) {
-      const defaultCategory = categories.find(cat => cat.name === 'Tümü');
-      if (!defaultCategory) {
-        setError('Varsayılan kategori bulunamadı.');
-        return;
+      try {
+        await productService.deleteCategory(category.id);
+        onUpdate(categories.filter((c) => c.id !== category.id));
+      } catch (error) {
+        setError("Kategori silinirken bir hata oluştu.");
+        console.error("Kategori silme hatası:", error);
       }
-
-      await productService.deleteCategory(category.id, defaultCategory.id);
-      onUpdate(categories.filter(c => c.id !== category.id));
     }
   };
 
@@ -106,7 +122,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
               onClick={onClose}
             >
               <span className="sr-only">Kapat</span>
-              <Trash2 className="h-6 w-6" />
+              <X className="h-6 w-6" />
             </button>
           </div>
 
@@ -117,7 +133,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
               </h3>
 
               <div className="mt-4 grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
-                {categories.map(category => (
+                {categories.map((category) => (
                   <div
                     key={category.id}
                     className="flex items-center justify-between p-2 border rounded-lg"
@@ -126,8 +142,8 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                       <span>{category.icon}</span>
                       <span>{category.name}</span>
                     </div>
-                    
-                    {category.name !== 'Tümü' && (
+
+                    {category.name !== "Tümü" && (
                       <div className="flex gap-1">
                         <button
                           onClick={() => {
@@ -170,7 +186,9 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                     <input
                       type="text"
                       value={newCategory.name}
-                      onChange={e => setNewCategory({ ...newCategory, name: e.target.value })}
+                      onChange={(e) =>
+                        setNewCategory({ ...newCategory, name: e.target.value })
+                      }
                       className="mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                       placeholder="Kategori adı girin..."
                     />
@@ -181,13 +199,19 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                       İkon
                     </label>
                     <div className="grid grid-cols-6 gap-2">
-                      {EMOJI_LIST.map(emoji => (
+                      {EMOJI_LIST.map((emoji) => (
                         <button
                           key={emoji}
                           type="button"
-                          onClick={() => setNewCategory({ ...newCategory, icon: emoji })}
+                          onClick={() =>
+                            setNewCategory({ ...newCategory, icon: emoji })
+                          }
                           className={`w-10 h-10 flex items-center justify-center border rounded-lg text-xl
-                            ${newCategory.icon === emoji ? 'border-primary-500 bg-primary-50' : 'hover:bg-gray-50'}`}
+                            ${
+                              newCategory.icon === emoji
+                                ? "border-primary-500 bg-primary-50"
+                                : "hover:bg-gray-50"
+                            }`}
                         >
                           {emoji}
                         </button>
@@ -208,7 +232,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                       onClick={() => {
                         setShowForm(false);
                         setEditingCategory(null);
-                        setNewCategory({ name: '', icon: '🏷️' });
+                        setNewCategory({ name: "", icon: "🏷️" });
                       }}
                       className="px-4 py-2 border rounded-lg hover:bg-gray-50"
                     >
@@ -218,7 +242,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                       type="submit"
                       className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
                     >
-                      {editingCategory ? 'Güncelle' : 'Ekle'}
+                      {editingCategory ? "Güncelle" : "Ekle"}
                     </button>
                   </div>
                 </form>

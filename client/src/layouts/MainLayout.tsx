@@ -19,6 +19,7 @@ import {
 
 // Header Component
 const Header = ({ toggleSidebar }: { toggleSidebar: () => void }) => {
+  const navigate = useNavigate();
   return (
     <header className="bg-white shadow-soft h-16 flex items-center justify-between px-4 lg:px-6">
       <div className="flex items-center gap-4">
@@ -40,7 +41,10 @@ const Header = ({ toggleSidebar }: { toggleSidebar: () => void }) => {
             <div className="text-sm font-medium text-gray-900">Admin</div>
             <div className="text-xs text-gray-500">Yönetici</div>
           </div>
-          <button className="p-2 hover:bg-gray-100 rounded-full">
+          <button
+            className="p-2 hover:bg-gray-100 rounded-full"
+            onClick={() => navigate("/settings")}
+          >
             <Settings size={20} className="text-gray-600" />
           </button>
         </div>

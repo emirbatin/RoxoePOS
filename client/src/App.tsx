@@ -6,6 +6,7 @@ import SaleDetailPage from './pages/SaleDetailPage'
 import DashboardPage from './pages/DashboardPage'
 import ProductsPage from './pages/ProductsPage'
 import CreditPage from './pages/CreditPage'
+import SettingsPage from './pages/SettingsPage'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           <Route path="/credit" element={<CreditPage />} />
           <Route path="/history" element={<SalesHistoryPage />} />
           <Route path="/reports" element={<DashboardPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/sales/:id" element={<SaleDetailPage />} />
         </Routes>
       </MainLayout>

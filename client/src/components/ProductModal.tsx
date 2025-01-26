@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
-import { Product, Category, VatRate } from '../types/pos';
-import { calculatePriceWithVat } from '../utils/vatUtils';
+import React, { useState, useEffect } from "react";
+import { X } from "lucide-react";
+import { Product, Category, VatRate } from "../types/pos";
+import { calculatePriceWithVat } from "../utils/vatUtils";
 
 interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (product: Omit<Product, 'id'>) => void;
+  onSave: (product: Omit<Product, "id">) => void;
   product?: Product;
   categories: Category[];
 }
@@ -18,50 +18,52 @@ const ProductModal: React.FC<ProductModalProps> = ({
   onClose,
   onSave,
   product,
-  categories
+  categories,
 }) => {
   const [form, setForm] = useState({
-    name: '',
-    price: '',
+    name: "",
+    price: "",
     vatRate: 18 as VatRate,
-    category: '',
-    stock: '',
-    barcode: ''
+    category: categories[0]?.name || "",
+    stock: "",
+    barcode: "",
   });
 
-  // Form verilerini sıfırla
+  // Form verilerini sıfırla ve doldur
   useEffect(() => {
-    if (product) {
-      setForm({
-        name: product.name,
-        price: product.price.toString(),
-        vatRate: product.vatRate,
-        category: product.category,
-        stock: product.stock.toString(),
-        barcode: product.barcode
-      });
-    } else {
-      setForm({
-        name: '',
-        price: '',
-        vatRate: 18,
-        category: categories[0]?.name || '',
-        stock: '',
-        barcode: ''
-      });
+    if (isOpen) {
+      if (product) {
+        setForm({
+          name: product.name,
+          price: product.price.toString(),
+          vatRate: product.vatRate,
+          category: product.category,
+          stock: product.stock.toString(),
+          barcode: product.barcode,
+        });
+      } else {
+        setForm({
+          name: "",
+          price: "",
+          vatRate: 18,
+          category: categories[0]?.name || "",
+          stock: "",
+          barcode: "",
+        });
+      }
     }
-  }, [product, categories]);
+  }, [isOpen, product, categories]);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const price = parseFloat(form.price);
     const stock = parseInt(form.stock);
 
     if (isNaN(price) || isNaN(stock)) {
-      alert('Lütfen geçerli sayısal değerler girin.');
+      alert("Lütfen geçerli sayısal değerler girin.");
       return;
     }
 
@@ -74,8 +76,10 @@ const ProductModal: React.FC<ProductModalProps> = ({
       vatRate: form.vatRate,
       category: form.category,
       stock,
-      barcode: form.barcode
+      barcode: form.barcode,
     });
+
+    onClose(); // Modal kapatma
   };
 
   return (
@@ -84,7 +88,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b">
           <h2 className="text-xl font-semibold">
-            {product ? 'Ürün Düzenle' : 'Yeni Ürün Ekle'}
+            {product ? "Ürün Düzenle" : "Yeni Ürün Ekle"}
           </h2>
           <button
             onClick={onClose}
@@ -105,7 +109,9 @@ const ProductModal: React.FC<ProductModalProps> = ({
               <input
                 type="text"
                 value={form.name}
-                onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, name: e.target.value }))
+                }
                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Ürün adı girin"
                 required
@@ -119,11 +125,13 @@ const ProductModal: React.FC<ProductModalProps> = ({
               </label>
               <select
                 value={form.category}
-                onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, category: e.target.value }))
+                }
                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
               >
-                {categories.map(category => (
+                {categories.map((category) => (
                   <option key={category.id} value={category.name}>
                     {category.icon} {category.name}
                   </option>
@@ -139,7 +147,9 @@ const ProductModal: React.FC<ProductModalProps> = ({
               <input
                 type="text"
                 value={form.barcode}
-                onChange={e => setForm(prev => ({ ...prev, barcode: e.target.value }))}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, barcode: e.target.value }))
+                }
                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Barkod girin"
                 required
@@ -156,7 +166,9 @@ const ProductModal: React.FC<ProductModalProps> = ({
                   type="number"
                   step="0.01"
                   value={form.price}
-                  onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, price: e.target.value }))
+                  }
                   className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="0.00"
                   required
@@ -174,11 +186,16 @@ const ProductModal: React.FC<ProductModalProps> = ({
               </label>
               <select
                 value={form.vatRate}
-                onChange={e => setForm(prev => ({ ...prev, vatRate: parseInt(e.target.value) as VatRate }))}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    vatRate: parseInt(e.target.value) as VatRate,
+                  }))
+                }
                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
               >
-                {VAT_RATES.map(rate => (
+                {VAT_RATES.map((rate) => (
                   <option key={rate} value={rate}>
                     %{rate}
                   </option>
@@ -194,7 +211,14 @@ const ProductModal: React.FC<ProductModalProps> = ({
               <div className="relative">
                 <input
                   type="text"
-                  value={form.price ? calculatePriceWithVat(parseFloat(form.price), form.vatRate).toFixed(2) : ''}
+                  value={
+                    form.price
+                      ? calculatePriceWithVat(
+                          parseFloat(form.price),
+                          form.vatRate
+                        ).toFixed(2)
+                      : ""
+                  }
                   className="w-full p-2 border rounded-lg bg-gray-50"
                   disabled
                 />
@@ -212,7 +236,9 @@ const ProductModal: React.FC<ProductModalProps> = ({
               <input
                 type="number"
                 value={form.stock}
-                onChange={e => setForm(prev => ({ ...prev, stock: e.target.value }))}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, stock: e.target.value }))
+                }
                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="0"
                 min="0"
@@ -234,7 +260,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
               type="submit"
               className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
             >
-              {product ? 'Güncelle' : 'Ekle'}
+              {product ? "Güncelle" : "Ekle"}
             </button>
           </div>
         </form>

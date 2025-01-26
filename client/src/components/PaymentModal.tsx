@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { PaymentModalProps } from "../types/pos";
 import { formatCurrency } from "../utils/vatUtils";
+import { posService } from '../services/posServices';
 
 const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
@@ -13,10 +14,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   selectedCustomer,
   setSelectedCustomer,
 }) => {
-  const [paymentMethod, setPaymentMethod] = useState<
-    "nakit" | "kart" | "veresiye" | "nakitpos"
-  >("nakit");
+  const [paymentMethod, setPaymentMethod] = useState<"nakit" | "kart" | "veresiye" | "nakitpos">("nakit");
   const [receivedAmount, setReceivedAmount] = useState<string>("");
+  const [processingPOS, setProcessingPOS] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -26,25 +26,57 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
-    // Modal kapandığında state'i temizle
     if (!isOpen) {
       setPaymentMethod("nakit");
       setReceivedAmount("");
-      setSelectedCustomer(null); // Müşteri seçimini sıfırla
+      setSelectedCustomer(null);
+      setProcessingPOS(false);
     }
-  }, [isOpen]);
+  }, [isOpen, setSelectedCustomer]);
 
   if (!isOpen) return null;
 
   const parsedReceived = parseFloat(receivedAmount) || 0;
   const changeAmount = parsedReceived - total;
 
+  const handlePayment = async () => {
+    if (paymentMethod === "veresiye" && !selectedCustomer) {
+      alert("Lütfen bir müşteri seçin!");
+      return;
+    }
+
+    if (paymentMethod === "kart" || paymentMethod === "nakitpos") {
+      setProcessingPOS(true);
+      try {
+        const connected = await posService.connect('Ingenico');
+        if (!connected) {
+          alert('POS cihazına bağlanılamadı!');
+          return;
+        }
+
+        const result = await posService.processPayment(total);
+        if (result.success) {
+          onComplete(paymentMethod, parsedReceived);
+        } else {
+          alert(result.message);
+        }
+      } catch (error) {
+        console.error('POS işlemi hatası:', error);
+        alert('POS işlemi sırasında bir hata oluştu!');
+      } finally {
+        setProcessingPOS(false);
+        await posService.disconnect();
+      }
+    } else if ((paymentMethod === "nakit" && changeAmount >= 0) || paymentMethod === "veresiye") {
+      onComplete(paymentMethod, parsedReceived);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-96">
         <h2 className="text-xl font-semibold mb-4">Ödeme</h2>
 
-        {/* Toplam Bilgileri */}
         <div className="bg-gray-50 p-4 rounded-lg mb-4 space-y-2">
           <div className="flex justify-between text-sm text-gray-600">
             <span>Ara Toplam:</span>
@@ -61,7 +93,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         </div>
 
         <div className="space-y-4">
-          {/* Ödeme Yöntemi Seçimi */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Ödeme Yöntemi
@@ -74,6 +105,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     : "hover:bg-gray-50"
                 } transition-colors`}
                 onClick={() => setPaymentMethod("nakit")}
+                disabled={processingPOS}
               >
                 💵 Nakit
               </button>
@@ -84,6 +116,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     : "hover:bg-gray-50"
                 } transition-colors`}
                 onClick={() => setPaymentMethod("kart")}
+                disabled={processingPOS}
               >
                 💳 Kredi Kartı
               </button>
@@ -94,6 +127,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     : "hover:bg-gray-50"
                 } transition-colors`}
                 onClick={() => setPaymentMethod("veresiye")}
+                disabled={processingPOS}
               >
                 📝 Veresiye
               </button>
@@ -104,13 +138,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     : "hover:bg-gray-50"
                 } transition-colors`}
                 onClick={() => setPaymentMethod("nakitpos")}
+                disabled={processingPOS}
               >
                 💵 POS (Nakit)
               </button>
             </div>
           </div>
 
-          {/* Nakit ve Nakit POS Ödeme Detayları */}
           {(paymentMethod === "nakit" || paymentMethod === "nakitpos") && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -121,8 +155,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 type="number"
                 value={receivedAmount}
                 onChange={(e) => setReceivedAmount(e.target.value)}
-                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="0.00"
+                disabled={processingPOS}
               />
               {changeAmount >= 0 && receivedAmount && (
                 <div className="mt-2 p-2 bg-green-50 text-green-700 rounded-lg">
@@ -137,7 +172,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           )}
 
-          {/* Veresiye Detayları */}
           {paymentMethod === "veresiye" && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -147,20 +181,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 value={selectedCustomer?.id || ""}
                 onChange={(e) =>
                   setSelectedCustomer(
-                    customers.find(
-                      (customer) => customer.id.toString() === e.target.value
-                    ) || null
+                    customers.find(c => c.id.toString() === e.target.value) || null
                   )
                 }
                 className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                disabled={processingPOS}
               >
-                <option value="" disabled>
-                  Müşteri Seçin
-                </option>
+                <option value="" disabled>Müşteri Seçin</option>
                 {customers.map((customer) => (
                   <option key={customer.id} value={customer.id}>
-                    {customer.name} - Kalan Bakiye:{" "}
-                    {formatCurrency(customer.creditLimit - customer.currentDebt)}
+                    {customer.name} - Kalan Bakiye: {formatCurrency(customer.creditLimit - customer.currentDebt)}
                   </option>
                 ))}
               </select>
@@ -172,38 +202,25 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             </div>
           )}
 
-          {/* Onay Butonları */}
           <div className="flex gap-2 mt-6">
             <button
               onClick={onClose}
               className="flex-1 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+              disabled={processingPOS}
             >
               İptal
             </button>
             <button
-              onClick={() => {
-                if (
-                  paymentMethod === "veresiye" &&
-                  !selectedCustomer // Eğer veresiye seçilmişse müşteri seçilmiş olmalı
-                ) {
-                  alert("Lütfen bir müşteri seçin!");
-                  return;
-                }
-
-                if (
-                  paymentMethod === "kart" ||
-                  (paymentMethod === "nakit" && changeAmount >= 0) ||
-                  paymentMethod === "veresiye" ||
-                  paymentMethod === "nakitpos"
-                ) {
-                  onComplete(paymentMethod, parsedReceived);
-                }
-              }}
-              disabled={paymentMethod === "nakit" && changeAmount < 0}
+              onClick={handlePayment}
+              disabled={
+                (paymentMethod === "nakit" && changeAmount < 0) ||
+                (paymentMethod === "veresiye" && !selectedCustomer) ||
+                processingPOS
+              }
               className="flex-1 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 
                 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
-              Ödemeyi Tamamla
+              {processingPOS ? "İşlem yapılıyor..." : "Ödemeyi Tamamla"}
             </button>
           </div>
         </div>

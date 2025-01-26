@@ -53,7 +53,19 @@ export const productService = {
 
   async addProduct(product: Omit<Product, "id">): Promise<number> {
     const db = await initProductDB();
-    return db.add("products", product) as Promise<number>;
+    const tx = db.transaction("products", "readwrite");
+
+    // Barkod kontrolü
+    const existingProduct = await tx.store
+      .index("barcode")
+      .get(product.barcode);
+    if (existingProduct) {
+      throw new Error(`Bu barkoda sahip ürün zaten mevcut: ${product.barcode}`);
+    }
+
+    const id = await tx.store.add(product);
+    await tx.done;
+    return id as number;
   },
 
   async updateProduct(product: Product): Promise<void> {
@@ -73,7 +85,31 @@ export const productService = {
 
   async addCategory(category: Omit<Category, "id">): Promise<number> {
     const db = await initProductDB();
-    return db.add("categories", category) as Promise<number>;
+    const tx = db.transaction(["categories"], "readwrite");
+
+    try {
+      // Kategori adı kontrolü
+      const store = tx.objectStore("categories");
+      const categories = await store.getAll();
+      const exists = categories.some(
+        (c) => c.name.toLowerCase() === category.name.toLowerCase()
+      );
+
+      if (exists) {
+        throw new Error(`${category.name} kategorisi zaten mevcut`);
+      }
+
+      const id = await store.add(category);
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve(undefined);
+        tx.onerror = () => reject(tx.error);
+      });
+
+      return id as number;
+    } catch (error) {
+      tx.abort();
+      throw error;
+    }
   },
 
   async updateCategory(category: Category): Promise<void> {
@@ -81,20 +117,40 @@ export const productService = {
     await db.put("categories", category);
   },
 
-  async deleteCategory(id: number, defaultCategoryId: number): Promise<void> {
+  // productDB.ts içinde
+  async deleteCategory(id: number): Promise<void> {
     const db = await initProductDB();
     const tx = db.transaction(["products", "categories"], "readwrite");
 
-    const products = await tx.objectStore("products").getAll();
-    for (const product of products) {
-      if (product.categoryId === id) {
-        product.categoryId = defaultCategoryId;
-        await tx.objectStore("products").put(product);
-      }
-    }
+    try {
+      const store = tx.objectStore("products");
+      const products = await store.getAll();
+      const categoryStore = tx.objectStore("categories");
+      const categoryToDelete = await categoryStore.get(id);
 
-    await tx.objectStore("categories").delete(id);
-    await tx.done;
+      if (!categoryToDelete) {
+        throw new Error("Silinecek kategori bulunamadı");
+      }
+
+      // Ürünleri güncelle
+      for (const product of products) {
+        if (product.category === categoryToDelete.name) {
+          product.category = "Genel";
+          await store.put(product);
+        }
+      }
+
+      // Kategoriyi sil
+      await categoryStore.delete(id);
+
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (error) {
+      tx.abort();
+      throw error;
+    }
   },
 
   async updateStock(id: number, quantity: number): Promise<void> {
@@ -109,23 +165,37 @@ export const productService = {
   },
 
   async bulkInsertProducts(products: Product[]): Promise<void> {
+    console.log("İçe aktarılacak ürünler:", products); // Debug için
+
     const db = await initProductDB();
     const tx = db.transaction("products", "readwrite");
-    const store = tx.store;
-  
-    for (const product of products) {
-      const existingProduct = await store.get(product.id);
-  
-      if (existingProduct) {
-        // Güncelleme yap
-        await store.put({ ...existingProduct, ...product });
-      } else {
-        // Yeni ürün ekle
-        await store.add(product);
+    const store = tx.objectStore("products");
+
+    try {
+      for (const product of products) {
+        const { id, ...productData } = product;
+
+        // Barkod kontrolü
+        const existing = await store.index("barcode").get(productData.barcode);
+
+        if (existing) {
+          await store.put({ ...productData, id: existing.id });
+        } else {
+          await store.add(productData);
+        }
       }
+
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => {
+          resolve();
+        };
+        tx.onerror = () => {
+          reject(tx.error);
+        };
+      });
+    } catch (error) {
+      throw error;
     }
-  
-    await tx.done;
   },
 
   async bulkInsertCategories(categories: Category[]): Promise<void> {
@@ -135,5 +205,42 @@ export const productService = {
       await tx.store.add(category);
     }
     await tx.done;
+  },
+
+  async getTransaction() {
+    const db = await initProductDB();
+    return db.transaction("products", "readwrite");
+  },
+
+  async addOrUpdateProduct(product: Omit<Product, "id">, tx?: IDBTransaction) {
+    const db = await initProductDB();
+    const transaction = tx || db.transaction("products", "readwrite");
+    const store = transaction.objectStore("products");
+
+    try {
+      const index = store.index("barcode");
+      const existing = await index.get(product.barcode);
+
+      if (existing) {
+        await store.put({
+          ...product,
+          id: existing.id,
+        });
+      } else {
+        await store.add(product);
+      }
+
+      if (!tx) {
+        await new Promise((resolve, reject) => {
+          transaction.oncomplete = resolve;
+          transaction.onerror = () => reject(transaction.error);
+        });
+      }
+    } catch (error) {
+      if (!tx) {
+        transaction.abort();
+      }
+      throw error;
+    }
   },
 };

@@ -45,3 +45,37 @@ export interface PaymentModalProps {
   selectedCustomer: Customer | null; // Seçilen müşteri (null olabilir)
   setSelectedCustomer: (customer: Customer | null) => void; // Seçilen müşteriyi güncellemek için fonksiyon
 }
+
+export interface POSConfig {
+  type: string;          // POS markası/modeli
+  baudRate: number;      // İletişim hızı
+  protocol: string;      // Kullanılan protokol
+  commandSet: {          // Cihaza özel komutlar
+    payment: string;
+    cancel: string;
+    status: string;
+  };
+}
+
+export interface SerialOptions {
+  baudRate: number;
+  dataBits?: number;
+  stopBits?: number;
+  parity?: 'none' | 'even' | 'odd';
+  bufferSize?: number;
+  flowControl?: 'none' | 'hardware';
+}
+
+export interface SerialPort {
+  readonly readable: ReadableStream;
+  readonly writable: WritableStream;
+  open(options: SerialOptions): Promise<void>;
+  close(): Promise<void>;
+  getInfo(): SerialPortInfo;
+}
+
+export interface SerialPortInfo {
+  usbVendorId: number;
+  usbProductId: number;
+}
+

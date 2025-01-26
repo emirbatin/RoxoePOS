@@ -23,35 +23,54 @@ class ImportExportService {
       if (!worksheet) throw new ProcessingError("Excel dosyası boş");
 
       const products: Product[] = [];
+      const uniqueCategories = new Set<string>();
       const headers = this.getHeaders(worksheet);
 
+      // Önce kategorileri topla
       worksheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return;
+        const category = this.getCellValue(row, headers, "Kategori") || "Genel";
+        uniqueCategories.add(category);
+      });
 
+      // Kategorileri veritabanına ekle
+      const existingCategories = await productService.getCategories();
+      const existingCategoryNames = new Set(
+        existingCategories.map((c) => c.name)
+      );
+
+      for (const categoryName of uniqueCategories) {
+        if (!existingCategoryNames.has(categoryName)) {
+          await productService.addCategory({
+            name: categoryName,
+            icon: "🏷️", // Varsayılan ikon
+          });
+        }
+      }
+
+      // Ürünleri işle
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
         try {
           const product = this.processExcelRow(row, headers);
           products.push(product);
         } catch (error) {
           if (error instanceof ProcessingError) {
             throw new ProcessingError(`Satır ${rowNumber}: ${error.message}`);
-          } else {
-            throw new ProcessingError(
-              `Satır ${rowNumber}: Beklenmeyen bir hata oluştu`
-            );
           }
+          throw new ProcessingError(
+            `Satır ${rowNumber}: Beklenmeyen bir hata oluştu`
+          );
         }
       });
 
-      // Elde edilen ürünleri veritabanına ekle
       await productService.bulkInsertProducts(products);
-
       return products;
     } catch (error) {
       if (error instanceof ProcessingError) {
         throw error;
-      } else {
-        throw new ProcessingError("Dosya işlenirken bir hata oluştu");
       }
+      throw new ProcessingError("Dosya işlenirken bir hata oluştu");
     }
   }
 
@@ -288,6 +307,16 @@ class ImportExportService {
       }
       throw new ProcessingError("Beklenmeyen bir hata oluştu");
     }
+  }
+
+  private getCellValue(
+    row: ExcelJS.Row,
+    headers: Map<string, number>,
+    header: string
+  ): string {
+    const colNumber = headers.get(header);
+    if (!colNumber) return "";
+    return row.getCell(colNumber).value?.toString() || "";
   }
 
   private processCSVRow(

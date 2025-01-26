@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Category, Product } from "../types/pos";
 import { formatCurrency, formatVatRate } from "../utils/vatUtils";
-import { productService } from "../services/productDB";
+import { initProductDB, productService } from "../services/productDB";
 import ProductModal from "../components/ProductModal";
 import BulkProductOperations from "../components/BulkProductOperations";
 import BatchPriceUpdate from "../components/BatchPriceUpdate";
@@ -42,7 +42,7 @@ const ProductsPage: React.FC = () => {
   // İlk yükleme
   useEffect(() => {
     loadData();
-  }, [products]);
+  }, []);
 
   const loadData = async () => {
     try {
@@ -137,26 +137,49 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  const handleBulkImport = async (importedProducts: Product[]) => {
+  async function handleBulkImport(importedProducts: Product[]) {
+    let addedCount = 0;
+    let updatedCount = 0;
+    
     try {
+      // Tüm ürünleri tek transaction içinde işle
+      const db = await initProductDB();
+      const tx = db.transaction('products', 'readwrite');
+      const store = tx.objectStore('products');
+      
       for (const product of importedProducts) {
-        const existingProduct = products.find(
-          (p) => p.barcode === product.barcode
-        );
-        if (existingProduct) {
-          await productService.updateProduct({
-            ...product,
-            id: existingProduct.id,
-          });
-        } else {
-          await productService.addProduct(product);
+        try {
+          const index = store.index('barcode');
+          const existing = await index.get(product.barcode);
+          const { id, ...productData } = product;
+  
+          if (existing) {
+            await store.put({
+              ...productData,
+              id: existing.id
+            });
+            updatedCount++;
+          } else {
+            await store.add(productData);
+            addedCount++;
+          }
+        } catch (err) {
+          console.error(`Ürün işleme hatası (${product.name}):`, err);
         }
       }
+  
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      
       await loadData();
-    } catch (error) {
-      console.error("Toplu içe aktarma sırasında hata:", error);
+      alert(`İçe aktarma tamamlandı:\n${addedCount} yeni ürün eklendi\n${updatedCount} ürün güncellendi`);
+    } catch (err: any) {
+      console.error("İçe aktarma hatası:", err);
+      alert(`İçe aktarma sırasında hata:\n${addedCount} ürün eklendi\n${updatedCount} ürün güncellendi\nHata: ${err?.message || 'Bilinmeyen hata'}`);
     }
-  };
+  }
 
   // Stok işlemleri
   const handleStockUpdate = async (productId: number, newStock: number) => {

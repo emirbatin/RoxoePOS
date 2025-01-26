@@ -32,6 +32,7 @@ import ReceiptModal from "../components/ReceiptModal";
 import { salesDB } from "../services/salesDB";
 import { creditService } from "../services/creditServices";
 import { Sale } from "../types/sales";
+import { BarcodeConfig } from "../types/barcode";
 
 const POSPage: React.FC = () => {
   // Temel state'ler
@@ -50,6 +51,10 @@ const POSPage: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null
   );
+  const [barcodeConfig] = useState<BarcodeConfig>(() => {
+    const saved = localStorage.getItem("barcodeConfig");
+    return saved ? JSON.parse(saved) : { enabled: true, suffix: "\n" };
+  });
 
   // Sepet sekmeleri için state'ler
   const [cartTabs, setCartTabs] = useState<CartTab[]>([
@@ -240,7 +245,7 @@ const POSPage: React.FC = () => {
     cashReceived?: number
   ): Promise<void> => {
     if (!activeTab) return;
-  
+
     const subtotal = activeTab.cart.reduce(
       (sum, item) => sum + item.price * item.quantity,
       0
@@ -250,7 +255,7 @@ const POSPage: React.FC = () => {
       0
     );
     const totalAmount = subtotal + vatAmount;
-  
+
     // Satış verilerini oluştur
     const saleData: Omit<Sale, "id"> = {
       items: activeTab.cart,
@@ -264,12 +269,12 @@ const POSPage: React.FC = () => {
       status: "completed", // Sabit türde bir değer
       receiptNo: salesDB.generateReceiptNo(),
     };
-  
+
     try {
       // Satışı veritabanına ekle
       const newSale = await salesDB.addSale(saleData);
       console.log("Satış tamamlandı:", newSale);
-  
+
       // Veresiye satışta müşteri borcunu güncelle
       if (paymentMethod === "veresiye" && selectedCustomer) {
         await creditService.addTransaction({
@@ -280,20 +285,20 @@ const POSPage: React.FC = () => {
           description: `Fiş No: ${newSale.receiptNo}`,
         });
       }
-  
+
       // Stoktan düşme işlemini çağır
       await updateStock();
-  
+
       // Sepeti temizle
       setCartTabs((prevTabs) =>
         prevTabs.map((tab) =>
           tab.id === activeTabId ? { ...tab, cart: [] } : tab
         )
       );
-  
+
       // Modalı kapat
       setShowPaymentModal(false);
-  
+
       alert(`Satış başarıyla tamamlandı! Fiş No: ${newSale.receiptNo}`);
     } catch (error) {
       console.error("Satış tamamlama sırasında hata:", error);
@@ -409,6 +414,21 @@ const POSPage: React.FC = () => {
   });
 
   useEffect(() => {
+    if (!barcodeConfig.enabled) return;
+
+    const handleBarcodeScan = (event: KeyboardEvent) => {
+      // suffix genelde Enter (\n) olur
+      if (event.key === barcodeConfig.suffix && searchQuery) {
+        event.preventDefault();
+        handleBarcodeSearch();
+      }
+    };
+
+    window.addEventListener("keydown", handleBarcodeScan);
+    return () => window.removeEventListener("keydown", handleBarcodeScan);
+  }, [searchQuery, barcodeConfig]);
+
+  useEffect(() => {
     const fetchCustomers = async () => {
       try {
         const allCustomers = await creditService.getAllCustomers();
@@ -417,7 +437,7 @@ const POSPage: React.FC = () => {
         console.error("Müşteriler yüklenirken bir hata oluştu:", error);
       }
     };
-  
+
     fetchCustomers();
   }, []);
 
@@ -441,6 +461,11 @@ const POSPage: React.FC = () => {
                 }
               }}
             />
+            {barcodeConfig.enabled && (
+              <span className="absolute right-3 top-2.5 text-xs text-green-500">
+                Barkod Hazır
+              </span>
+            )}
             <Search
               className="absolute left-3 top-2.5 text-gray-400"
               size={20}
