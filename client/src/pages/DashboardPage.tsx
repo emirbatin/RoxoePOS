@@ -19,40 +19,102 @@ import {
   ShoppingCart,
   DollarSign,
   BarChart2,
-  Users,
   XCircle,
   RotateCcw,
+  ArrowUpRight,
 } from "lucide-react";
-
 import { Sale } from "../types/sales";
-
 import DashboardFilters from "../components/DashboardFilters";
+import { Table } from "../components/Table";
 import { StatCard } from "../components/StatCard";
-
 import { salesDB } from "../services/salesDB";
 import { exportService } from "../services/exportSevices";
+import { Column } from "../types/table";
+import { ProductStats } from "../types/product";
+import { Pagination } from "../components/Pagination";
 
 const DashboardPage: React.FC = () => {
   const [salesData, setSalesData] = useState<Sale[]>([]);
-  const [dateRange, setDateRange] = useState<"week" | "month">("week");
   const [period, setPeriod] = useState<"day" | "week" | "month" | "year">(
     "week"
   );
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [endDate, setEndDate] = useState<Date>(new Date());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  const columns: Column<ProductStats>[] = [
+    {
+      key: "name",
+      title: "Ürün",
+      render: (product) => (
+        <div className="text-sm font-medium text-gray-900">{product.name}</div>
+      ),
+    },
+    {
+      key: "category",
+      title: "Kategori",
+      render: (product) => (
+        <div className="text-sm text-gray-500">{product.category}</div>
+      ),
+    },
+    {
+      key: "quantity",
+      title: "Satış Adedi",
+      className: "text-right",
+      render: (product) => (
+        <div className="text-sm font-medium">{product.quantity}</div>
+      ),
+    },
+    {
+      key: "averagePrice",
+      title: "Birim Fiyat",
+      className: "text-right",
+      render: (product) => (
+        <div className="text-sm">{`₺${product.averagePrice.toFixed(2)}`}</div>
+      ),
+    },
+    {
+      key: "revenue",
+      title: "Toplam Ciro",
+      className: "text-right",
+      render: (product) => (
+        <div className="text-sm">{`₺${product.revenue.toFixed(2)}`}</div>
+      ),
+    },
+    {
+      key: "profit",
+      title: "Net Kâr",
+      className: "text-right",
+      render: (product) => (
+        <div className="text-sm font-medium text-green-600">
+          {`₺${product.profit.toFixed(2)}`}
+        </div>
+      ),
+    },
+    {
+      key: "profitMargin",
+      title: "Kâr Marjı",
+      className: "text-right",
+      render: (product) => (
+        <div className="text-sm">
+          {`%${((product.profit / product.revenue) * 100).toFixed(1)}`}
+        </div>
+      ),
+    },
+  ];
 
   const loadSales = async () => {
     try {
       const allSales = await salesDB.getAllSales();
       setSalesData(allSales);
     } catch (error) {
-      console.error("Satış verileri yüklenirken hata oluştu:", error);
+      console.error("Satış verileri yüklenirken hata:", error);
     }
   };
 
   useEffect(() => {
     loadSales();
-
     const interval = setInterval(loadSales, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -63,19 +125,16 @@ const DashboardPage: React.FC = () => {
     setEndDate(end);
   }, [period]);
 
-  const filteredSales = salesData.filter((sale) => {
-    const saleDate = new Date(sale.date);
-    return saleDate >= startDate && saleDate <= endDate;
-  });
-
-  const handleExport = async (type: "excel" | "pdf") => {
+  const handleExport = async (
+    type: "excel" | "pdf",
+    reportType: "sale" | "product"
+  ) => {
     const dateRange = exportService.formatDateRange(startDate, endDate);
-
     try {
       if (type === "excel") {
-        await exportService.exportToExcel(filteredSales, dateRange);
+        await exportService.exportToExcel(filteredSales, dateRange, reportType);
       } else {
-        await exportService.exportToPDF(filteredSales, dateRange);
+        await exportService.exportToPDF(filteredSales, dateRange, reportType);
       }
     } catch (error) {
       console.error(`${type.toUpperCase()} export hatası:`, error);
@@ -83,11 +142,46 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  const filteredSales = salesData.filter((sale) => {
+    const saleDate = new Date(sale.date);
+    return saleDate >= startDate && saleDate <= endDate;
+  });
+
   const totalStats = {
     totalSales: filteredSales.length,
     totalRevenue: filteredSales
       .filter((sale) => sale.status === "completed")
       .reduce((sum, sale) => sum + sale.total, 0),
+    netProfit: filteredSales
+      .filter((sale) => sale.status === "completed")
+      .reduce((sum, sale) => {
+        const saleProfit = sale.items.reduce(
+          (itemSum, item) =>
+            itemSum + (item.salePrice - item.purchasePrice) * item.quantity,
+          0
+        );
+        return sum + saleProfit;
+      }, 0),
+    profitMargin:
+      filteredSales
+        .filter((sale) => sale.status === "completed")
+        .reduce((sum, sale) => sum + sale.total, 0) > 0
+        ? (filteredSales
+            .filter((sale) => sale.status === "completed")
+            .reduce((sum, sale) => {
+              const saleProfit = sale.items.reduce(
+                (itemSum, item) =>
+                  itemSum +
+                  (item.salePrice - item.purchasePrice) * item.quantity,
+                0
+              );
+              return sum + saleProfit;
+            }, 0) /
+            filteredSales
+              .filter((sale) => sale.status === "completed")
+              .reduce((sum, sale) => sum + sale.total, 0)) *
+          100
+        : 0,
     averageBasket: filteredSales.length
       ? filteredSales.reduce((sum, sale) => sum + sale.total, 0) /
         filteredSales.length
@@ -107,51 +201,122 @@ const DashboardPage: React.FC = () => {
   const categorySales = salesData.reduce((acc, sale) => {
     sale.items.forEach((item) => {
       if (!acc[item.category]) {
-        acc[item.category] = { count: 0, revenue: 0 };
+        acc[item.category] = { count: 0, revenue: 0, profit: 0 };
       }
       acc[item.category].count += item.quantity;
-      acc[item.category].revenue += item.price * item.quantity;
+      acc[item.category].revenue += item.priceWithVat * item.quantity;
+      acc[item.category].profit +=
+        (item.salePrice - item.purchasePrice) * item.quantity;
     });
     return acc;
-  }, {} as Record<string, { count: number; revenue: number }>);
+  }, {} as Record<string, { count: number; revenue: number; profit: number }>);
 
-  const categoryChartData = Object.entries(categorySales).map(
-    ([name, data]) => ({
-      name,
-      value: data.revenue,
-    })
+  const categoryData = Object.entries(categorySales).map(([name, data]) => ({
+    name,
+    revenue: data.revenue || 0,
+    profit: data.profit || 0,
+  }));
+
+  const dailySales = salesData.reduce(
+    (acc, sale) => {
+      const date = new Date(sale.date).toLocaleDateString("tr-TR");
+      if (!acc[date]) {
+        acc[date] = {
+          total: 0,
+          count: 0,
+          profit: 0,
+          netRevenue: 0,
+          refunds: 0,
+          cancellations: 0,
+        };
+      }
+
+      acc[date].total += sale.total;
+      acc[date].count += 1;
+
+      const saleProfit = sale.items.reduce(
+        (sum, item) =>
+          sum + (item.salePrice - item.purchasePrice) * item.quantity,
+        0
+      );
+      acc[date].profit += saleProfit;
+
+      if (sale.status === "refunded") acc[date].refunds += 1;
+      if (sale.status === "cancelled") acc[date].cancellations += 1;
+
+      return acc;
+    },
+    {} as Record<
+      string,
+      {
+        total: number;
+        count: number;
+        profit: number;
+        netRevenue: number;
+        refunds: number;
+        cancellations: number;
+      }
+    >
   );
-
-  const dailySales = salesData.reduce((acc, sale) => {
-    const date = new Date(sale.date).toLocaleDateString("tr-TR");
-    if (!acc[date]) {
-      acc[date] = { total: 0, count: 0, refunds: 0, cancellations: 0 };
-    }
-
-    acc[date].total += sale.total;
-    acc[date].count += 1;
-
-    if (sale.status === "refunded") {
-      acc[date].refunds += 1;
-    }
-
-    if (sale.status === "cancelled") {
-      acc[date].cancellations += 1;
-    }
-
-    return acc;
-  }, {} as Record<string, { total: number; count: number; refunds: number; cancellations: number }>);
 
   const dailySalesData = Object.entries(dailySales)
     .map(([date, data]) => ({
       date,
-      total: data.total,
-      count: data.count,
-      refunds: data.refunds,
-      cancellations: data.cancellations,
+      ...data,
     }))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(-7);
+
+  // Ürün istatistikleri hesaplama
+  const productStats = filteredSales.reduce(
+    (acc, sale) => {
+      if (sale.status !== "completed") return acc;
+
+      sale.items.forEach((item) => {
+        if (!acc[item.name]) {
+          acc[item.name] = {
+            name: item.name,
+            category: item.category,
+            quantity: 0,
+            revenue: 0,
+            profit: 0,
+            averagePrice: item.salePrice,
+          };
+        }
+        acc[item.name].quantity += item.quantity;
+        acc[item.name].revenue += item.priceWithVat * item.quantity;
+        acc[item.name].profit +=
+          (item.salePrice - item.purchasePrice) * item.quantity;
+      });
+      return acc;
+    },
+    {} as Record<
+      string,
+      {
+        name: string;
+        category: string;
+        quantity: number;
+        revenue: number;
+        profit: number;
+        averagePrice: number;
+      }
+    >
+  );
+
+  // Sayfalama için ürünleri hazırla
+  const sortedProducts = Object.values(productStats).sort(
+    (a, b) => b.quantity - a.quantity
+  );
+
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentProducts = sortedProducts.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
+  const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
+
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
   const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
 
@@ -168,21 +333,29 @@ const DashboardPage: React.FC = () => {
         onPeriodChange={setPeriod}
         onExport={handleExport}
       />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         <StatCard
           title="Toplam Satış"
           value={totalStats.totalSales.toString()}
           icon={<ShoppingCart size={24} />}
         />
         <StatCard
-          title="Toplam Ciro"
+          title="Brüt Ciro"
           value={`₺${totalStats.totalRevenue.toFixed(2)}`}
           icon={<DollarSign size={24} />}
         />
         <StatCard
-          title="Ortalama Sepet"
-          value={`₺${totalStats.averageBasket.toFixed(2)}`}
-          icon={<BarChart2 size={24} />}
+          title="Net Kâr"
+          value={`₺${totalStats.netProfit.toFixed(2)}`}
+          icon={<TrendingUp size={24} />}
+          color="green"
+        />
+        <StatCard
+          title="Kâr Marjı"
+          value={`%${totalStats.profitMargin.toFixed(1)}`}
+          icon={<ArrowUpRight size={24} />}
+          color="blue"
         />
         <StatCard
           title="İptal Oranı"
@@ -218,51 +391,43 @@ const DashboardPage: React.FC = () => {
                   type="monotone"
                   dataKey="total"
                   stroke="#8884d8"
-                  name="Ciro (₺)"
+                  name="Brüt Ciro (₺)"
+                />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="profit"
+                  stroke="#82ca9d"
+                  name="Net Kâr (₺)"
                 />
                 <Line
                   yAxisId="right"
                   type="monotone"
                   dataKey="count"
-                  stroke="#82ca9d"
+                  stroke="#ffc658"
                   name="Satış Adedi"
-                />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="refunds"
-                  stroke="#FF8042"
-                  name="İade Adedi"
-                />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="cancellations"
-                  stroke="#FF0000"
-                  name="İptal Adedi"
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
-
         <div className="bg-white p-6 rounded-lg border">
           <h2 className="text-lg font-semibold mb-4">Kategori Dağılımı</h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={categoryChartData}
+                  data={categoryData}
                   cx="50%"
                   cy="50%"
                   outerRadius={120}
                   fill="#8884d8"
-                  dataKey="value"
+                  dataKey="profit"
                   label={({ name, percent }) =>
                     `${name} (${(percent * 100).toFixed(0)}%)`
                   }
                 >
-                  {categoryChartData.map((_, index) => (
+                  {categoryData.map((_, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={COLORS[index % COLORS.length]}
@@ -276,13 +441,14 @@ const DashboardPage: React.FC = () => {
             </ResponsiveContainer>
           </div>
         </div>
-
         <div className="bg-white p-6 rounded-lg border lg:col-span-2">
-          <h2 className="text-lg font-semibold mb-4">En Çok Satan Ürünler</h2>
+          <h2 className="text-lg font-semibold mb-4">
+            Kategori Bazlı Kârlılık
+          </h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={categoryChartData}
+                data={categoryData}
                 margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" />
@@ -290,11 +456,36 @@ const DashboardPage: React.FC = () => {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="value" fill="#8884d8" name="Ciro (₺)" />
+                <Bar dataKey="revenue" fill="#8884d8" name="Brüt Ciro (₺)" />
+                <Bar dataKey="profit" fill="#82ca9d" name="Net Kâr (₺)" />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
+        {/* Ürün Tablosu */}
+        <div className="bg-white p-6 rounded-lg border lg:col-span-2">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-lg font-semibold">Ürün Satış Performansı</h2>
+            <span className="text-sm text-gray-500">
+              Toplam {sortedProducts.length} ürün
+            </span>
+          </div>
+
+          <Table<ProductStats, string>
+            data={currentProducts}
+            columns={columns}
+            idField="name"
+            className="w-full"
+            emptyMessage="Henüz satış verisi bulunmuyor."
+          />
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={paginate}
+            className="mt-4"
+          />
+        </div>{" "}
       </div>
     </div>
   );

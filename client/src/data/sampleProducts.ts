@@ -1,4 +1,4 @@
-import { Product, Category } from '../types/pos';
+import { Product, Category } from '../types/product';
 import { calculatePriceWithVat } from '../utils/vatUtils';
 
 // Örnek kategoriler

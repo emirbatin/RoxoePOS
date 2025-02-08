@@ -1,13 +1,14 @@
-import { VatRate, CartItem } from '../types/pos';
+import {CartItem } from '../types/pos';
+import {VatRate} from '../types/product'
 
 // KDV'li fiyat hesaplama
-export const calculatePriceWithVat = (price: number, vatRate: VatRate): number => {
-  return Number((price * (1 + vatRate / 100)).toFixed(2));
+export const calculatePriceWithVat = (salePrice: number, vatRate: VatRate): number => {
+  return Number((salePrice * (1 + vatRate / 100)).toFixed(2));
 };
 
 // KDV tutarı hesaplama
-export const calculateVatAmount = (price: number, vatRate: VatRate): number => {
-  return Number((price * (vatRate / 100)).toFixed(2));
+export const calculateVatAmount = (salePrice: number, vatRate: VatRate): number => {
+  return Number((salePrice * (vatRate / 100)).toFixed(2));
 };
 
 // KDV'siz fiyat hesaplama (KDV'li fiyattan)
@@ -17,31 +18,32 @@ export const calculatePriceWithoutVat = (priceWithVat: number, vatRate: VatRate)
 
 // Sepet öğesi için KDV hesaplamaları
 export const calculateCartItemTotals = (item: CartItem): CartItem => {
-  const totalWithoutVat = Number((item.price * item.quantity).toFixed(2));
-  const totalVatAmount = Number((totalWithoutVat * (item.vatRate / 100)).toFixed(2));
-  const totalWithVat = Number((totalWithoutVat + totalVatAmount).toFixed(2));
-
   return {
     ...item,
-    totalWithoutVat,
-    totalVatAmount,
-    totalWithVat
+    total: Number((item.salePrice * item.quantity).toFixed(2)),         // KDV'siz toplam
+    totalWithVat: Number((item.priceWithVat * item.quantity).toFixed(2)), // KDV'li toplam
+    vatAmount: Number(((item.priceWithVat - item.salePrice) * item.quantity).toFixed(2)) // Toplam KDV tutarı
   };
 };
 
 // Sepet toplamı için KDV hesaplamaları
 export const calculateCartTotals = (items: CartItem[]) => {
   const totals = {
-    subtotal: 0,      // KDV'siz toplam
-    vatAmount: 0,     // Toplam KDV
-    total: 0,         // KDV'li toplam
-    vatBreakdown: new Map<VatRate, { baseAmount: number; vatAmount: number; totalAmount: number }>()
+    subtotal: 0,     // KDV'siz toplam (salePrice'lar toplamı)
+    vatAmount: 0,    // Toplam KDV
+    total: 0,        // KDV'li toplam
+    vatBreakdown: new Map<VatRate, { 
+      baseAmount: number;      // KDV'siz tutar
+      vatAmount: number;       // KDV tutarı
+      totalAmount: number;     // KDV'li tutar
+    }>()
   };
 
   items.forEach(item => {
     const itemWithTotals = calculateCartItemTotals(item);
-    totals.subtotal += itemWithTotals.totalWithoutVat!;
-    totals.vatAmount += itemWithTotals.totalVatAmount!;
+    
+    totals.subtotal += itemWithTotals.total!;
+    totals.vatAmount += itemWithTotals.vatAmount!;
     totals.total += itemWithTotals.totalWithVat!;
 
     // KDV oranlarına göre dağılım
@@ -52,8 +54,8 @@ export const calculateCartTotals = (items: CartItem[]) => {
     };
 
     totals.vatBreakdown.set(item.vatRate, {
-      baseAmount: currentVatGroup.baseAmount + itemWithTotals.totalWithoutVat!,
-      vatAmount: currentVatGroup.vatAmount + itemWithTotals.totalVatAmount!,
+      baseAmount: currentVatGroup.baseAmount + itemWithTotals.total!,
+      vatAmount: currentVatGroup.vatAmount + itemWithTotals.vatAmount!,
       totalAmount: currentVatGroup.totalAmount + itemWithTotals.totalWithVat!
     });
   });

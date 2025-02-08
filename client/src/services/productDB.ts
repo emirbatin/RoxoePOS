@@ -1,6 +1,6 @@
 // productDB.ts
 import { openDB } from "idb";
-import { Product, Category } from "../types/pos";
+import { Product, Category } from "../types/product";
 
 const DB_NAME = "posDB";
 const DB_VERSION = 1;

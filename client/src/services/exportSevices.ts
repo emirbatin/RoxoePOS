@@ -3,7 +3,8 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 
-interface ReportData {
+// Fiş bazlı rapor için interface
+interface SaleReportData {
   'Fiş No': string;
   'Tarih': Date;
   'Tutar': number;
@@ -13,8 +14,23 @@ interface ReportData {
   'Ürünler': string;
 }
 
+// Ürün bazlı rapor için interface
+interface ProductReportData {
+  'Ürün Adı': string;
+  'Kategori': string;
+  'Satış Adedi': number;
+  'Birim Alış': number;
+  'Birim Satış': number;
+  'Toplam Ciro': number;
+  'Toplam Kâr': number;
+  'Kâr Marjı (%)': number;
+}
+
+type ReportType = 'sale' | 'product';
+
 class ExportService {
-  private prepareData(sales: Sale[]): ReportData[] {
+  // Fiş bazlı veri hazırlama
+  private prepareSaleData(sales: Sale[]): SaleReportData[] {
     return sales.map(sale => ({
       'Fiş No': sale.receiptNo,
       'Tarih': new Date(sale.date),
@@ -27,114 +43,112 @@ class ExportService {
     }));
   }
 
-  async exportToExcel(sales: Sale[], dateRange: string) {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Satışlar');
+  // Ürün bazlı veri hazırlama
+  private prepareProductData(sales: Sale[]): ProductReportData[] {
+    const productStats = sales.reduce((acc, sale) => {
+      if (sale.status !== 'completed') return acc; // Sadece tamamlanan satışları dahil et
 
-    // Başlık stilini tanımla
-    const titleStyle: Partial<ExcelJS.Style> = {
-      font: { size: 12, bold: true, color: { argb: 'FFFFFF' } },
-      fill: {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: '2980B9' }
-      } as ExcelJS.FillPattern,
-      alignment: { horizontal: 'center' }
-    };
+      sale.items.forEach(item => {
+        if (!acc[item.name]) {
+          acc[item.name] = {
+            'Ürün Adı': item.name,
+            'Kategori': item.category,
+            'Satış Adedi': 0,
+            'Birim Alış': item.purchasePrice,
+            'Birim Satış': item.salePrice,
+            'Toplam Ciro': 0,
+            'Toplam Kâr': 0,
+            'Kâr Marjı (%)': 0
+          };
+        }
 
-    // Para birimi stili
-    const currencyStyle: Partial<ExcelJS.Style> = {
-      numFmt: '#,##0.00 ₺'
-    };
-
-    // Tarih stili
-    const dateStyle: Partial<ExcelJS.Style> = {
-      numFmt: 'dd.mm.yyyy hh:mm'
-    };
-
-    // Verileri hazırla
-    const data = this.prepareData(sales);
-    const headers = Object.keys(data[0] || {}) as (keyof ReportData)[];
-
-    // Sütunları ayarla
-    worksheet.columns = headers.map(header => ({
-      header,
-      key: header,
-      width: header === 'Ürünler' ? 50 : 15,
-      style: header === 'Tutar' ? currencyStyle : 
-             header === 'Tarih' ? dateStyle : {}
-    }));
-
-    // Başlık stilini uygula
-    worksheet.getRow(1).eachCell((cell) => {
-      cell.style = titleStyle;
-    });
-
-    // Verileri ekle
-    data.forEach(row => {
-      worksheet.addRow(row as any);
-    });
-
-    // Alternatif satır renklendirmesi
-    worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber > 1) { // Başlık hariç
-        const rowStyle: Partial<ExcelJS.Style> = {
-          fill: {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: rowNumber % 2 === 0 ? 'F3F6F9' : 'FFFFFF' }
-          } as ExcelJS.FillPattern
-        };
-        
-        row.eachCell((cell) => {
-          cell.style = rowStyle;
-        });
-      }
-    });
-
-    // Tüm sütunlar için ince kenarlık
-    const borderStyle: Partial<ExcelJS.Borders> = {
-      top: { style: 'thin', color: { argb: 'E2E8F0' } },
-      left: { style: 'thin', color: { argb: 'E2E8F0' } },
-      bottom: { style: 'thin', color: { argb: 'E2E8F0' } },
-      right: { style: 'thin', color: { argb: 'E2E8F0' } }
-    };
-
-    worksheet.eachRow((row) => {
-      row.eachCell((cell) => {
-        cell.border = borderStyle;
+        acc[item.name]['Satış Adedi'] += item.quantity;
+        acc[item.name]['Toplam Ciro'] += item.priceWithVat * item.quantity;
+        acc[item.name]['Toplam Kâr'] += (item.salePrice - item.purchasePrice) * item.quantity;
       });
+      return acc;
+    }, {} as Record<string, ProductReportData>);
+
+    return Object.values(productStats).map(product => ({
+      ...product,
+      'Kâr Marjı (%)': Number(((product['Toplam Kâr'] / product['Toplam Ciro']) * 100).toFixed(2))
+    }));
+  }
+
+  async exportToExcel(sales: Sale[], dateRange: string, type: ReportType = 'product') {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(type === 'product' ? 'Ürün Satışları' : 'Satışlar');
+
+    if (type === 'product') {
+      const data = this.prepareProductData(sales);
+
+      worksheet.columns = [
+        { header: 'Ürün Adı', key: 'Ürün Adı', width: 30 },
+        { header: 'Kategori', key: 'Kategori', width: 20 },
+        { header: 'Satış Adedi', key: 'Satış Adedi', width: 15 },
+        { header: 'Birim Alış', key: 'Birim Alış', width: 15, style: { numFmt: '#,##0.00 ₺' } },
+        { header: 'Birim Satış', key: 'Birim Satış', width: 15, style: { numFmt: '#,##0.00 ₺' } },
+        { header: 'Toplam Ciro', key: 'Toplam Ciro', width: 15, style: { numFmt: '#,##0.00 ₺' } },
+        { header: 'Toplam Kâr', key: 'Toplam Kâr', width: 15, style: { numFmt: '#,##0.00 ₺' } },
+        { header: 'Kâr Marjı (%)', key: 'Kâr Marjı (%)', width: 15, style: { numFmt: '#,##0.00' } }
+      ];
+
+      data.forEach(row => worksheet.addRow(row));
+
+      // Toplam satırı
+      const totals = {
+        'Ürün Adı': 'TOPLAM',
+        'Kategori': '',
+        'Satış Adedi': data.reduce((sum, row) => sum + row['Satış Adedi'], 0),
+        'Birim Alış': null,
+        'Birim Satış': null,
+        'Toplam Ciro': data.reduce((sum, row) => sum + row['Toplam Ciro'], 0),
+        'Toplam Kâr': data.reduce((sum, row) => sum + row['Toplam Kâr'], 0),
+        'Kâr Marjı (%)': Number(((data.reduce((sum, row) => sum + row['Toplam Kâr'], 0) / 
+                                 data.reduce((sum, row) => sum + row['Toplam Ciro'], 0)) * 100).toFixed(2))
+      };
+      worksheet.addRow(totals);
+
+    } else {
+      const data = this.prepareSaleData(sales);
+
+      worksheet.columns = [
+        { header: 'Fiş No', key: 'Fiş No', width: 15 },
+        { header: 'Tarih', key: 'Tarih', width: 20, style: { numFmt: 'dd.mm.yyyy hh:mm' } },
+        { header: 'Tutar', key: 'Tutar', width: 15, style: { numFmt: '#,##0.00 ₺' } },
+        { header: 'Ödeme', key: 'Ödeme', width: 15 },
+        { header: 'Durum', key: 'Durum', width: 15 },
+        { header: 'Ürün Sayısı', key: 'Ürün Sayısı', width: 15 },
+        { header: 'Ürünler', key: 'Ürünler', width: 50 }
+      ];
+
+      data.forEach(row => worksheet.addRow(row));
+    }
+
+    // Başlık stili
+    worksheet.getRow(1).eachCell((cell) => {
+      cell.style = {
+        font: { size: 12, bold: true, color: { argb: 'FFFFFF' } },
+        fill: {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: '2980B9' }
+        } as ExcelJS.FillPattern,
+        alignment: { horizontal: 'center' }
+      };
     });
 
-    // Rapor bilgilerini ekle
+    // Rapor başlığı
+    const title = type === 'product' ? 'Ürün Satış Raporu' : 'Satış Raporu';
     worksheet.insertRow(1, []);
-    worksheet.insertRow(1, [`Satış Raporu - ${dateRange}`]);
-    worksheet.mergeCells('A1:G1');
+    worksheet.insertRow(1, [`${title} - ${dateRange}`]);
+    worksheet.mergeCells('A1:H1');
     worksheet.getCell('A1').style = {
       font: { size: 14, bold: true },
       alignment: { horizontal: 'center' }
     };
 
-    // Alt toplam
-    const lastRow = worksheet.rowCount + 1;
-    worksheet.mergeCells(`A${lastRow}:B${lastRow}`);
-    worksheet.getCell(`A${lastRow}`).value = 'TOPLAM';
-    worksheet.getCell(`A${lastRow}`).style = {
-      font: { bold: true },
-      alignment: { horizontal: 'right' }
-    };
-    
-    // Toplam formülü
-    worksheet.getCell(`C${lastRow}`).value = {
-      formula: `SUM(C4:C${lastRow-1})`,
-      date1904: false
-    };
-    worksheet.getCell(`C${lastRow}`).style = {
-      font: { bold: true },
-      numFmt: '#,##0.00 ₺'
-    };
-
-    // Excel dosyasını indir
+    // Excel'i indir
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { 
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
@@ -142,40 +156,75 @@ class ExportService {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Satış_Raporu_${dateRange}.xlsx`;
+    a.download = `${type === 'product' ? 'Ürün_Satış_Raporu' : 'Satış_Raporu'}_${dateRange}.xlsx`;
     a.click();
     window.URL.revokeObjectURL(url);
   }
 
-  async exportToPDF(sales: Sale[], dateRange: string) {
-    const data = this.prepareData(sales);
-    const columns = (Object.keys(data[0] || {}) as (keyof ReportData)[])
-      .filter(col => col !== 'Ürünler'); // Ürünler sütununu PDF'te gösterme
-    
+  async exportToPDF(sales: Sale[], dateRange: string, type: ReportType = 'product') {
     const doc = new jsPDF();
     
-    // Başlık
-    doc.setFontSize(16);
-    doc.text("Satış Raporu", 14, 15);
-    doc.setFontSize(10);
-    doc.text(dateRange, 14, 22);
-    
-    // Tablo
-    const tableData = data.map(item => 
-      columns.map(col => col === 'Tutar' ? `₺${item[col].toFixed(2)}` : item[col].toString())
-    );
+    if (type === 'product') {
+      const data = this.prepareProductData(sales);
+      
+      doc.setFontSize(16);
+      doc.text("Ürün Satış Raporu", 14, 15);
+      doc.setFontSize(10);
+      doc.text(dateRange, 14, 22);
+      
+      const columns = [
+        'Ürün Adı',
+        'Kategori',
+        'Satış Adedi',
+        'Toplam Ciro',
+        'Toplam Kâr'
+      ];
 
-    (doc as any).autoTable({
-      head: [columns],
-      body: tableData,
-      startY: 25,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [41, 128, 185] },
-      alternateRowStyles: { fillColor: [242, 242, 242] },
-    });
+      const tableData = data.map(item => [
+        item['Ürün Adı'],
+        item['Kategori'],
+        item['Satış Adedi'].toString(),
+        `₺${item['Toplam Ciro'].toFixed(2)}`,
+        `₺${item['Toplam Kâr'].toFixed(2)}`
+      ]);
 
-    // Dosyayı indir
-    doc.save(`Satış_Raporu_${dateRange}.pdf`);
+      (doc as any).autoTable({
+        head: [columns],
+        body: tableData,
+        startY: 25,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [41, 128, 185] },
+        alternateRowStyles: { fillColor: [242, 242, 242] },
+      });
+
+    } else {
+      const data = this.prepareSaleData(sales);
+      
+      doc.setFontSize(16);
+      doc.text("Satış Raporu", 14, 15);
+      doc.setFontSize(10);
+      doc.text(dateRange, 14, 22);
+      
+      const columns = ['Fiş No', 'Tarih', 'Tutar', 'Ödeme', 'Durum'];
+      const tableData = data.map(item => [
+        item['Fiş No'],
+        new Date(item['Tarih']).toLocaleString('tr-TR'),
+        `₺${item['Tutar'].toFixed(2)}`,
+        item['Ödeme'],
+        item['Durum']
+      ]);
+
+      (doc as any).autoTable({
+        head: [columns],
+        body: tableData,
+        startY: 25,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [41, 128, 185] },
+        alternateRowStyles: { fillColor: [242, 242, 242] },
+      });
+    }
+
+    doc.save(`${type === 'product' ? 'Ürün_Satış_Raporu' : 'Satış_Raporu'}_${dateRange}.pdf`);
   }
 
   getDateRange(

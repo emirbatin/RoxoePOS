@@ -12,7 +12,10 @@ import { Sale, SalesFilter, SalesSummary } from "../types/sales";
 import { salesDB } from "../services/salesDB";
 import ReasonModal from "../components/ReasonModal";
 import { useNavigate } from "react-router-dom";
-import { VatRate } from "../types/pos";
+import { VatRate } from "../types/product";
+import { Table } from "../components/Table";
+import { Column } from "../types/table";
+import { Pagination } from "../components/Pagination";
 
 const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -37,6 +40,130 @@ const SalesHistoryPage: React.FC = () => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+
+  // State ekleyelim
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  // Sayfalama hesaplamaları
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentSales = filteredSales.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredSales.length / itemsPerPage);
+
+  const columns: Column<Sale>[] = [
+    {
+      key: "receiptNo",
+      title: "Fiş No",
+      className: "whitespace-nowrap text-sm font-medium text-gray-900",
+    },
+    {
+      key: "date",
+      title: "Tarih",
+      render: (sale) => (
+        <span className="text-sm text-gray-500">
+          {new Date(sale.date).toLocaleString("tr-TR")}
+        </span>
+      ),
+    },
+    {
+      key: "total",
+      title: "Tutar",
+      render: (sale) => (
+        <span className="text-sm text-gray-900">₺{sale.total.toFixed(2)}</span>
+      ),
+    },
+    {
+      key: "paymentMethod",
+      title: "Ödeme",
+      render: (sale) => (
+        <div>
+          <div className="text-sm text-gray-500">
+            {sale.paymentMethod === "nakit" && "💵 Nakit"}
+            {sale.paymentMethod === "kart" && "💳 Kart"}
+            {sale.paymentMethod === "veresiye" && "📝 Veresiye"}
+            {sale.paymentMethod === "nakitpos" && "💵 POS (Nakit)"}
+          </div>
+          {sale.paymentMethod === "nakit" && sale.cashReceived && (
+            <div className="text-xs text-gray-400">
+              Alınan: ₺{sale.cashReceived.toFixed(2)}
+              <br />
+              Para üstü: ₺{sale.changeAmount?.toFixed(2)}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      title: "Durum",
+      render: (sale) => (
+        <div>
+          <span
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+            ${sale.status === "completed" ? "bg-green-100 text-green-800" : ""}
+            ${sale.status === "cancelled" ? "bg-red-100 text-red-800" : ""}
+            ${
+              sale.status === "refunded" ? "bg-orange-100 text-orange-800" : ""
+            }`}
+          >
+            {sale.status === "completed" && "Tamamlandı"}
+            {sale.status === "cancelled" && "İptal Edildi"}
+            {sale.status === "refunded" && "İade Edildi"}
+          </span>
+          {(sale.cancelReason || sale.refundReason) && (
+            <div className="text-xs text-gray-400 mt-1">
+              {sale.cancelReason && `İptal sebebi: ${sale.cancelReason}`}
+              {sale.refundReason && `İade sebebi: ${sale.refundReason}`}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "actions",
+      title: "İşlemler",
+      className: "text-right",
+      render: (sale) => (
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/sales/${sale.id}`);
+            }}
+            className="text-blue-600 hover:text-blue-800"
+            title="Detay"
+          >
+            <FileText size={18} />
+          </button>
+          {sale.status === "completed" && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCancelSale(sale.id);
+                }}
+                className="text-red-600 hover:text-red-800"
+                title="İptal Et"
+              >
+                <XCircle size={18} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRefundSale(sale.id);
+                }}
+                className="text-orange-600 hover:text-orange-800"
+                title="İade Al"
+              >
+                <RotateCcw size={18} />
+              </button>
+            </>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   useEffect(() => {
     const loadSales = async () => {
@@ -101,7 +228,7 @@ const SalesHistoryPage: React.FC = () => {
         (sum, sale) =>
           sum +
           sale.items.reduce(
-            (itemSum, item) => itemSum + item.price * item.quantity,
+            (itemSum, item) => itemSum + item.salePrice * item.quantity,
             0
           ),
         0
@@ -111,7 +238,7 @@ const SalesHistoryPage: React.FC = () => {
           sum +
           sale.items.reduce(
             (itemSum, item) =>
-              itemSum + item.price * item.quantity * (item.vatRate / 100),
+              itemSum + (item.priceWithVat - item.salePrice) * item.quantity,
             0
           ),
         0
@@ -133,8 +260,9 @@ const SalesHistoryPage: React.FC = () => {
       vatBreakdown: filteredSales.reduce((breakdown, sale) => {
         sale.items.forEach((item) => {
           const vatRate = item.vatRate as VatRate;
-          const itemBaseAmount = item.price * item.quantity;
-          const itemVatAmount = itemBaseAmount * (vatRate / 100);
+          const itemBaseAmount = item.salePrice * item.quantity;
+          const itemVatAmount =
+            (item.priceWithVat - item.salePrice) * item.quantity;
 
           const vatRateEntry = breakdown.find(
             (entry) => entry.rate === vatRate
@@ -431,130 +559,23 @@ const SalesHistoryPage: React.FC = () => {
 
       {/* Satış Listesi */}
       <div className="bg-white border rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <div className="p-8 text-center text-gray-500">Yükleniyor...</div>
-          ) : filteredSales.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              {searchTerm || Object.keys(filter).length > 0
-                ? "Filtrelere uygun satış bulunamadı."
-                : "Henüz satış kaydı bulunmuyor."}
-            </div>
-          ) : (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Fiş No
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Tarih
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Tutar
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Ödeme
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Durum
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                    İşlemler
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredSales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {sale.receiptNo}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {sale.date.toLocaleString("tr-TR")}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      ₺{sale.total.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {sale.paymentMethod === "nakit" && "💵 Nakit"}
-                      {sale.paymentMethod === "kart" && "💳 Kart"}
-                      {sale.paymentMethod === "veresiye" && "📝 Veresiye"}
-                      {sale.paymentMethod === "nakitpos" && "💵 POS (Nakit)"}
-                      {sale.paymentMethod === "nakit" && sale.cashReceived && (
-                        <div className="text-xs text-gray-400">
-                          Alınan: ₺{sale.cashReceived.toFixed(2)}
-                          <br />
-                          Para üstü: ₺{sale.changeAmount?.toFixed(2)}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                        ${
-                          sale.status === "completed"
-                            ? "bg-green-100 text-green-800"
-                            : ""
-                        }
-                        ${
-                          sale.status === "cancelled"
-                            ? "bg-red-100 text-red-800"
-                            : ""
-                        }
-                        ${
-                          sale.status === "refunded"
-                            ? "bg-orange-100 text-orange-800"
-                            : ""
-                        }
-                      `}
-                      >
-                        {sale.status === "completed" && "Tamamlandı"}
-                        {sale.status === "cancelled" && "İptal Edildi"}
-                        {sale.status === "refunded" && "İade Edildi"}
-                      </span>
-                      {(sale.cancelReason || sale.refundReason) && (
-                        <div className="text-xs text-gray-400 mt-1">
-                          {sale.cancelReason &&
-                            `İptal sebebi: ${sale.cancelReason}`}
-                          {sale.refundReason &&
-                            `İade sebebi: ${sale.refundReason}`}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                      <button
-                        onClick={() => navigate(`/sales/${sale.id}`)}
-                        className="text-blue-600 hover:text-blue-800"
-                        title="Detay"
-                      >
-                        <FileText size={18} />
-                      </button>
-                      {sale.status === "completed" && (
-                        <>
-                          <button
-                            onClick={() => handleCancelSale(sale.id)}
-                            className="text-red-600 hover:text-red-800"
-                            title="İptal Et"
-                          >
-                            <XCircle size={18} />
-                          </button>
-                          <button
-                            onClick={() => handleRefundSale(sale.id)}
-                            className="text-orange-600 hover:text-orange-800"
-                            title="İade Al"
-                          >
-                            <RotateCcw size={18} />
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <Table<Sale, string>
+          data={currentSales}
+          columns={columns}
+          loading={isLoading}
+          emptyMessage={
+            searchTerm || Object.keys(filter).length > 0
+              ? "Filtrelere uygun satış bulunamadı."
+              : "Henüz satış kaydı bulunmuyor."
+          }
+          idField="id"
+        />
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          className="p-4 border-t"
+        />
       </div>
 
       {/* İptal Modalı */}

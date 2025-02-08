@@ -9,15 +9,11 @@ import {
   Tag,
   AlertTriangle,
   Trash2,
+  ImageOff,
 } from "lucide-react";
 import { useHotkeys, HotkeysHelper } from "../hooks/useHotkeys";
-import {
-  CartItem,
-  CartTab,
-  Category,
-  PaymentMethod,
-  Product,
-} from "../types/pos";
+import { CartItem, CartTab, PaymentMethod } from "../types/pos";
+import { Category, Product } from "../types/product";
 import { ReceiptInfo } from "../types/receipt";
 import { Customer } from "../types/credit";
 import { productService } from "../services/productDB";
@@ -110,7 +106,7 @@ const POSPage: React.FC = () => {
   };
 
   const cartTotals = activeTab
-    ? calculateCartTotals(activeTab.cart)
+    ? calculateCartTotals(activeTab.cart) // 'sale' parametresi eklenebilir
     : { subtotal: 0, vatAmount: 0, total: 0, vatBreakdown: [] };
 
   const clearCart = (): void => {
@@ -172,10 +168,12 @@ const POSPage: React.FC = () => {
 
           const updatedCart = tab.cart.map((item) =>
             item.id === product.id
-              ? calculateCartItemTotals({
+              ? {
                   ...item,
                   quantity: item.quantity + 1,
-                })
+                  totalWithVat: (item.quantity + 1) * product.priceWithVat,
+                  total: (item.quantity + 1) * product.salePrice,
+                }
               : item
           );
           return { ...tab, cart: updatedCart };
@@ -185,7 +183,12 @@ const POSPage: React.FC = () => {
           ...tab,
           cart: [
             ...tab.cart,
-            calculateCartItemTotals({ ...product, quantity: 1 }),
+            {
+              ...product,
+              quantity: 1,
+              totalWithVat: product.priceWithVat,
+              total: product.salePrice,
+            },
           ],
         };
       })
@@ -247,27 +250,38 @@ const POSPage: React.FC = () => {
   ): Promise<void> => {
     if (!activeTab) return;
 
+    // Yeni fiyat yapısına göre totaller hesaplanıyor
     const subtotal = activeTab.cart.reduce(
-      (sum, item) => sum + item.price * item.quantity,
+      (sum, item) => sum + item.salePrice * item.quantity,
       0
     );
-    const vatAmount = activeTab.cart.reduce(
-      (sum, item) => sum + item.price * item.quantity * (item.vatRate / 100),
+
+    const total = activeTab.cart.reduce(
+      (sum, item) => sum + item.priceWithVat * item.quantity,
       0
     );
-    const totalAmount = subtotal + vatAmount;
+
+    const vatAmount = total - subtotal; // KDV tutarı, toplam - ara toplam
 
     // Satış verilerini oluştur
     const saleData: Omit<Sale, "id"> = {
-      items: activeTab.cart,
+      items: activeTab.cart.map((item) => ({
+        ...item,
+        // Her bir ürünün satış detayları
+        salePrice: item.salePrice,
+        priceWithVat: item.priceWithVat,
+        total: item.salePrice * item.quantity,
+        totalWithVat: item.priceWithVat * item.quantity,
+        vatAmount: (item.priceWithVat - item.salePrice) * item.quantity,
+      })),
       subtotal,
       vatAmount,
-      total: totalAmount,
+      total,
       paymentMethod,
       cashReceived,
-      changeAmount: cashReceived ? cashReceived - totalAmount : undefined,
+      changeAmount: cashReceived ? cashReceived - total : undefined,
       date: new Date(),
-      status: "completed", // Sabit türde bir değer
+      status: "completed",
       receiptNo: salesDB.generateReceiptNo(),
     };
 
@@ -281,7 +295,7 @@ const POSPage: React.FC = () => {
         await creditService.addTransaction({
           customerId: selectedCustomer.id,
           type: "debt",
-          amount: totalAmount,
+          amount: total,
           date: new Date(),
           description: `Fiş No: ${newSale.receiptNo}`,
         });
@@ -296,6 +310,9 @@ const POSPage: React.FC = () => {
           tab.id === activeTabId ? { ...tab, cart: [] } : tab
         )
       );
+
+      // Seçili müşteriyi temizle
+      setSelectedCustomer(null);
 
       // Modalı kapat
       setShowPaymentModal(false);
@@ -503,14 +520,27 @@ const POSPage: React.FC = () => {
                 onClick={() => addToCart(product)}
                 disabled={product.stock === 0}
                 className={`p-4 border rounded-lg hover:shadow-md transition-shadow text-left relative 
-                  ${product.stock === 0 ? "opacity-50 cursor-not-allowed" : ""}
-                `}
+          ${product.stock === 0 ? "opacity-50 cursor-not-allowed" : ""}
+        `}
               >
-                <div className="font-medium text-gray-900">{product.name}</div>
+                {/* Ürün Görseli (Eğer varsa göster) */}
+                {product.imageUrl && (
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name}
+                    className="w-full h-32 object-cover rounded mb-2"
+                  />
+                )}
+
+                {/* Ürün Bilgileri */}
+                <div className="font-medium text-gray-900 truncate">
+                  {product.name}
+                </div>
                 <div className="text-sm text-gray-500 flex items-center gap-1">
                   <Tag size={14} />
                   {product.category}
                 </div>
+
                 {/* Fiyat Bilgisi */}
                 <div className="mt-2">
                   <div className="font-semibold text-primary-600">
@@ -520,6 +550,7 @@ const POSPage: React.FC = () => {
                     +{formatVatRate(product.vatRate)} KDV
                   </div>
                 </div>
+
                 {/* Stok Durumu */}
                 <div
                   className={`text-sm mt-1 ${
@@ -632,7 +663,7 @@ const POSPage: React.FC = () => {
                       <div className="font-medium">{item.name}</div>
                       <div className="text-sm space-y-0.5">
                         <div className="text-gray-500">
-                          {formatCurrency(item.price)} +{" "}
+                          {formatCurrency(item.salePrice)} +{" "}
                           {formatVatRate(item.vatRate)} KDV
                         </div>
                         <div className="text-gray-900 font-medium">
@@ -706,9 +737,18 @@ const POSPage: React.FC = () => {
         subtotal={cartTotals.subtotal}
         vatAmount={cartTotals.vatAmount}
         onComplete={handlePaymentComplete}
-        customers={customers} // Müşteri listesi burada aktarılıyor
+        customers={customers}
         selectedCustomer={selectedCustomer}
         setSelectedCustomer={setSelectedCustomer}
+        items={
+          activeTab
+            ? activeTab.cart.map((item) => ({
+                id: item.id,
+                name: item.name,
+                amount: item.totalWithVat ?? item.salePrice * item.quantity,
+              }))
+            : []
+        }
       />
 
       {/* Fiş Modal */}

@@ -1,25 +1,7 @@
 import { Customer } from "./credit";
-
+import { Product } from "./product";
 // Temel type'lar
-export type PaymentMethod = 'nakit' | 'kart' | 'veresiye' | 'nakitpos';
-export type VatRate = 0 | 1 | 8 | 18 | 20;
-
-export interface Product {
-  id: number;
-  name: string;
-  price: number;        // KDV'siz fiyat
-  vatRate: VatRate;     // KDV oranı
-  priceWithVat: number; // KDV'li fiyat
-  category: string;
-  stock: number;
-  barcode: string;
-}
-
-export interface Category {
-  id: number;
-  name: string;
-  icon: string;
-}
+export type PaymentMethod = "nakit" | "kart" | "veresiye" | "nakitpos";
 
 export interface CartTab {
   id: string;
@@ -29,9 +11,9 @@ export interface CartTab {
 
 export interface CartItem extends Product {
   quantity: number;
-  totalWithoutVat?: number; // Toplam KDV'siz tutar (hesaplanacak)
-  totalVatAmount?: number;  // Toplam KDV tutarı (hesaplanacak)
-  totalWithVat?: number;    // Toplam KDV'li tutar (hesaplanacak)
+  total?: number;           // KDV'siz toplam (salePrice * quantity)
+  vatAmount?: number;       // KDV tutarı
+  totalWithVat?: number;    // KDV'li toplam
 }
 
 export interface PaymentModalProps {
@@ -40,17 +22,20 @@ export interface PaymentModalProps {
   total: number; // Toplam tutar
   subtotal: number; // KDV'siz toplam tutar
   vatAmount: number; // KDV tutarı
-  onComplete: (paymentMethod: PaymentMethod, cashReceived?: number) => void; // Ödeme tamamlandığında çalışacak fonksiyon
+  onComplete: (paymentMethod: PaymentMethod, cashReceived?: number, paymentData?: any) => void; // Ödeme tamamlandığında çalışacak fonksiyon
   customers: Customer[]; // Müşteri listesi
   selectedCustomer: Customer | null; // Seçilen müşteri (null olabilir)
   setSelectedCustomer: (customer: Customer | null) => void; // Seçilen müşteriyi güncellemek için fonksiyon
+  // Aşağıdaki satırı ekleyerek, opsiyonel olarak sepet öğelerini (örneğin, split ödeme için) aktarabilirsiniz:
+  items?: { id: number; name: string; amount: number }[];
 }
 
 export interface POSConfig {
-  type: string;          // POS markası/modeli
-  baudRate: number;      // İletişim hızı
-  protocol: string;      // Kullanılan protokol
-  commandSet: {          // Cihaza özel komutlar
+  type: string; // POS markası/modeli
+  baudRate: number; // İletişim hızı
+  protocol: string; // Kullanılan protokol
+  commandSet: {
+    // Cihaza özel komutlar
     payment: string;
     cancel: string;
     status: string;
@@ -61,9 +46,9 @@ export interface SerialOptions {
   baudRate: number;
   dataBits?: number;
   stopBits?: number;
-  parity?: 'none' | 'even' | 'odd';
+  parity?: "none" | "even" | "odd";
   bufferSize?: number;
-  flowControl?: 'none' | 'hardware';
+  flowControl?: "none" | "hardware";
 }
 
 export interface SerialPort {
@@ -78,4 +63,3 @@ export interface SerialPortInfo {
   usbVendorId: number;
   usbProductId: number;
 }
-

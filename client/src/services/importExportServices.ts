@@ -1,4 +1,4 @@
-import { Product } from "../types/pos";
+import { Product } from "../types/product";
 import ExcelJS from "exceljs";
 import Papa from "papaparse";
 import { productService } from "./productDB";

@@ -1,16 +1,18 @@
-import { CartItem, PaymentMethod, VatRate } from './pos';
+import { CartItem, PaymentMethod } from "./pos";
+import { VatRate } from "./product";
 
 export interface ReceiptInfo {
   receiptNo: string;
   date: Date;
   items: CartItem[];
-  subtotal: number;    // KDV'siz toplam
-  vatAmount: number;   // Toplam KDV tutarı
-  total: number;       // KDV'li toplam
+  subtotal: number; // KDV'siz toplam
+  vatAmount: number; // Toplam KDV tutarı
+  total: number; // KDV'li toplam
   paymentMethod: PaymentMethod;
   cashReceived?: number;
   changeAmount?: number;
-  vatBreakdown?: Array<{  // KDV oranlarına göre dağılım
+  vatBreakdown?: Array<{
+    // KDV oranlarına göre dağılım
     rate: VatRate;
     baseAmount: number;
     vatAmount: number;

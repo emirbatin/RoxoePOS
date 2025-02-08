@@ -6,7 +6,7 @@ import {
   AlertTriangle,
   FileDown,
 } from "lucide-react";
-import { Product } from "../types/pos";
+import { Product } from "../types/product";
 import { importExportService } from "../services/importExportServices";
 import { productService } from "../services/productDB";
 

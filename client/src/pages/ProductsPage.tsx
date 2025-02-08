@@ -12,8 +12,12 @@ import {
   Package,
   Barcode,
 } from "lucide-react";
-import { Category, Product } from "../types/pos";
-import { formatCurrency, formatVatRate } from "../utils/vatUtils";
+import { Category, Product } from "../types/product";
+import {
+  calculatePriceWithVat,
+  formatCurrency,
+  formatVatRate,
+} from "../utils/vatUtils";
 import { initProductDB, productService } from "../services/productDB";
 import ProductModal from "../components/ProductModal";
 import BulkProductOperations from "../components/BulkProductOperations";
@@ -22,6 +26,9 @@ import CategoryManagement from "../components/CategoryManagement";
 import StockManagement from "../components/StockManagement";
 import BarcodeGenerator from "../components/BarcodeGenerator";
 import Button from "../components/Button";
+import { Column } from "../types/table";
+import { Table } from "../components/Table";
+import { Pagination } from "../components/Pagination";
 
 const ProductsPage: React.FC = () => {
   // State tanımlamaları
@@ -39,6 +46,119 @@ const ProductsPage: React.FC = () => {
     useState<Product | null>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [showBatchUpdate, setShowBatchUpdate] = useState(false);
+
+  // State ekleyelim (en üstte diğer state'lerin yanına)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  const columns: Column<Product>[] = [
+    {
+      key: "name",
+      title: "Ürün",
+      render: (product) => (
+        <div className="font-medium text-gray-900">{product.name}</div>
+      ),
+    },
+    {
+      key: "category",
+      title: "Kategori",
+      render: (product) => (
+        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+          <Tag size={14} />
+          {product.category}
+        </div>
+      ),
+    },
+    {
+      key: "barcode",
+      title: "Barkod",
+      className: "font-mono text-sm",
+    },
+    {
+      key: "purchasePrice",
+      title: "Alış Fiyatı",
+      render: (product) => formatCurrency(product.purchasePrice),
+    },
+    {
+      key: "salePrice",
+      title: "Satış Fiyatı",
+      render: (product) => formatCurrency(product.salePrice),
+    },
+    {
+      key: "vatRate",
+      title: "KDV",
+      render: (product) => formatVatRate(product.vatRate),
+    },
+    {
+      key: "priceWithVat",
+      title: "KDV'li Fiyat",
+      render: (product) => formatCurrency(product.priceWithVat),
+      className: "font-medium",
+    },
+    {
+      key: "stock",
+      title: "Stok",
+      render: (product) => (
+        <div
+          className={`flex items-center gap-1 ${
+            product.stock < 5 ? "text-red-600" : "text-gray-600"
+          }`}
+        >
+          {product.stock}
+          {product.stock < 5 && <AlertTriangle size={14} />}
+        </div>
+      ),
+    },
+    {
+      key: "actions",
+      title: "İşlemler",
+      render: (product) => (
+        <div className="flex gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedStockProduct(product);
+            }}
+            className="p-1 hover:bg-gray-100 rounded text-gray-600"
+            title="Stok Yönetimi"
+          >
+            <Package size={16} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedBarcodeProduct(product);
+            }}
+            className="p-1 hover:bg-gray-100 rounded text-purple-600"
+            title="Barkod Yazdır"
+          >
+            <Barcode size={16} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedProduct(product);
+              setShowProductModal(true);
+            }}
+            className="p-1 hover:bg-gray-100 rounded text-blue-600"
+            title="Düzenle"
+          >
+            <Edit size={16} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteProduct(product.id);
+            }}
+            className="p-1 hover:bg-gray-100 rounded text-red-600"
+            title="Sil"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   // İlk yükleme
   useEffect(() => {
@@ -128,7 +248,12 @@ const ProductsPage: React.FC = () => {
   const handleBatchPriceUpdate = async (updatedProducts: Product[]) => {
     try {
       for (const product of updatedProducts) {
-        await productService.updateProduct(product);
+        // Burada sadece salePrice'ı güncelleyeceğiz, priceWithVat hesaplamasına gerek yok
+        await productService.updateProduct({
+          ...product,
+          // Yalnızca satış fiyatını güncelle
+          priceWithVat: product.priceWithVat,
+        });
       }
       await loadData();
       setSelectedProductIds([]);
@@ -143,7 +268,6 @@ const ProductsPage: React.FC = () => {
     let updatedCount = 0;
 
     try {
-      // Tüm ürünleri tek transaction içinde işle
       const db = await initProductDB();
       const tx = db.transaction("products", "readwrite");
       const store = tx.objectStore("products");
@@ -154,14 +278,25 @@ const ProductsPage: React.FC = () => {
           const existing = await index.get(product.barcode);
           const { id, ...productData } = product;
 
+          // Fiyat alanlarının doğru şekilde ayarlandığından emin olun
+          const processedProduct = {
+            ...productData,
+            purchasePrice: Number(productData.purchasePrice),
+            salePrice: Number(productData.salePrice),
+            priceWithVat: calculatePriceWithVat(
+              Number(productData.salePrice),
+              productData.vatRate
+            ),
+          };
+
           if (existing) {
             await store.put({
-              ...productData,
+              ...processedProduct,
               id: existing.id,
             });
             updatedCount++;
           } else {
-            await store.add(productData);
+            await store.add(processedProduct);
             addedCount++;
           }
         } catch (err) {
@@ -224,6 +359,7 @@ const ProductsPage: React.FC = () => {
   };
 
   // Filtreleme
+  // Filtreleme (Move this section up)
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -232,6 +368,15 @@ const ProductsPage: React.FC = () => {
       selectedCategory === "Tümü" || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  // Sayfalama hesaplamalarını yapalım
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentProducts = filteredProducts.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
 
   return (
     <div className="p-6">
@@ -274,8 +419,7 @@ const ProductsPage: React.FC = () => {
       {showBatchUpdate && (
         <div className="mb-6">
           <BatchPriceUpdate
-            products={products}
-            selectedProducts={selectedProductIds}
+            products={products.filter((p) => selectedProductIds.includes(p.id))}
             onUpdate={handleBatchPriceUpdate}
           />
         </div>
@@ -363,129 +507,20 @@ const ProductsPage: React.FC = () => {
 
       {/* Ürün Listesi */}
       <div className="bg-white rounded-lg shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">
-                  <input
-                    type="checkbox"
-                    checked={
-                      selectedProductIds.length === filteredProducts.length
-                    }
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                  />
-                </th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">
-                  Ürün
-                </th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">
-                  Kategori
-                </th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">
-                  Barkod
-                </th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">
-                  KDV'siz Fiyat
-                </th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">
-                  KDV
-                </th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">
-                  KDV'li Fiyat
-                </th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">
-                  Stok
-                </th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-900">
-                  İşlemler
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {filteredProducts.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <input
-                      type="checkbox"
-                      checked={selectedProductIds.includes(product.id)}
-                      onChange={(e) =>
-                        handleSelectProduct(product.id, e.target.checked)
-                      }
-                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-gray-900">
-                      {product.name}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                      <Tag size={14} />
-                      {product.category}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-sm">
-                    {product.barcode}
-                  </td>
-                  <td className="px-6 py-4">{formatCurrency(product.price)}</td>
-                  <td className="px-6 py-4">
-                    {formatVatRate(product.vatRate)}
-                  </td>
-                  <td className="px-6 py-4 font-medium">
-                    {formatCurrency(product.priceWithVat)}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div
-                      className={`flex items-center gap-1 
-                      ${product.stock < 5 ? "text-red-600" : "text-gray-600"}`}
-                    >
-                      {product.stock}
-                      {product.stock < 5 && <AlertTriangle size={14} />}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setSelectedStockProduct(product)}
-                        className="p-1 hover:bg-gray-100 rounded text-gray-600"
-                        title="Stok Yönetimi"
-                      >
-                        <Package size={16} />
-                      </button>
-                      <button
-                        onClick={() => setSelectedBarcodeProduct(product)}
-                        className="p-1 hover:bg-gray-100 rounded text-purple-600"
-                        title="Barkod Yazdır"
-                      >
-                        <Barcode size={16} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedProduct(product);
-                          setShowProductModal(true);
-                        }}
-                        className="p-1 hover:bg-gray-100 rounded text-blue-600"
-                        title="Düzenle"
-                      >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteProduct(product.id)}
-                        className="p-1 hover:bg-gray-100 rounded text-red-600"
-                        title="Sil"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table<Product, number>
+          data={currentProducts} // filteredProducts yerine currentProducts kullanıyoruz
+          columns={columns}
+          selectable
+          selected={selectedProductIds}
+          onSelect={setSelectedProductIds}
+          idField="id"
+        />
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          className="p-4 border-t"
+        />
       </div>
 
       {/* Ürün Modalı */}

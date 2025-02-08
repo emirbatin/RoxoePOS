@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Plus, Edit2, Trash2, AlertTriangle, X } from "lucide-react";
-import { Category } from "../types/pos";
+import { Category } from "../types/product";
 import { productService } from "../services/productDB";
 
 interface CategoryManagementProps {

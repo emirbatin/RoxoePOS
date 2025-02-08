@@ -1,4 +1,5 @@
-import { CartItem, PaymentMethod, VatRate } from "./pos";
+import { CartItem, PaymentMethod } from "./pos";
+import { VatRate } from "./product";
 
 export interface Sale {
   id: string;

@@ -5,7 +5,7 @@ class ReceiptService {
   async generatePDF(receipt: ReceiptInfo): Promise<void> {
     const doc = new jsPDF({
       unit: 'mm',
-      format: [80, 200] // Tipik termal fiş boyutu
+      format: [80, 200] // Termal fiş boyutu
     });
 
     // Font ayarları
@@ -53,8 +53,8 @@ class ReceiptService {
       doc.text(item.name, 5, y);
       // Miktar
       doc.text(item.quantity.toString(), 45, y);
-      // Tutar
-      doc.text(`₺${(item.quantity * item.price).toFixed(2)}`, 65, y);
+      // Tutar (KDV dahil fiyat)
+      doc.text(`₺${(item.quantity * item.priceWithVat).toFixed(2)}`, 65, y);
       y += 4;
     });
 

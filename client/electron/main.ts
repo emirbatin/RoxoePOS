@@ -33,7 +33,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 800, // Initial width (will be resized to fullscreen)
     height: 600, // Initial height (will be resized to fullscreen)
-    fullscreen: true, // Opens in fullscreen mode
+    fullscreen: false, // Opens in fullscreen mode
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),

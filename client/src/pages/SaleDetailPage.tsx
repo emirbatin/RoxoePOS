@@ -5,27 +5,19 @@ import {
   Printer,
   Clock,
   CreditCard,
-  User,
   XCircle,
   RotateCcw,
-  FileText,
 } from "lucide-react";
-
 import { Sale } from "../types/sales";
 import { ReceiptInfo } from "../types/receipt";
-
 import { salesDB } from "../services/salesDB";
-import { receiptService } from "../services/receiptService";
-
-import {
-  calculateCartTotals,
-  calculateCartItemTotals,
-  formatCurrency,
-  formatVatRate,
-} from "../utils/vatUtils";
-
+import { formatCurrency, formatVatRate } from "../utils/vatUtils";
 import ReasonModal from "../components/ReasonModal";
 import Button from "../components/Button";
+import ReceiptModal from "../components/ReceiptModal";
+import { Column } from "../types/table";
+import { CartItem } from "../types/pos";
+import { Table } from "../components/Table";
 
 const SaleDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -34,6 +26,54 @@ const SaleDetailPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
+  // ReceiptModal ile fiş görüntüleme için state'ler:
+  const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
+  const [currentReceipt, setCurrentReceipt] = useState<ReceiptInfo | null>(
+    null
+  );
+
+  const columns: Column<CartItem>[] = [
+    {
+      key: "name",
+      title: "Ürün",
+      render: (item) => (
+        <div>
+          <div className="font-medium text-gray-900">{item.name}</div>
+          <div className="text-sm text-gray-500">{item.category}</div>
+        </div>
+      ),
+    },
+    {
+      key: "salePrice",
+      title: "Birim Fiyat",
+      className: "text-right",
+      render: (item) => (
+        <div className="text-sm">{formatCurrency(item.salePrice)}</div>
+      ),
+    },
+    {
+      key: "quantity",
+      title: "Miktar",
+      className: "text-right",
+      render: (item) => <div className="text-sm">{item.quantity}</div>,
+    },
+    {
+      key: "vatRate",
+      title: "KDV",
+      className: "text-right",
+      render: (item) => (
+        <div className="text-sm">{formatVatRate(item.vatRate)}</div>
+      ),
+    },
+    {
+      key: "total",
+      title: "Toplam",
+      className: "text-right text-sm font-medium",
+      render: (item) => (
+        <div>{formatCurrency(item.priceWithVat * item.quantity)}</div>
+      ),
+    },
+  ];
 
   useEffect(() => {
     const fetchSale = async () => {
@@ -52,29 +92,19 @@ const SaleDetailPage: React.FC = () => {
     fetchSale();
   }, [id]);
 
-  const handlePrint = async () => {
+  // ReceiptModal'ı açan fonksiyon
+  const handleOpenReceiptModal = () => {
     if (!sale) return;
-
-    try {
-      const receiptData: ReceiptInfo = {
-        ...sale,
-        subtotal: sale.subtotal,
-        vatAmount: sale.vatAmount,
-        total: sale.total,
-        items: sale.items,
-        date: sale.date,
-      };
-
-      const result = await receiptService.printReceipt(receiptData);
-      if (result) {
-        console.log("Fiş yazdırıldı");
-      } else {
-        alert("Fiş yazdırılırken bir hata oluştu!");
-      }
-    } catch (error) {
-      console.error("Yazdırma hatası:", error);
-      alert("Fiş yazdırılırken bir hata oluştu!");
-    }
+    const receiptData: ReceiptInfo = {
+      ...sale,
+      subtotal: sale.subtotal,
+      vatAmount: sale.vatAmount,
+      total: sale.total,
+      items: sale.items,
+      date: sale.date,
+    };
+    setCurrentReceipt(receiptData);
+    setShowReceiptModal(true);
   };
 
   const handleCancelConfirm = async (reason: string) => {
@@ -135,7 +165,6 @@ const SaleDetailPage: React.FC = () => {
 
   return (
     <div className="p-6">
-      {/* Üst Bar */}
       <div className="flex justify-between items-center mb-6">
         <button
           onClick={() => navigate("/history")}
@@ -145,17 +174,15 @@ const SaleDetailPage: React.FC = () => {
           Satış Listesine Dön
         </button>
         <div className="flex gap-2">
-          <Button onClick={handlePrint} icon={Printer}>
-            Fişi Yazdır
+          {/* ReceiptModal'ı açan buton */}
+          <Button onClick={handleOpenReceiptModal} icon={Printer}>
+            Fişi Yazdır / Görüntüle
           </Button>
         </div>
       </div>
 
-      {/* Ana İçerik */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sol Panel - Satış Detayları */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Satış Özeti */}
           <div className="bg-white p-6 rounded-lg border">
             <h2 className="text-xl font-semibold mb-4">Satış Bilgileri</h2>
             <div className="grid grid-cols-2 gap-4">
@@ -166,7 +193,7 @@ const SaleDetailPage: React.FC = () => {
               <div>
                 <div className="text-sm text-gray-500">Tarih</div>
                 <div className="font-medium">
-                  {sale.date.toLocaleString("tr-TR")}
+                  {new Date(sale.date).toLocaleString("tr-TR")}
                 </div>
               </div>
               <div>
@@ -186,7 +213,7 @@ const SaleDetailPage: React.FC = () => {
                   <div>
                     <div className="text-sm text-gray-500">Alınan</div>
                     <div className="font-medium">
-                      {formatCurrency(sale.cashReceived || 0)}
+                      {formatCurrency(sale.cashReceived)}
                     </div>
                   </div>
                   <div>
@@ -200,80 +227,43 @@ const SaleDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Ürün Listesi */}
           <div className="bg-white rounded-lg border">
             <div className="p-6 border-b">
               <h2 className="text-xl font-semibold">Ürünler</h2>
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Ürün
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      Birim Fiyat
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      Miktar
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      KDV
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      Toplam
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {sale.items.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium text-gray-900">
-                          {item.name}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {item.category}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        {formatCurrency(item.price)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        {item.quantity}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        {formatVatRate(item.vatRate)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        {formatCurrency(item.price)} +{" "}
-                        {formatVatRate(item.vatRate)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-gray-50">
-                  <tr>
-                    <td
-                      colSpan={3}
-                      className="px-6 py-4 text-right font-medium"
-                    >
-                      Toplam
-                    </td>
-                    <td className="px-6 py-4 text-right text-lg font-bold">
-                      {formatCurrency(sale.total)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+
+            {/* Tablo */}
+            <Table<CartItem, number>
+              data={sale.items}
+              columns={columns}
+              idField="id"
+              className="w-full"
+              emptyMessage="Bu satışta ürün bulunmuyor."
+            />
+
+            {/* Toplam Bilgileri - Table'dan hemen sonra */}
+            <div className="bg-gray-50 p-4 border-t">
+              <div className="flex justify-end space-y-2 text-sm">
+                <div className="w-48 space-y-2">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Ara Toplam:</span>
+                    <span>{formatCurrency(sale.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span>KDV:</span>
+                    <span>{formatCurrency(sale.vatAmount)}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold text-lg">
+                    <span>Toplam:</span>
+                    <span>{formatCurrency(sale.total)}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Sağ Panel - Durum ve İşlem Geçmişi */}
         <div className="space-y-6">
-          {/* Durum Kartı */}
           <div className="bg-white p-6 rounded-lg border">
             <h2 className="text-lg font-semibold mb-4">Durum Bilgisi</h2>
             <div className="space-y-4">
@@ -320,7 +310,6 @@ const SaleDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* İşlem Geçmişi */}
           <div className="bg-white p-6 rounded-lg border">
             <h2 className="text-lg font-semibold mb-4">İşlem Geçmişi</h2>
             <div className="space-y-4">
@@ -331,7 +320,7 @@ const SaleDetailPage: React.FC = () => {
                 <div>
                   <div className="text-sm font-medium">Satış Yapıldı</div>
                   <div className="text-xs text-gray-500">
-                    {sale.date.toLocaleString("tr-TR")}
+                    {new Date(sale.date).toLocaleString("tr-TR")}
                   </div>
                 </div>
               </div>
@@ -347,7 +336,8 @@ const SaleDetailPage: React.FC = () => {
                         : "Ürün İade Edildi"}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {sale.refundDate?.toLocaleString("tr-TR")}
+                      {sale.refundDate &&
+                        new Date(sale.refundDate).toLocaleString("tr-TR")}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
                       {sale.cancelReason || sale.refundReason}
@@ -360,7 +350,6 @@ const SaleDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* İptal Modalı */}
       <ReasonModal
         isOpen={showCancelModal}
         onClose={() => setShowCancelModal(false)}
@@ -370,7 +359,6 @@ const SaleDetailPage: React.FC = () => {
         type="cancel"
       />
 
-      {/* İade Modalı */}
       <ReasonModal
         isOpen={showRefundModal}
         onClose={() => setShowRefundModal(false)}
@@ -379,6 +367,15 @@ const SaleDetailPage: React.FC = () => {
         actionText="İade Et"
         type="refund"
       />
+
+      {/* ReceiptModal Kullanımı */}
+      {currentReceipt && (
+        <ReceiptModal
+          isOpen={showReceiptModal}
+          onClose={() => setShowReceiptModal(false)}
+          receiptData={currentReceipt}
+        />
+      )}
     </div>
   );
 };

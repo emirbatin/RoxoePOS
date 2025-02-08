@@ -46,6 +46,19 @@ const CreditPage: React.FC = () => {
     setShowCustomerDetail(true);
   };
 
+  // State ekleyelim
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  // Sayfalama hesaplamaları
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentCustomers = filteredCustomers.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
+  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+
   // Filtre state'leri
   const [filters, setFilters] = useState({
     hasOverdue: false,

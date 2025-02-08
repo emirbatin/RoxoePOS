@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Package, Plus, Minus, AlertTriangle, History, X } from 'lucide-react';
-import { Product } from '../types/pos';
+import { Product } from '../types/product';
 
 interface StockMovement {
   id: string;

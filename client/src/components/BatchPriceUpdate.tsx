@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Calculator } from 'lucide-react';
-import { Product } from '../types/pos';
+import { Product } from '../types/product';
 
 interface BatchPriceUpdateProps {
   products: Product[];
@@ -41,20 +41,22 @@ const BatchPriceUpdate: React.FC<BatchPriceUpdateProps> = ({
         return product;
       }
 
-      let newPrice = product.price;
+      let newPriceWithVat = product.priceWithVat; // Start with the VAT-inclusive price
       if (updateType === 'percentage') {
-        newPrice = product.price * (1 + numericValue / 100);
+        // Apply percentage change to the VAT-inclusive price
+        newPriceWithVat = product.priceWithVat * (1 + numericValue / 100);
       } else {
-        newPrice = product.price + numericValue;
+        // Apply fixed change to the VAT-inclusive price
+        newPriceWithVat = product.priceWithVat + numericValue;
       }
 
-      // KDV'li fiyatı tekrar hesapla
-      const priceWithVat = newPrice * (1 + product.vatRate / 100);
+      // Calculate the sale price (without VAT) based on the new VAT-inclusive price
+      const salePrice = newPriceWithVat / (1 + product.vatRate / 100); // Calculate the base price
 
       return {
         ...product,
-        price: Number(newPrice.toFixed(2)),
-        priceWithVat: Number(priceWithVat.toFixed(2))
+        priceWithVat: Number(newPriceWithVat.toFixed(2)),
+        salePrice: Number(salePrice.toFixed(2)), // Update sale price (without VAT)
       };
     });
 

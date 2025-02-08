@@ -16,7 +16,7 @@ function createWindow() {
     // Initial width (will be resized to fullscreen)
     height: 600,
     // Initial height (will be resized to fullscreen)
-    fullscreen: true,
+    fullscreen: false,
     // Opens in fullscreen mode
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     webPreferences: {
