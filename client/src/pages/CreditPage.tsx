@@ -16,6 +16,7 @@ import CustomerModal from "../components/CustomerModal";
 import TransactionModal from "../components/TransactionModal";
 import CustomerDetailModal from "../components/CustomerDetailModal";
 import Button from "../components/Button";
+import { Pagination } from "../components/Pagination";
 
 const CreditPage: React.FC = () => {
   // State tanımlamaları
@@ -411,7 +412,7 @@ const CreditPage: React.FC = () => {
       ) : (
         <div className="bg-white rounded-lg shadow-sm">
           <CustomerList
-            customers={filteredCustomers}
+            customers={currentCustomers}
             summaries={summaries}
             onEdit={(customer) => {
               setSelectedCustomer(customer);
@@ -420,7 +421,15 @@ const CreditPage: React.FC = () => {
             onDelete={handleDeleteCustomer}
             onAddDebt={handleAddDebt}
             onAddPayment={handleAddPayment}
-            onViewDetail={handleViewCustomerDetail} // Bu satırı ekleyelim
+            onViewDetail={handleViewCustomerDetail}
+          />
+
+          {/* Pagination Component */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            className="p-4 border-t"
           />
         </div>
       )}

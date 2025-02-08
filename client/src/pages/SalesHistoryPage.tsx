@@ -78,18 +78,16 @@ const SalesHistoryPage: React.FC = () => {
       title: "Ödeme",
       render: (sale) => (
         <div>
-          <div className="text-sm text-gray-500">
-            {sale.paymentMethod === "nakit" && "💵 Nakit"}
-            {sale.paymentMethod === "kart" && "💳 Kart"}
-            {sale.paymentMethod === "veresiye" && "📝 Veresiye"}
-            {sale.paymentMethod === "nakitpos" && "💵 POS (Nakit)"}
-          </div>
-          {sale.paymentMethod === "nakit" && sale.cashReceived && (
-            <div className="text-xs text-gray-400">
-              Alınan: ₺{sale.cashReceived.toFixed(2)}
-              <br />
-              Para üstü: ₺{sale.changeAmount?.toFixed(2)}
-            </div>
+          {sale.paymentMethod === "mixed" ? (
+            <span className="text-sm text-gray-500">Karışık (Split)</span>
+          ) : (
+            <span className="text-sm text-gray-500">
+              {/* Buraya kart/nakit/veresiye gibi diğer ödeme gösterimleri */}
+              {sale.paymentMethod === "veresiye" && "Veresiye"}
+              {sale.paymentMethod === "kart" && "Kredi Kartı"}
+              {sale.paymentMethod === "nakit" && "Nakit"}
+              {sale.paymentMethod === "nakitpos" && "Nakit POS"}
+            </span>
           )}
         </div>
       ),

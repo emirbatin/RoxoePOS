@@ -12,7 +12,7 @@ import {
   ImageOff,
 } from "lucide-react";
 import { useHotkeys, HotkeysHelper } from "../hooks/useHotkeys";
-import { CartItem, CartTab, PaymentMethod } from "../types/pos";
+import { CartItem, CartTab, PaymentMethod, PaymentResult } from "../types/pos";
 import { Category, Product } from "../types/product";
 import { ReceiptInfo } from "../types/receipt";
 import { Customer } from "../types/credit";
@@ -244,26 +244,36 @@ const POSPage: React.FC = () => {
   };
 
   // Ödeme tamamlama
-  const handlePaymentComplete = async (
-    paymentMethod: PaymentMethod,
-    cashReceived?: number
-  ): Promise<void> => {
+  const handlePaymentComplete = async (paymentResult: PaymentResult) => {
+    // activeTab check
     if (!activeTab) return;
-
-    // Yeni fiyat yapısına göre totaller hesaplanıyor
+  
+    // 1) Tüm ürünlerin ara toplam, KDV, total
     const subtotal = activeTab.cart.reduce(
       (sum, item) => sum + item.salePrice * item.quantity,
       0
     );
-
     const total = activeTab.cart.reduce(
       (sum, item) => sum + item.priceWithVat * item.quantity,
       0
     );
-
-    const vatAmount = total - subtotal; // KDV tutarı, toplam - ara toplam
-
-    // Satış verilerini oluştur
+    const vatAmount = total - subtotal;
+  
+    // 2) salesDB kaydı için "genel" Sale datası
+    // Eğer normal modda tek paymentMethod var, split modda "mixed" diyebiliriz (isteğe bağlı).
+    let paymentMethodForSale: PaymentMethod | "mixed" = "nakit";
+    let cashReceived: number | undefined = undefined;
+  
+    if (paymentResult.mode === "normal") {
+      paymentMethodForSale = paymentResult.paymentMethod;
+      cashReceived = paymentResult.received;
+    } else {
+      // split
+      paymentMethodForSale = "mixed"; 
+      // Dilerseniz "split" diye de koyabilirsiniz, ya da "mixed-split" vs.
+    }
+  
+    // 3) saleData oluştur
     const saleData: Omit<Sale, "id"> = {
       items: activeTab.cart.map((item) => ({
         ...item,
@@ -277,21 +287,25 @@ const POSPage: React.FC = () => {
       subtotal,
       vatAmount,
       total,
-      paymentMethod,
+      paymentMethod: paymentMethodForSale, 
       cashReceived,
-      changeAmount: cashReceived ? cashReceived - total : undefined,
+      changeAmount: 
+        paymentResult.mode === "normal" && paymentResult.paymentMethod === "nakit"
+          ? (cashReceived || 0) - total
+          : undefined,
       date: new Date(),
       status: "completed",
       receiptNo: salesDB.generateReceiptNo(),
     };
-
+  
     try {
-      // Satışı veritabanına ekle
+      // 4) Satışı veritabanına ekle
       const newSale = await salesDB.addSale(saleData);
-      console.log("Satış tamamlandı:", newSale);
-
-      // Veresiye satışta müşteri borcunu güncelle
-      if (paymentMethod === "veresiye" && selectedCustomer) {
+      console.log("Satış (fiş) eklendi:", newSale);
+  
+      // 5) Veresiye kısımlarını eklemek:
+      // Normal modda:
+      if (paymentResult.mode === "normal" && paymentResult.paymentMethod === "veresiye" && selectedCustomer) {
         await creditService.addTransaction({
           customerId: selectedCustomer.id,
           type: "debt",
@@ -300,23 +314,59 @@ const POSPage: React.FC = () => {
           description: `Fiş No: ${newSale.receiptNo}`,
         });
       }
-
-      // Stoktan düşme işlemini çağır
+  
+      // Split modda:
+      if (paymentResult.mode === "split") {
+        // Ürün Bazında
+        if (paymentResult.splitOption === "product" && paymentResult.productPayments) {
+          for (const p of paymentResult.productPayments) {
+            if (p.paymentMethod === "veresiye" && p.customer) {
+              // Müşteriye borç gir
+              await creditService.addTransaction({
+                customerId: p.customer.id,
+                type: "debt",
+                amount: p.received,
+                date: new Date(),
+                description: `Fiş No: ${newSale.receiptNo} - Ürün ID: ${p.itemId}`,
+              });
+            }
+            // kart/nakitpos -> pos ödemesi, nakit vs. bu kısım PaymentModal’da halledildi.
+          }
+        }
+  
+        // Eşit Bölüşüm
+        if (paymentResult.splitOption === "equal" && paymentResult.equalPayments) {
+          // Her kişi için veresiye mi?
+          for (const eq of paymentResult.equalPayments) {
+            if (eq.paymentMethod === "veresiye" && eq.customer) {
+              await creditService.addTransaction({
+                customerId: eq.customer.id,
+                type: "debt",
+                amount: eq.received,
+                date: new Date(),
+                description: `Fiş No: ${newSale.receiptNo} - Eşit Pay`,
+              });
+            }
+          }
+        }
+      }
+  
+      // 6) Stok güncelle
       await updateStock();
-
-      // Sepeti temizle
+  
+      // 7) Sepeti temizle
       setCartTabs((prevTabs) =>
         prevTabs.map((tab) =>
           tab.id === activeTabId ? { ...tab, cart: [] } : tab
         )
       );
-
-      // Seçili müşteriyi temizle
+  
+      // 8) Müşteri seçimini sıfırla
       setSelectedCustomer(null);
-
-      // Modalı kapat
+  
+      // 9) Modalı kapat
       setShowPaymentModal(false);
-
+  
       alert(`Satış başarıyla tamamlandı! Fiş No: ${newSale.receiptNo}`);
     } catch (error) {
       console.error("Satış tamamlama sırasında hata:", error);
