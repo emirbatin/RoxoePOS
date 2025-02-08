@@ -205,8 +205,82 @@ const SaleDetailPage: React.FC = () => {
               <div>
                 <div className="text-sm text-gray-500">Ödeme Yöntemi</div>
                 <div className="font-medium">
-                  {sale.paymentMethod === "nakit" ? "💵 Nakit" : "💳 Kart"}
+                  {sale.paymentMethod === "nakit" && "💵 Nakit"}
+                  {sale.paymentMethod === "kart" && "💳 Kart"}
+                  {sale.paymentMethod === "veresiye" && "📝 Veresiye"}
+                  {sale.paymentMethod === "nakitpos" && "💵 POS (Nakit)"}
+                  {sale.paymentMethod === "mixed" && "Karışık (Split)"}
                 </div>
+
+                {sale.paymentMethod === "mixed" && sale.splitDetails && (
+                  <div className="mt-4 p-4 border rounded bg-gray-50">
+                    <h3 className="font-semibold mb-2">
+                      Karışık Ödeme Detayları
+                    </h3>
+
+                    {/* Ürün Bazında Ödeme */}
+                    {sale.splitDetails.productPayments &&
+                      sale.splitDetails.productPayments.length > 0 && (
+                        <>
+                          <h4 className="text-sm font-medium mb-2">
+                            Ürün Bazında Split
+                          </h4>
+                          <ul className="space-y-1 text-sm">
+                            {sale.splitDetails.productPayments.map((p, idx) => (
+                              <li key={idx} className="flex justify-between">
+                                <span>
+                                  Ürün ID #{p.itemId} -{" "}
+                                  {p.paymentMethod === "veresiye"
+                                    ? "Veresiye"
+                                    : p.paymentMethod === "kart"
+                                    ? "Kredi Kartı"
+                                    : p.paymentMethod === "nakitpos"
+                                    ? "POS (Nakit)"
+                                    : "Nakit"}
+                                  {p.customer &&
+                                    ` (Müşteri: ${p.customer.name})`}
+                                </span>
+                                <span className="font-medium text-gray-700">
+                                  {formatCurrency(p.received)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+
+                    {/* Eşit Bölüşüm Ödeme */}
+                    {sale.splitDetails.equalPayments &&
+                      sale.splitDetails.equalPayments.length > 0 && (
+                        <>
+                          <h4 className="mt-4 text-sm font-medium mb-2">
+                            Eşit Bölüşüm Split
+                          </h4>
+                          <ul className="space-y-1 text-sm">
+                            {sale.splitDetails.equalPayments.map((p, idx) => (
+                              <li key={idx} className="flex justify-between">
+                                <span>
+                                  Kişi {idx + 1} -{" "}
+                                  {p.paymentMethod === "veresiye"
+                                    ? "Veresiye"
+                                    : p.paymentMethod === "kart"
+                                    ? "Kredi Kartı"
+                                    : p.paymentMethod === "nakitpos"
+                                    ? "POS (Nakit)"
+                                    : "Nakit"}
+                                  {p.customer &&
+                                    ` (Müşteri: ${p.customer.name})`}
+                                </span>
+                                <span className="font-medium text-gray-700">
+                                  {formatCurrency(p.received)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                  </div>
+                )}
               </div>
               {sale.paymentMethod === "nakit" && sale.cashReceived && (
                 <>

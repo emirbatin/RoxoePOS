@@ -2,6 +2,7 @@ import { Sale } from '../types/sales';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import ExcelJS from 'exceljs';
+import { getPaymentMethodDisplay } from '../helpers/paymentMethodDisplay';
 
 // Fiş bazlı rapor için interface
 interface SaleReportData {
@@ -35,13 +36,19 @@ class ExportService {
       'Fiş No': sale.receiptNo,
       'Tarih': new Date(sale.date),
       'Tutar': sale.total,
-      'Ödeme': sale.paymentMethod === 'nakit' ? 'Nakit' : 'Kredi Kartı',
-      'Durum': sale.status === 'completed' ? 'Tamamlandı' : 
-               sale.status === 'cancelled' ? 'İptal Edildi' : 'İade Edildi',
+      // ÖNCEKİ: sale.paymentMethod === 'nakit' ? 'Nakit' : 'Kredi Kartı'
+      // YENİ:
+      'Ödeme': getPaymentMethodDisplay(sale.paymentMethod),
+      'Durum': sale.status === 'completed' 
+                ? 'Tamamlandı' 
+                : sale.status === 'cancelled' 
+                  ? 'İptal Edildi' 
+                  : 'İade Edildi',
       'Ürün Sayısı': sale.items.reduce((sum, item) => sum + item.quantity, 0),
       'Ürünler': sale.items.map(item => `${item.name} (${item.quantity} adet)`).join(', ')
     }));
   }
+  
 
   // Ürün bazlı veri hazırlama
   private prepareProductData(sales: Sale[]): ProductReportData[] {

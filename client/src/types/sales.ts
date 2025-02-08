@@ -1,5 +1,15 @@
-import { CartItem, PaymentMethod } from "./pos";
+import {
+  CartItem,
+  PaymentMethod,
+  ProductPaymentDetail,
+  EqualPaymentDetail,
+} from "./pos";
 import { VatRate } from "./product";
+
+export interface SplitDetails {
+  productPayments?: ProductPaymentDetail[];
+  equalPayments?: EqualPaymentDetail[];
+}
 
 export interface Sale {
   id: string;
@@ -7,7 +17,7 @@ export interface Sale {
   subtotal: number; // KDV'siz toplam
   vatAmount: number; // Toplam KDV tutarı
   total: number; // KDV'li toplam
-  paymentMethod: PaymentMethod;
+  paymentMethod: PaymentMethod; // "nakit" | "kart" | "veresiye" | "nakitpos" | "mixed"
   cashReceived?: number;
   changeAmount?: number;
   date: Date;
@@ -16,6 +26,9 @@ export interface Sale {
   cancelReason?: string;
   refundReason?: string;
   refundDate?: Date;
+
+  // Yeni alan: splitDetails - sadece paymentMethod = "mixed" durumlarında dolu olabilir
+  splitDetails?: SplitDetails;
 }
 
 export interface SalesFilter {
