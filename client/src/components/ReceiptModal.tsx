@@ -1,14 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Printer, X } from "lucide-react";
-import { ReceiptInfo } from "../types/receipt";
+import {
+  ReceiptConfig,
+  ReceiptInfo,
+  ReceiptModalProps,
+} from "../types/receipt";
 import { formatCurrency, formatVatRate } from "../utils/vatUtils";
 import { receiptService } from "../services/receiptService";
-
-interface ReceiptModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  receiptData: ReceiptInfo;
-}
 
 const ReceiptModal: React.FC<ReceiptModalProps> = ({
   isOpen,
@@ -16,6 +14,15 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({
   receiptData,
 }) => {
   const [isPrinting, setIsPrinting] = useState(false);
+  const [config, setConfig] = useState<ReceiptConfig | null>(null);
+
+  // Load receipt config from localStorage
+  useEffect(() => {
+    const savedConfig = localStorage.getItem("receiptConfig");
+    if (savedConfig) {
+      setConfig(JSON.parse(savedConfig));
+    }
+  }, []);
 
   if (!isOpen) return null;
 
@@ -34,98 +41,194 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({
     }
   };
 
+  // Dotted line component
+  const DottedLine = () => (
+    <div className="w-full flex justify-center my-2">
+      <div className="text-gray-400 text-sm tracking-widest">
+        - - - - - - - - - - - - - - - - - - - - - - - - -
+      </div>
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
-        {/* Başlık ve Yazdır / Kapat Butonları */}
-        <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pb-4 border-b">
-          <h2 className="text-xl font-semibold">Satış Fişi</h2>
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
+          <h2 className="text-xl font-semibold text-gray-900">Fiş Görüntüle</h2>
           <div className="flex gap-2">
             <button
               onClick={handlePrint}
               disabled={isPrinting}
-              className="flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed shadow-sm"
             >
               <Printer size={18} />
               <span>{isPrinting ? "Yazdırılıyor..." : "Yazdır"}</span>
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
             >
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* Fiş İçeriği */}
-        <div className="bg-white p-4 font-mono text-sm border rounded-lg">
-          {/* Mağaza Bilgileri */}
-          <div className="text-center mb-4">
-            <div className="font-bold text-lg">MARKET ADI</div>
-            <div>Adres Satırı 1</div>
-            <div>Adres Satırı 2</div>
-            <div>Tel: (123) 456-7890</div>
-            <div className="text-xs">Vergi No: 1234567890</div>
-          </div>
+        {/* Receipt Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="bg-white rounded-lg shadow-sm mx-auto w-[280px] relative font-mono text-[11px] leading-tight">
+            {/* Top tear effect */}
+            <div className="absolute -top-2 left-0 right-0 h-4 bg-[linear-gradient(45deg,transparent_33.333%,#fff_33.333%,#fff_66.667%,transparent_66.667%),linear-gradient(-45deg,transparent_33.333%,#fff_33.333%,#fff_66.667%,transparent_66.667%)] bg-size-[10px_10px]" />
 
-          {/* Fiş Detayları */}
-          <div className="border-t border-b border-dashed py-2 mb-4">
-            <div>Fiş No: {receiptData.receiptNo}</div>
-            <div>
-              Tarih: {new Date(receiptData.date).toLocaleString("tr-TR")}
-            </div>
-          </div>
-
-          {/* Ürün Listesi */}
-          <div className="space-y-1 mb-4">
-            <div className="flex justify-between text-xs border-b pb-1">
-              <span>Ürün</span>
-              <span className="text-right">Miktar x Fiyat = Tutar</span>
-            </div>
-            {receiptData.items.map((item) => (
-              <div
-                key={item.id}
-                className="flex justify-between items-start text-sm"
-              >
-                <div>
-                  <div>{item.name}</div>
-                  <div className="text-xs text-gray-500">
-                    KDV: {formatVatRate(item.vatRate)}
-                  </div>
+            <div className="p-3">
+              {/* Store Info */}
+              <div className="text-center space-y-0.5 mb-2">
+                <div className="font-bold text-base">
+                  {config?.storeName || "MARKET ADI"}
                 </div>
-                <div className="text-right">
-                  <div>
-                    {item.quantity} x {formatCurrency(item.priceWithVat)} ={" "}
-                    {formatCurrency(item.priceWithVat * item.quantity)}
+                <div className="text-[10px]">{config?.legalName || ""}</div>
+                {config?.address.map((line, index) => (
+                  <div key={index} className="text-[10px]">
+                    {line}
+                  </div>
+                ))}
+                {config?.phone && (
+                  <div className="text-[10px]">Tel: {config.phone}</div>
+                )}
+                <div className="flex justify-between text-[10px] mt-1">
+                  <span>VD: {config?.taxOffice || "---"}</span>
+                  <span>VN: {config?.taxNumber || "---"}</span>
+                </div>
+                {config?.mersisNo && (
+                  <div className="text-[10px]">
+                    Mersis No: {config.mersisNo}
+                  </div>
+                )}
+              </div>
+
+              <DottedLine />
+
+              {/* Receipt Details */}
+              <div className="space-y-0.5 mb-2">
+                <div className="flex justify-between text-[10px]">
+                  <span>Fiş No:</span>
+                  <span>
+                    {receiptData.receiptNo.toString().padStart(4, "0")}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[10px]">
+                  <span>Tarih:</span>
+                  <span>
+                    {new Date(receiptData.date).toLocaleDateString("tr-TR")}
+                  </span>
+                </div>
+                <div className="flex justify-between text-[10px]">
+                  <span>Saat:</span>
+                  <span>
+                    {new Date(receiptData.date).toLocaleTimeString("tr-TR")}
+                  </span>
+                </div>
+              </div>
+
+              <DottedLine />
+
+              {/* Items */}
+              <div className="space-y-2 mb-3">
+                {receiptData.items.map((item, index) => (
+                  <div key={item.id}>
+                    <div className="font-bold uppercase">{item.name}</div>
+                    <div className="flex justify-between text-[10px]">
+                      <span>
+                        {item.quantity} x {formatCurrency(item.priceWithVat)}
+                      </span>
+                      <span>
+                        {formatCurrency(item.priceWithVat * item.quantity)}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-right">
+                      KDV(%{item.vatRate}):{" "}
+                      {formatCurrency(
+                        item.priceWithVat * item.quantity -
+                          (item.priceWithVat * item.quantity) /
+                            (1 + item.vatRate / 100)
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <DottedLine />
+
+              {/* Totals */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px]">
+                  <span>TOPLAM</span>
+                  <span className="font-bold">
+                    {formatCurrency(receiptData.total)}
+                  </span>
+                </div>
+
+                {/* KDV Breakdown */}
+                <div className="text-[10px] space-y-0.5 pt-1 border-t border-dashed">
+                  <div className="flex justify-between">
+                    <span>KDV Toplam:</span>
+                    <span>{formatCurrency(receiptData.vatAmount)}</span>
+                  </div>
+
+                  {/* KDV by rate */}
+                  {[1, 8, 18].map((rate) => {
+                    const itemsWithRate = receiptData.items.filter(
+                      (item) => item.vatRate === rate
+                    );
+                    const vatAmount = itemsWithRate.reduce((sum, item) => {
+                      const itemTotal = item.priceWithVat * item.quantity;
+                      return sum + (itemTotal - itemTotal / (1 + rate / 100));
+                    }, 0);
+
+                    if (vatAmount > 0) {
+                      return (
+                        <div key={rate} className="flex justify-between">
+                          <span>KDV %{rate}:</span>
+                          <span>{formatCurrency(vatAmount)}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              </div>
+
+              <DottedLine />
+
+              {/* Footer */}
+              <div className="text-center space-y-2">
+                <div className="text-[10px]">
+                  {config?.footer.returnPolicy ||
+                    "Ürün iade ve değişimlerinde bu fiş ve ambalaj gereklidir"}
+                </div>
+                <div className="font-bold text-[10px]">
+                  ***{" "}
+                  {config?.footer.message ||
+                    "Bizi tercih ettiğiniz için teşekkür ederiz"}{" "}
+                  ***
+                </div>
+
+                {/* Machine Readable Section */}
+                <div className="mt-3 pt-2 border-t border-dashed space-y-1">
+                  <div className="text-[10px]">
+                    EKÜ NO: {receiptData.receiptNo.toString().padStart(4, "0")}
+                    <span className="mx-2">|</span>Z NO:{" "}
+                    {receiptData.receiptNo.toString().padStart(4, "0")}
+                  </div>
+                  <div className="font-mono text-[8px] mt-1 tracking-widest">
+                    ||| || ||| || || |||
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
 
-          {/* Toplam Bilgiler */}
-          <div className="border-t border-dashed pt-2 space-y-1">
-            <div className="flex justify-between text-sm">
-              <span>Ara Toplam:</span>
-              <span>{formatCurrency(receiptData.subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>KDV:</span>
-              <span>{formatCurrency(receiptData.vatAmount)}</span>
-            </div>
-            <div className="flex justify-between font-bold pt-2 mt-1 border-t">
-              <span>TOPLAM:</span>
-              <span>{formatCurrency(receiptData.total)}</span>
-            </div>
-          </div>
-
-          {/* Alt Bilgi */}
-          <div className="text-center text-xs mt-4 pt-4 border-t">
-            <div>*** Bizi tercih ettiğiniz için teşekkür ederiz ***</div>
-            <div className="mt-1">
-              {new Date(receiptData.date).toLocaleString("tr-TR")}
-            </div>
+            {/* Bottom tear effect */}
+            <div className="absolute -bottom-2 left-0 right-0 h-4 bg-[linear-gradient(45deg,transparent_33.333%,#fff_33.333%,#fff_66.667%,transparent_66.667%),linear-gradient(-45deg,transparent_33.333%,#fff_33.333%,#fff_66.667%,transparent_66.667%)] bg-size-[10px_10px]" />
           </div>
         </div>
       </div>

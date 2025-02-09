@@ -4,6 +4,7 @@ import { POSConfig, SerialOptions } from "../types/pos";
 import { BarcodeConfig } from "../types/barcode";
 import clsx from "clsx";
 import Button from "../components/Button";
+import { ReceiptConfig } from "../types/receipt";
 
 const SettingsPage: React.FC = () => {
   const [posConfig, setPosConfig] = useState<POSConfig>({
@@ -44,7 +45,9 @@ const SettingsPage: React.FC = () => {
       const savedPosConfig = localStorage.getItem("posConfig");
       const savedSerialOptions = localStorage.getItem("serialOptions");
       const savedBarcodeConfig = localStorage.getItem("barcodeConfig");
+      const savedReceiptConfig = localStorage.getItem("receiptConfig");
 
+      if (savedReceiptConfig) setReceiptConfig(JSON.parse(savedReceiptConfig));
       if (savedPosConfig) setPosConfig(JSON.parse(savedPosConfig));
       if (savedSerialOptions) setSerialOptions(JSON.parse(savedSerialOptions));
       if (savedBarcodeConfig) setBarcodeConfig(JSON.parse(savedBarcodeConfig));
@@ -94,12 +97,27 @@ const SettingsPage: React.FC = () => {
       localStorage.setItem("posConfig", JSON.stringify(posConfig));
       localStorage.setItem("serialOptions", JSON.stringify(serialOptions));
       localStorage.setItem("barcodeConfig", JSON.stringify(barcodeConfig));
+      localStorage.setItem("receiptConfig", JSON.stringify(receiptConfig));
       alert("Ayarlar başarıyla kaydedildi");
     } catch (err) {
       const error = err as Error;
       alert("Ayarlar kaydedilirken hata oluştu: " + error.message);
     }
   };
+
+  const [receiptConfig, setReceiptConfig] = useState<ReceiptConfig>({
+    storeName: "",
+    legalName: "",
+    address: ["", ""],
+    phone: "",
+    taxOffice: "",
+    taxNumber: "",
+    mersisNo: "",
+    footer: {
+      message: "Bizi tercih ettiğiniz için teşekkür ederiz",
+      returnPolicy: "Ürün iade ve değişimlerinde bu fiş ve ambalaj gereklidir",
+    },
+  });
 
   return (
     <div className="p-6">
@@ -113,9 +131,14 @@ const SettingsPage: React.FC = () => {
               <Printer
                 className={clsx(
                   "transition-colors",
-                  (connectionStatus === "connected" || posConfig.manualMode) && "text-green-500",
-                  connectionStatus === "disconnected" && !posConfig.manualMode && "text-red-500",
-                  connectionStatus === "unknown" && !posConfig.manualMode && "text-gray-400"
+                  (connectionStatus === "connected" || posConfig.manualMode) &&
+                    "text-green-500",
+                  connectionStatus === "disconnected" &&
+                    !posConfig.manualMode &&
+                    "text-red-500",
+                  connectionStatus === "unknown" &&
+                    !posConfig.manualMode &&
+                    "text-gray-400"
                 )}
                 size={24}
               />
@@ -132,8 +155,12 @@ const SettingsPage: React.FC = () => {
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-sm font-medium text-gray-700">Manuel Mod</span>
-                <p className="text-sm text-gray-500">POS cihazı olmadan çalışmayı etkinleştir</p>
+                <span className="text-sm font-medium text-gray-700">
+                  Manuel Mod
+                </span>
+                <p className="text-sm text-gray-500">
+                  POS cihazı olmadan çalışmayı etkinleştir
+                </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -152,7 +179,12 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className={clsx("space-y-4", posConfig.manualMode && "opacity-50 pointer-events-none")}>
+          <div
+            className={clsx(
+              "space-y-4",
+              posConfig.manualMode && "opacity-50 pointer-events-none"
+            )}
+          >
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 POS Markası
@@ -267,7 +299,9 @@ const SettingsPage: React.FC = () => {
 
             <div className="flex gap-2 pt-4">
               <Button onClick={testConnection} variant="primary" icon={Printer}>
-                {posConfig.manualMode ? "Manuel Mod Aktif" : "Bağlantıyı Test Et"}
+                {posConfig.manualMode
+                  ? "Manuel Mod Aktif"
+                  : "Bağlantıyı Test Et"}
               </Button>
             </div>
           </div>
@@ -344,6 +378,215 @@ const SettingsPage: React.FC = () => {
                 className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
                 placeholder="Varsayılan: \n (Enter)"
               />
+            </div>
+          </div>
+        </div>
+        {/* Fiş Ayarları */}
+        <div className="bg-white rounded-lg shadow-sm p-6 md:col-span-2">
+          <div className="flex items-center gap-2 mb-6">
+            <Printer className="text-primary-600" size={24} />
+            <h2 className="text-lg font-semibold">Fiş Ayarları</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Market Bilgileri */}
+            <div className="space-y-4">
+              <h3 className="text-md font-medium text-gray-700">
+                Market Bilgileri
+              </h3>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Market Adı
+                </label>
+                <input
+                  type="text"
+                  value={receiptConfig.storeName}
+                  onChange={(e) =>
+                    setReceiptConfig({
+                      ...receiptConfig,
+                      storeName: e.target.value,
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Örn: MARKET XYZ"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Ticari Unvan
+                </label>
+                <input
+                  type="text"
+                  value={receiptConfig.legalName}
+                  onChange={(e) =>
+                    setReceiptConfig({
+                      ...receiptConfig,
+                      legalName: e.target.value,
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Örn: XYZ GIDA SAN. VE TİC. LTD. ŞTİ."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Adres Satır 1
+                </label>
+                <input
+                  type="text"
+                  value={receiptConfig.address[0]}
+                  onChange={(e) =>
+                    setReceiptConfig({
+                      ...receiptConfig,
+                      address: [e.target.value, receiptConfig.address[1]],
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Örn: Fatih Mah. Kurtuluş Cad."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Adres Satır 2
+                </label>
+                <input
+                  type="text"
+                  value={receiptConfig.address[1]}
+                  onChange={(e) =>
+                    setReceiptConfig({
+                      ...receiptConfig,
+                      address: [receiptConfig.address[0], e.target.value],
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Örn: No:123 Merkez/İstanbul"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Telefon
+                </label>
+                <input
+                  type="text"
+                  value={receiptConfig.phone}
+                  onChange={(e) =>
+                    setReceiptConfig({
+                      ...receiptConfig,
+                      phone: e.target.value,
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Örn: (212) 123 45 67"
+                />
+              </div>
+            </div>
+
+            {/* Vergi ve Yasal Bilgiler */}
+            <div className="space-y-4">
+              <h3 className="text-md font-medium text-gray-700">
+                Vergi ve Yasal Bilgiler
+              </h3>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Vergi Dairesi
+                </label>
+                <input
+                  type="text"
+                  value={receiptConfig.taxOffice}
+                  onChange={(e) =>
+                    setReceiptConfig({
+                      ...receiptConfig,
+                      taxOffice: e.target.value,
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Örn: Fatih VD."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Vergi No
+                </label>
+                <input
+                  type="text"
+                  value={receiptConfig.taxNumber}
+                  onChange={(e) =>
+                    setReceiptConfig({
+                      ...receiptConfig,
+                      taxNumber: e.target.value,
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Örn: 1234567890"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mersis No
+                </label>
+                <input
+                  type="text"
+                  value={receiptConfig.mersisNo}
+                  onChange={(e) =>
+                    setReceiptConfig({
+                      ...receiptConfig,
+                      mersisNo: e.target.value,
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Örn: 0123456789"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Teşekkür Mesajı
+                </label>
+                <input
+                  type="text"
+                  value={receiptConfig.footer.message}
+                  onChange={(e) =>
+                    setReceiptConfig({
+                      ...receiptConfig,
+                      footer: {
+                        ...receiptConfig.footer,
+                        message: e.target.value,
+                      },
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Örn: Bizi tercih ettiğiniz için teşekkür ederiz"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  İade Politikası
+                </label>
+                <input
+                  type="text"
+                  value={receiptConfig.footer.returnPolicy}
+                  onChange={(e) =>
+                    setReceiptConfig({
+                      ...receiptConfig,
+                      footer: {
+                        ...receiptConfig.footer,
+                        returnPolicy: e.target.value,
+                      },
+                    })
+                  }
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                  placeholder="Örn: Ürün iade ve değişimlerinde bu fiş ve ambalaj gereklidir"
+                />
+              </div>
             </div>
           </div>
         </div>

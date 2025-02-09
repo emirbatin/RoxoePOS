@@ -20,9 +20,30 @@ export interface ReceiptInfo {
   }>;
 }
 
+export interface ReceiptConfig {
+  storeName: string;
+  legalName: string;
+  address: string[];
+  phone: string;
+  taxOffice: string;
+  taxNumber: string;
+  mersisNo: string;
+  footer: {
+    message: string;
+    returnPolicy: string;
+  };
+  logo?: string;
+}
+
 export interface ReceiptProps {
   isOpen: boolean;
   onClose: () => void;
   receiptData: ReceiptInfo;
   onPrint?: () => void;
+}
+
+export interface ReceiptModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  receiptData: ReceiptInfo;
 }
