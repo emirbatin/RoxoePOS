@@ -3,7 +3,6 @@ import { POSConfig, SerialPort } from "../types/pos";
 export class POSService {
   private port: SerialPort | null = null;
   private currentConfig: POSConfig | null = null;
-
   private readonly DEFAULT_CONFIGS: Record<string, POSConfig> = {
     Ingenico: {
       type: "Ingenico",
@@ -14,6 +13,7 @@ export class POSService {
         cancel: "0x02cancel0x03",
         status: "0x02status0x03",
       },
+      manualMode: false,
     },
     Verifone: {
       type: "Verifone",
@@ -24,17 +24,39 @@ export class POSService {
         cancel: "0x02CAN0x03",
         status: "0x02STA0x03",
       },
+      manualMode: false,
     },
   };
 
+  // Manuel mod kontrolü için localStorage'dan config okuma
+  private loadConfig(): POSConfig | null {
+    const savedConfig = localStorage.getItem("posConfig");
+    if (savedConfig) {
+      return JSON.parse(savedConfig);
+    }
+    return null;
+  }
+
+  // Manuel mod kontrolü
+  async isManualMode(): Promise<boolean> {
+    const config = this.loadConfig();
+    return config?.manualMode || false;
+  }
+
   async connect(posType: string): Promise<boolean> {
     try {
+      // Manuel mod kontrolü
+      const savedConfig = this.loadConfig();
+      if (savedConfig?.manualMode) {
+        this.currentConfig = savedConfig;
+        return true;
+      }
+
       const config = this.DEFAULT_CONFIGS[posType];
       if (!config) throw new Error(`POS tipi desteklenmiyor: ${posType}`);
 
       const port = await navigator.serial.requestPort();
       await port.open({ baudRate: config.baudRate });
-
       this.port = port;
       this.currentConfig = config;
       return true;
@@ -47,6 +69,11 @@ export class POSService {
   async processPayment(
     amount: number
   ): Promise<{ success: boolean; message: string }> {
+    // Manuel mod kontrolü
+    if (await this.isManualMode()) {
+      return { success: true, message: "Ödeme başarılı (Manuel Mod)" };
+    }
+
     if (!this.port || !this.currentConfig) {
       return { success: false, message: "POS bağlantısı yok" };
     }
@@ -56,7 +83,6 @@ export class POSService {
       const command = this.formatPaymentCommand(amount);
       await writer.write(command);
       writer.releaseLock();
-
       const response = await this.waitForResponse();
       return this.parseResponse(response);
     } catch (error) {
@@ -66,8 +92,12 @@ export class POSService {
   }
 
   async cancelTransaction(): Promise<boolean> {
-    if (!this.port || !this.currentConfig) return false;
+    // Manuel modda iptal işlemi her zaman başarılı
+    if (await this.isManualMode()) {
+      return true;
+    }
 
+    if (!this.port || !this.currentConfig) return false;
     try {
       const writer = this.port.writable.getWriter();
       const command = new TextEncoder().encode(
@@ -83,6 +113,11 @@ export class POSService {
   }
 
   async disconnect(): Promise<void> {
+    // Manuel modda bağlantı kesme işlemi gerekmiyor
+    if (await this.isManualMode()) {
+      return;
+    }
+
     if (this.port) {
       await this.port.close();
       this.port = null;
@@ -92,7 +127,6 @@ export class POSService {
 
   private formatPaymentCommand(amount: number): Uint8Array {
     if (!this.currentConfig) throw new Error("POS yapılandırması yok");
-
     const amountStr = amount.toFixed(2).replace(".", "");
     const command = `${this.currentConfig.commandSet.payment}${amountStr}`;
     return new TextEncoder().encode(command);
@@ -100,11 +134,9 @@ export class POSService {
 
   private async waitForResponse(): Promise<Uint8Array> {
     if (!this.port) throw new Error("POS bağlantısı yok");
-
     const reader = this.port.readable.getReader();
     const { value, done } = await reader.read();
     reader.releaseLock();
-
     if (done || !value) throw new Error("POS yanıt vermedi");
     return value;
   }
@@ -115,12 +147,10 @@ export class POSService {
   } {
     // POS cihazından gelen yanıtı işle
     const responseText = new TextDecoder().decode(response);
-
     // Başarılı işlem kontrolü (cihaza göre özelleştirilebilir)
     if (responseText.includes("approved") || responseText.includes("success")) {
       return { success: true, message: "Ödeme başarılı" };
     }
-
     return { success: false, message: "Ödeme reddedildi" };
   }
 }

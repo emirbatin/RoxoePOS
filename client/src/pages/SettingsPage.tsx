@@ -15,6 +15,7 @@ const SettingsPage: React.FC = () => {
       cancel: "0x02cancel0x03",
       status: "0x02status0x03",
     },
+    manualMode: false, // Yeni eklenen manuel mod ayarı
   });
 
   const [serialOptions, setSerialOptions] = useState<SerialOptions>({
@@ -53,6 +54,13 @@ const SettingsPage: React.FC = () => {
   }, []);
 
   const testConnection = async () => {
+    if (posConfig.manualMode) {
+      setConnectionStatus("connected");
+      setLastChecked(new Date());
+      alert("Manuel mod aktif - Bağlantı testi atlandı!");
+      return;
+    }
+
     try {
       const port = await navigator.serial.requestPort();
       await port.open(serialOptions);
@@ -105,9 +113,9 @@ const SettingsPage: React.FC = () => {
               <Printer
                 className={clsx(
                   "transition-colors",
-                  connectionStatus === "connected" && "text-green-500",
-                  connectionStatus === "disconnected" && "text-red-500",
-                  connectionStatus === "unknown" && "text-gray-400"
+                  (connectionStatus === "connected" || posConfig.manualMode) && "text-green-500",
+                  connectionStatus === "disconnected" && !posConfig.manualMode && "text-red-500",
+                  connectionStatus === "unknown" && !posConfig.manualMode && "text-gray-400"
                 )}
                 size={24}
               />
@@ -120,7 +128,31 @@ const SettingsPage: React.FC = () => {
             )}
           </div>
 
-          <div className="space-y-4">
+          {/* Manuel Mod Toggle */}
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-sm font-medium text-gray-700">Manuel Mod</span>
+                <p className="text-sm text-gray-500">POS cihazı olmadan çalışmayı etkinleştir</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={posConfig.manualMode}
+                  onChange={(e) =>
+                    setPosConfig({
+                      ...posConfig,
+                      manualMode: e.target.checked,
+                    })
+                  }
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+              </label>
+            </div>
+          </div>
+
+          <div className={clsx("space-y-4", posConfig.manualMode && "opacity-50 pointer-events-none")}>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 POS Markası
@@ -235,7 +267,7 @@ const SettingsPage: React.FC = () => {
 
             <div className="flex gap-2 pt-4">
               <Button onClick={testConnection} variant="primary" icon={Printer}>
-                Bağlantıyı Test Et
+                {posConfig.manualMode ? "Manuel Mod Aktif" : "Bağlantıyı Test Et"}
               </Button>
             </div>
           </div>

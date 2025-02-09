@@ -25,10 +25,7 @@ export interface CartItem extends Product {
 /**
  * Önceden tanımlı PaymentModalProps:
  * onComplete: (paymentMethod: PaymentMethod, cashReceived?: number, paymentData?: any) => void;
- *
- * Aşağıda, normal ve split ödeme senaryolarını kapsayacak yeni tipler tanımladık:
  */
-
 export type NormalPaymentData = {
   mode: "normal";
   paymentMethod: PaymentMethod; // "nakit" | "kart" | "veresiye" | "nakitpos"
@@ -52,10 +49,8 @@ export type EqualPaymentDetail = {
 export type SplitPaymentData = {
   mode: "split";
   splitOption: "product" | "equal";
-
   // Ürün bazında split ödemeler:
   productPayments?: ProductPaymentDetail[];
-
   // Eşit bölüşüm ödemeler:
   equalPayments?: EqualPaymentDetail[];
 };
@@ -69,7 +64,7 @@ export interface PaymentModalProps {
   total: number;
   subtotal: number;
   vatAmount: number;
-  onComplete: (paymentResult: PaymentResult) => void; // <-- buraya dikkat
+  onComplete: (paymentResult: PaymentResult) => void;
   customers: Customer[];
   selectedCustomer: Customer | null;
   setSelectedCustomer: (customer: Customer | null) => void;
@@ -86,6 +81,7 @@ export interface POSConfig {
     cancel: string;
     status: string;
   };
+  manualMode?: boolean; // Manuel mod - fiziksel POS cihazı olmadan çalışma modu
 }
 
 export interface SerialOptions {
