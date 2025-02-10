@@ -1,14 +1,9 @@
 import React, { useState } from "react";
-import {
-  Upload,
-  Download,
-  FileSpreadsheet,
-  AlertTriangle,
-  FileDown,
-} from "lucide-react";
+import { Upload, Download, AlertTriangle, FileDown } from "lucide-react";
 import { Product } from "../types/product";
 import { importExportService } from "../services/importExportServices";
 import { productService } from "../services/productDB";
+import ColumnMappingModal from "./ColumnMappingModal";
 
 interface BulkProductOperationsProps {
   onImport: (products: Product[]) => void;
@@ -26,40 +21,39 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
     new: number;
     update: number;
   } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showMappingModal, setShowMappingModal] = useState(false);
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setIsProcessing(true);
+    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls") && !file.name.endsWith(".csv")) {
+      setError("Desteklenmeyen dosya formatı. Lütfen .xlsx, .xls veya .csv dosyası yükleyin.");
+      return;
+    }
+
+    setSelectedFile(file);
+    setShowMappingModal(true);
     setError("");
     setImportStats(null);
+    
+    if (event.target) {
+      event.target.value = "";
+    }
+  };
 
+  const handleMappedData = async (mappedProducts: Product[]) => {
+    setIsProcessing(true);
     try {
-      let importedProducts: Product[];
-
-      // Dosya tipine göre import işlemi
-      if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
-        importedProducts = await importExportService.importFromExcel(file);
-      } else if (file.name.endsWith(".csv")) {
-        importedProducts = await importExportService.importFromCSV(file);
-      } else {
-        throw new Error(
-          "Desteklenmeyen dosya formatı. Lütfen .xlsx, .xls veya .csv dosyası yükleyin."
-        );
-      }
-
-      // İstatistikler
       const existingBarcodes = new Set(products.map((p) => p.barcode));
       const stats = {
-        total: importedProducts.length,
+        total: mappedProducts.length,
         new: 0,
         update: 0,
       };
 
-      importedProducts.forEach((product) => {
+      mappedProducts.forEach((product) => {
         if (existingBarcodes.has(product.barcode)) {
           stats.update++;
         } else {
@@ -69,31 +63,21 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
 
       setImportStats(stats);
 
-      // Onay al
-      if (
-        window.confirm(
-          `${stats.total} ürün içe aktarılacak:\n` +
-            `${stats.new} yeni ürün\n` +
-            `${stats.update} güncellenecek ürün\n\n` +
-            `Devam etmek istiyor musunuz?`
-        )
-      ) {
-        // Veritabanına kaydet
-        await productService.bulkInsertProducts(importedProducts);
-
-        // Yeni ürün listesini çek ve durumu güncelle
+      if (window.confirm(
+        `${stats.total} ürün içe aktarılacak:\n` +
+        `${stats.new} yeni ürün\n` +
+        `${stats.update} güncellenecek ürün\n\n` +
+        `Devam etmek istiyor musunuz?`
+      )) {
+        await productService.bulkInsertProducts(mappedProducts);
         const updatedProducts = await productService.getAllProducts();
         onImport(updatedProducts);
       }
     } catch (error) {
-      setError(
-        error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu"
-      );
+      setError(error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu");
     } finally {
       setIsProcessing(false);
-      if (event.target) {
-        event.target.value = "";
-      }
+      setSelectedFile(null);
     }
   };
 
@@ -106,11 +90,7 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
         importExportService.exportToCSV(products, `${fileName}.csv`);
       }
     } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Dışa aktarma sırasında bir hata oluştu"
-      );
+      setError(error instanceof Error ? error.message : "Dışa aktarma sırasında bir hata oluştu");
     }
   };
 
@@ -118,11 +98,7 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
     try {
       await importExportService.generateTemplate(type);
     } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Şablon indirme sırasında bir hata oluştu"
-      );
+      setError(error instanceof Error ? error.message : "Şablon indirme sırasında bir hata oluştu");
     }
   };
 
@@ -154,11 +130,7 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
           <label className="block">
             <div
               className={`flex items-center justify-center w-full h-24 border-2 border-dashed rounded-lg 
-              ${
-                isProcessing
-                  ? "bg-gray-50 cursor-wait"
-                  : "hover:bg-gray-50 cursor-pointer"
-              }`}
+              ${isProcessing ? "bg-gray-50 cursor-wait" : "hover:bg-gray-50 cursor-pointer"}`}
             >
               <div className="text-center">
                 <Upload className="mx-auto h-8 w-8 text-gray-400" />
@@ -173,7 +145,7 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
                 type="file"
                 className="hidden"
                 accept=".xlsx,.xls,.csv"
-                onChange={handleFileUpload}
+                onChange={handleFileSelect}
                 disabled={isProcessing}
               />
             </div>
@@ -204,7 +176,6 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
         </div>
       </div>
 
-      {/* Hata Mesajı */}
       {error && (
         <div className="flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-lg">
           <AlertTriangle size={20} />
@@ -212,7 +183,6 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
         </div>
       )}
 
-      {/* İstatistikler */}
       {importStats && !error && (
         <div className="bg-blue-50 p-3 rounded-lg">
           <div className="font-medium text-blue-700">İçe Aktarım Özeti</div>
@@ -222,6 +192,18 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
             <div>Güncellenecek: {importStats.update} ürün</div>
           </div>
         </div>
+      )}
+
+      {showMappingModal && selectedFile && (
+        <ColumnMappingModal
+          isOpen={showMappingModal}
+          onClose={() => {
+            setShowMappingModal(false);
+            setSelectedFile(null);
+          }}
+          file={selectedFile}
+          onImport={handleMappedData}
+        />
       )}
     </div>
   );
