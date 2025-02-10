@@ -9,9 +9,15 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-electron
 dist-ssr
 *.local
 release
+electron-builder.json5
+package-lock.json
+key.pem
+cert.pem
+certificate.pfx
 
 # Editor directories and files
 .vscode/*
