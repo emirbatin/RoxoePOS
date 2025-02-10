@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Printer, Download, Settings, X } from 'lucide-react';
+import { Printer, Download, X } from 'lucide-react';
 import { Product } from '../types/product';
 
 interface BarcodeGeneratorProps {
