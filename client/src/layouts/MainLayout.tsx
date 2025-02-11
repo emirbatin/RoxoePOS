@@ -102,9 +102,9 @@ interface MainLayoutProps {
 
 const MainLayout = ({ children }: MainLayoutProps) => {
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
+    <div className="flex flex-col min-h-screenbg-gray-50">
       <TopNav />
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-2">
         {children}
       </main>
     </div>
