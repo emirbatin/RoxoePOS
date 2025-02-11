@@ -4,6 +4,7 @@ import { formatCurrency } from "../utils/vatUtils";
 import { posService } from "../services/posServices";
 import { PaymentModalProps, PaymentMethod } from "../types/pos";
 import { Customer } from "../types/credit";
+import { focusManager } from "../utils/FocusManager";
 
 const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
@@ -27,6 +28,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [receivedAmount, setReceivedAmount] = useState("");
   const [processingPOS, setProcessingPOS] = useState(false);
   const receivedInputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   // ÜRÜN BAZINDA SPLIT
   const [remainingItems, setRemainingItems] = useState(items);
@@ -54,26 +56,64 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   // Modal açılınca miktar inputuna odaklanmak
   useEffect(() => {
     if (isOpen && receivedInputRef.current) {
-      receivedInputRef.current.focus();
+      focusManager.setFocus(receivedInputRef.current);
     }
   }, [isOpen]);
 
-  // Modal kapandığında tüm stateleri sıfırlama
+  // ESC tuşu ile kapatma
   useEffect(() => {
-    if (!isOpen) {
-      setMode("normal");
-      setSplitType("product");
-      setPaymentMethod("nakit");
-      setReceivedAmount("");
-      setSelectedCustomer(null);
-      setProcessingPOS(false);
-      setRemainingItems(items);
-      setProductPayments([]);
-      setProductPaymentInputs({});
-      setFriendCount(2);
-      setEqualPayments([]);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      window.addEventListener("keydown", handleEscape);
+      return () => {
+        window.removeEventListener("keydown", handleEscape);
+      };
     }
-  }, [isOpen, items, setSelectedCustomer]);
+  }, [isOpen]);
+
+  // Modal dışı tıklama ile kapatma
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        modalRef.current &&
+        !modalRef.current.contains(event.target as Node)
+      ) {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [isOpen]);
+
+  // Modal kapandığında cleanup
+  const handleClose = () => {
+    // State temizleme
+    setMode("normal");
+    setSplitType("product");
+    setPaymentMethod("nakit");
+    setReceivedAmount("");
+    setSelectedCustomer(null);
+    setProcessingPOS(false);
+    setRemainingItems(items);
+    setProductPayments([]);
+    setProductPaymentInputs({});
+    setFriendCount(2);
+    setEqualPayments([]);
+
+    // Focus'u temizle
+    focusManager.clearFocus();
+    onClose();
+  };
 
   // Veresiye limiti kontrol yardımı
   const checkVeresiyeLimit = (cust: Customer, amount: number) => {
@@ -460,7 +500,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 </p>
               </div>
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <svg
@@ -930,7 +970,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                   Kişi {i + 1}
                                 </h4>
                                 <span className="text-sm text-gray-500">
-                                  Ödenecek Tutar: {formatCurrency(perPersonAmount)}
+                                  Ödenecek Tutar:{" "}
+                                  {formatCurrency(perPersonAmount)}
                                 </span>
                               </div>
 
@@ -1073,7 +1114,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         <div className="px-8 py-6 border-t border-gray-100 bg-white">
           <div className="flex justify-between items-center">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="px-6 py-3 text-gray-600 hover:text-gray-800 font-medium transition-colors"
             >
               İptal
