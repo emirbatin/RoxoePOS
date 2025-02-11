@@ -1,26 +1,26 @@
+// SalesHistoryPage.tsx
 import React, { useState, useEffect } from "react";
 import {
-  Calendar,
-  Search,
-  Filter,
-  RefreshCw,
   FileText,
   XCircle,
   RotateCcw,
 } from "lucide-react";
 import { Sale, SalesFilter, SalesSummary } from "../types/sales";
 import { salesDB } from "../services/salesDB";
-import ReasonModal from "../components/ReasonModal";
+import ReasonModal from "../components/modals/ReasonModal";
 import { useNavigate } from "react-router-dom";
 import { VatRate } from "../types/product";
-import { Table } from "../components/Table";
+import { Table } from "../components/ui/Table";
 import { Column } from "../types/table";
-import { Pagination } from "../components/Pagination";
-// AlertProvider'dan gelen bildirim fonksiyonlarını import ediyoruz
+import { Pagination } from "../components/ui/Pagination";
 import { useAlert } from "../components/AlertProvider";
+import PageLayout from "../components/layout/PageLayout";
+import SearchFilterPanel from "../components/SearchFilterPanel";
 
 const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
+  const { showSuccess, showError } = useAlert();
+
   const [sales, setSales] = useState<Sale[]>([]);
   const [filteredSales, setFilteredSales] = useState<Sale[]>([]);
   const [filter, setFilter] = useState<SalesFilter>({});
@@ -46,9 +46,6 @@ const SalesHistoryPage: React.FC = () => {
   // Sayfalama için state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-
-  // AlertProvider'dan gelen bildirim fonksiyonları
-  const { showSuccess, showError } = useAlert();
 
   // Sayfalama hesaplamaları
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -103,11 +100,9 @@ const SalesHistoryPage: React.FC = () => {
         <div>
           <span
             className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-            ${sale.status === "completed" ? "bg-green-100 text-green-800" : ""}
-            ${sale.status === "cancelled" ? "bg-red-100 text-red-800" : ""}
-            ${
-              sale.status === "refunded" ? "bg-orange-100 text-orange-800" : ""
-            }`}
+              ${sale.status === "completed" ? "bg-green-100 text-green-800" : ""}
+              ${sale.status === "cancelled" ? "bg-red-100 text-red-800" : ""}
+              ${sale.status === "refunded" ? "bg-orange-100 text-orange-800" : ""}`}
           >
             {sale.status === "completed" && "Tamamlandı"}
             {sale.status === "cancelled" && "İptal Edildi"}
@@ -167,6 +162,7 @@ const SalesHistoryPage: React.FC = () => {
     },
   ];
 
+  // Veri yükleme
   useEffect(() => {
     const loadSales = async () => {
       try {
@@ -185,6 +181,7 @@ const SalesHistoryPage: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Arama ve filtreleme işlemi
   useEffect(() => {
     let result = [...sales];
 
@@ -221,8 +218,10 @@ const SalesHistoryPage: React.FC = () => {
     }
 
     setFilteredSales(result);
+    setCurrentPage(1); // Filtre değişince sayfayı sıfırla
   }, [sales, filter, searchTerm]);
 
+  // Özet hesaplamaları
   useEffect(() => {
     const newSummary: SalesSummary = {
       totalSales: filteredSales.length,
@@ -290,6 +289,7 @@ const SalesHistoryPage: React.FC = () => {
     setSummary(newSummary);
   }, [filteredSales]);
 
+  // Satış iptal ve iade işlemleri
   const handleCancelSale = (saleId: string) => {
     setSelectedSaleId(saleId);
     setShowCancelModal(true);
@@ -302,7 +302,6 @@ const SalesHistoryPage: React.FC = () => {
 
   const handleCancelConfirm = async (reason: string) => {
     if (!selectedSaleId) return;
-
     try {
       const updatedSale = await salesDB.cancelSale(selectedSaleId, reason);
       if (updatedSale) {
@@ -326,7 +325,6 @@ const SalesHistoryPage: React.FC = () => {
 
   const handleRefundConfirm = async (reason: string) => {
     if (!selectedSaleId) return;
-
     try {
       const updatedSale = await salesDB.refundSale(selectedSaleId, reason);
       if (updatedSale) {
@@ -348,6 +346,7 @@ const SalesHistoryPage: React.FC = () => {
     }
   };
 
+  // Reset filtre fonksiyonu
   const resetFilters = () => {
     setSearchTerm("");
     setFilter({});
@@ -355,169 +354,147 @@ const SalesHistoryPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6">
-      {/* Üst Kısım - Filtreler ve Özet */}
-      <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Arama ve Filtre */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex gap-2">
-            <div className="flex-1 relative">
+    <PageLayout title="Satış Geçmişi">
+      {/* Üst Kısım - Arama, Filtre Toggle ve Sıfırlama */}
+      <SearchFilterPanel
+        searchTerm={searchTerm}
+        onSearchTermChange={setSearchTerm}
+        onReset={resetFilters}
+        showFilter={showFilter}
+        toggleFilter={() => setShowFilter((prev) => !prev)}
+      />
+
+      {/* Gelişmiş Filtre Alanı */}
+      {showFilter && (
+        <div className="p-4 border rounded-lg bg-white mb-6">
+          <h3 className="font-medium mb-4">Filtreler</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Başlangıç Tarihi
+              </label>
               <input
-                type="text"
-                placeholder="Fiş no veya satış ID ara..."
-                className="w-full pl-10 pr-4 py-2 border rounded-lg"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <Search
-                className="absolute left-3 top-2.5 text-gray-400"
-                size={20}
+                type="date"
+                className="w-full p-2 border rounded-lg"
+                onChange={(e) =>
+                  setFilter((prev) => ({
+                    ...prev,
+                    startDate: e.target.value
+                      ? new Date(e.target.value)
+                      : undefined,
+                  }))
+                }
               />
             </div>
-            <button
-              onClick={() => setShowFilter(!showFilter)}
-              className={`p-2 border rounded-lg hover:bg-gray-50 ${
-                showFilter ? "bg-primary-50 border-primary-500" : ""
-              }`}
-              title="Filtreleri Göster/Gizle"
-            >
-              <Filter size={20} className="text-gray-600" />
-            </button>
-            <button
-              onClick={resetFilters}
-              className="p-2 border rounded-lg hover:bg-gray-50"
-              title="Filtreleri Sıfırla"
-            >
-              <RefreshCw size={20} className="text-gray-600" />
-            </button>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Bitiş Tarihi
+              </label>
+              <input
+                type="date"
+                className="w-full p-2 border rounded-lg"
+                onChange={(e) =>
+                  setFilter((prev) => ({
+                    ...prev,
+                    endDate: e.target.value
+                      ? new Date(e.target.value)
+                      : undefined,
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Durum
+              </label>
+              <select
+                className="w-full p-2 border rounded-lg"
+                onChange={(e) =>
+                  setFilter((prev) => ({
+                    ...prev,
+                    status: (e.target.value || undefined) as
+                      | "completed"
+                      | "cancelled"
+                      | "refunded"
+                      | undefined,
+                  }))
+                }
+                value={filter.status || ""}
+              >
+                <option value="">Tümü</option>
+                <option value="completed">Tamamlandı</option>
+                <option value="cancelled">İptal Edildi</option>
+                <option value="refunded">İade Edildi</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Minimum Tutar
+              </label>
+              <input
+                type="number"
+                className="w-full p-2 border rounded-lg"
+                placeholder="0.00"
+                onChange={(e) =>
+                  setFilter((prev) => ({
+                    ...prev,
+                    minAmount: e.target.value
+                      ? parseFloat(e.target.value)
+                      : undefined,
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Maksimum Tutar
+              </label>
+              <input
+                type="number"
+                className="w-full p-2 border rounded-lg"
+                placeholder="0.00"
+                onChange={(e) =>
+                  setFilter((prev) => ({
+                    ...prev,
+                    maxAmount: e.target.value
+                      ? parseFloat(e.target.value)
+                      : undefined,
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Ödeme Yöntemi
+              </label>
+              <select
+                className="w-full p-2 border rounded-lg"
+                onChange={(e) =>
+                  setFilter((prev) => ({
+                    ...prev,
+                    paymentMethod: (e.target.value || undefined) as
+                      | "nakit"
+                      | "kart"
+                      | "veresiye"
+                      | "nakitpos"
+                      | undefined,
+                  }))
+                }
+                value={filter.paymentMethod || ""}
+              >
+                <option value="">Tümü</option>
+                <option value="nakit">Nakit</option>
+                <option value="kart">Kredi Kartı</option>
+                <option value="veresiye">Veresiye</option>
+                <option value="nakitpos">POS (Nakit)</option>
+              </select>
+            </div>
           </div>
-
-          {showFilter && (
-            <div className="p-4 border rounded-lg bg-white">
-              <h3 className="font-medium mb-4">Filtreler</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Başlangıç Tarihi
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full p-2 border rounded-lg"
-                    onChange={(e) =>
-                      setFilter((prev) => ({
-                        ...prev,
-                        startDate: e.target.value
-                          ? new Date(e.target.value)
-                          : undefined,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bitiş Tarihi
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full p-2 border rounded-lg"
-                    onChange={(e) =>
-                      setFilter((prev) => ({
-                        ...prev,
-                        endDate: e.target.value
-                          ? new Date(e.target.value)
-                          : undefined,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Durum
-                  </label>
-                  <select
-                    className="w-full p-2 border rounded-lg"
-                    onChange={(e) =>
-                      setFilter((prev) => ({
-                        ...prev,
-                        status: e.target.value as Sale["status"] | undefined,
-                      }))
-                    }
-                    value={filter.status || ""}
-                  >
-                    <option value="">Tümü</option>
-                    <option value="completed">Tamamlandı</option>
-                    <option value="cancelled">İptal Edildi</option>
-                    <option value="refunded">İade Edildi</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Minimum Tutar
-                  </label>
-                  <input
-                    type="number"
-                    className="w-full p-2 border rounded-lg"
-                    placeholder="0.00"
-                    onChange={(e) =>
-                      setFilter((prev) => ({
-                        ...prev,
-                        minAmount: e.target.value
-                          ? parseFloat(e.target.value)
-                          : undefined,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Maksimum Tutar
-                  </label>
-                  <input
-                    type="number"
-                    className="w-full p-2 border rounded-lg"
-                    placeholder="0.00"
-                    onChange={(e) =>
-                      setFilter((prev) => ({
-                        ...prev,
-                        maxAmount: e.target.value
-                          ? parseFloat(e.target.value)
-                          : undefined,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Ödeme Yöntemi
-                  </label>
-                  <select
-                    className="w-full p-2 border rounded-lg"
-                    onChange={(e) =>
-                      setFilter((prev) => ({
-                        ...prev,
-                        paymentMethod: e.target.value as
-                          | "nakit"
-                          | "kart"
-                          | "veresiye"
-                          | "nakitpos"
-                          | undefined,
-                      }))
-                    }
-                    value={filter.paymentMethod || ""}
-                  >
-                    <option value="">Tümü</option>
-                    <option value="nakit">Nakit</option>
-                    <option value="kart">Kredi Kartı</option>
-                    <option value="veresiye">Veresiye</option>
-                    <option value="nakitpos">POS (Nakit)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
+      )}
 
-        {/* Özet Kartı */}
+      {/* Özet Kartı */}
+      <div className="mb-6">
         <div className="bg-white p-4 border rounded-lg">
           <h3 className="font-medium mb-4">Satış Özeti</h3>
           <div className="space-y-2 text-sm">
@@ -605,7 +582,7 @@ const SalesHistoryPage: React.FC = () => {
         actionText="İade Et"
         type="refund"
       />
-    </div>
+    </PageLayout>
   );
 };
 

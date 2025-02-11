@@ -12,12 +12,12 @@ import { Sale } from "../types/sales";
 import { ReceiptInfo } from "../types/receipt";
 import { salesDB } from "../services/salesDB";
 import { formatCurrency, formatVatRate } from "../utils/vatUtils";
-import ReasonModal from "../components/ReasonModal";
-import Button from "../components/Button";
-import ReceiptModal from "../components/ReceiptModal";
+import ReasonModal from "../components/modals/ReasonModal";
+import Button from "../components/ui/Button";
+import ReceiptModal from "../components/modals/ReceiptModal";
 import { Column } from "../types/table";
 import { CartItem } from "../types/pos";
-import { Table } from "../components/Table";
+import { Table } from "../components/ui/Table";
 // AlertProvider fonksiyonlarını import ediyoruz
 import { useAlert } from "../components/AlertProvider";
 

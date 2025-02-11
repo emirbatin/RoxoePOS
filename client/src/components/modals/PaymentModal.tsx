@@ -1,10 +1,10 @@
 // PaymentModal.tsx
 import React, { useState, useRef, useEffect } from "react";
-import { formatCurrency } from "../utils/vatUtils";
-import { posService } from "../services/posServices";
-import { PaymentModalProps, PaymentMethod } from "../types/pos";
-import { Customer } from "../types/credit";
-import { useAlert } from "./AlertProvider";
+import { formatCurrency } from "../../utils/vatUtils";
+import { posService } from "../../services/posServices";
+import { PaymentModalProps, PaymentMethod } from "../../types/pos";
+import { Customer } from "../../types/credit";
+import { useAlert } from "../AlertProvider";
 
 const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,

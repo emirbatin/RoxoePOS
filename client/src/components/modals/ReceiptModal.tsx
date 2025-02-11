@@ -4,9 +4,9 @@ import {
   ReceiptConfig,
   ReceiptInfo,
   ReceiptModalProps,
-} from "../types/receipt";
-import { formatCurrency, formatVatRate } from "../utils/vatUtils";
-import { receiptService } from "../services/receiptService";
+} from "../../types/receipt";
+import { formatCurrency, formatVatRate } from "../../utils/vatUtils";
+import { receiptService } from "../../services/receiptService";
 
 const ReceiptModal: React.FC<ReceiptModalProps> = ({
   isOpen,

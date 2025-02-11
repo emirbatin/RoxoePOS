@@ -1,3 +1,4 @@
+// DashboardPage.tsx
 import React, { useState, useEffect } from "react";
 import {
   LineChart,
@@ -18,22 +19,33 @@ import {
   TrendingUp,
   ShoppingCart,
   DollarSign,
-  BarChart2,
+  ArrowUpRight,
   XCircle,
   RotateCcw,
-  ArrowUpRight,
 } from "lucide-react";
 import { Sale } from "../types/sales";
 import DashboardFilters from "../components/DashboardFilters";
-import { Table } from "../components/Table";
-import { StatCard } from "../components/StatCard";
+import { Table } from "../components/ui/Table";
+import Card from "../components/ui/Card"; // Çok amaçlı Card bileşeni (stat için de kullanılacak)
 import { salesDB } from "../services/salesDB";
 import { exportService } from "../services/exportSevices";
 import { Column } from "../types/table";
 import { ProductStats } from "../types/product";
-import { Pagination } from "../components/Pagination";
+import { Pagination } from "../components/ui/Pagination";
+import PageLayout from "../components/layout/PageLayout";
+
+// Eğer StatCardItem tipini kullanmak isterseniz:
+interface StatCardItem {
+  title: string;
+  icon: React.ReactNode;
+  value: string | number;
+  trend?: number;
+  trendLabel?: string;
+  color?: "green" | "blue" | "red" | "orange" | "primary";
+}
 
 const DashboardPage: React.FC = () => {
+  // State tanımlamaları
   const [salesData, setSalesData] = useState<Sale[]>([]);
   const [period, setPeriod] = useState<"day" | "week" | "month" | "year">(
     "week"
@@ -43,67 +55,7 @@ const DashboardPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  const columns: Column<ProductStats>[] = [
-    {
-      key: "name",
-      title: "Ürün",
-      render: (product) => (
-        <div className="text-sm font-medium text-gray-900">{product.name}</div>
-      ),
-    },
-    {
-      key: "category",
-      title: "Kategori",
-      render: (product) => (
-        <div className="text-sm text-gray-500">{product.category}</div>
-      ),
-    },
-    {
-      key: "quantity",
-      title: "Satış Adedi",
-      className: "text-right",
-      render: (product) => (
-        <div className="text-sm font-medium">{product.quantity}</div>
-      ),
-    },
-    {
-      key: "averagePrice",
-      title: "Birim Fiyat",
-      className: "text-right",
-      render: (product) => (
-        <div className="text-sm">{`₺${product.averagePrice.toFixed(2)}`}</div>
-      ),
-    },
-    {
-      key: "revenue",
-      title: "Toplam Ciro",
-      className: "text-right",
-      render: (product) => (
-        <div className="text-sm">{`₺${product.revenue.toFixed(2)}`}</div>
-      ),
-    },
-    {
-      key: "profit",
-      title: "Net Kâr",
-      className: "text-right",
-      render: (product) => (
-        <div className="text-sm font-medium text-green-600">
-          {`₺${product.profit.toFixed(2)}`}
-        </div>
-      ),
-    },
-    {
-      key: "profitMargin",
-      title: "Kâr Marjı",
-      className: "text-right",
-      render: (product) => (
-        <div className="text-sm">
-          {`%${((product.profit / product.revenue) * 100).toFixed(1)}`}
-        </div>
-      ),
-    },
-  ];
-
+  // Satış verilerini yükleme
   const loadSales = async () => {
     try {
       const allSales = await salesDB.getAllSales();
@@ -125,6 +77,7 @@ const DashboardPage: React.FC = () => {
     setEndDate(end);
   }, [period]);
 
+  // Export işlemi
   const handleExport = async (
     type: "excel" | "pdf",
     reportType: "sale" | "product"
@@ -142,11 +95,13 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  // Tarih aralığına göre filtreleme
   const filteredSales = salesData.filter((sale) => {
     const saleDate = new Date(sale.date);
     return saleDate >= startDate && saleDate <= endDate;
   });
 
+  // Stat hesaplamaları
   const totalStats = {
     totalSales: filteredSales.length,
     totalRevenue: filteredSales
@@ -198,6 +153,7 @@ const DashboardPage: React.FC = () => {
       : 0,
   };
 
+  // Kategori satış dağılımı
   const categorySales = salesData.reduce((acc, sale) => {
     sale.items.forEach((item) => {
       if (!acc[item.category]) {
@@ -217,93 +173,59 @@ const DashboardPage: React.FC = () => {
     profit: data.profit || 0,
   }));
 
-  const dailySales = salesData.reduce(
-    (acc, sale) => {
-      const date = new Date(sale.date).toLocaleDateString("tr-TR");
-      if (!acc[date]) {
-        acc[date] = {
-          total: 0,
-          count: 0,
-          profit: 0,
-          netRevenue: 0,
-          refunds: 0,
-          cancellations: 0,
-        };
-      }
-
-      acc[date].total += sale.total;
-      acc[date].count += 1;
-
-      const saleProfit = sale.items.reduce(
-        (sum, item) =>
-          sum + (item.salePrice - item.purchasePrice) * item.quantity,
-        0
-      );
-      acc[date].profit += saleProfit;
-
-      if (sale.status === "refunded") acc[date].refunds += 1;
-      if (sale.status === "cancelled") acc[date].cancellations += 1;
-
-      return acc;
-    },
-    {} as Record<
-      string,
-      {
-        total: number;
-        count: number;
-        profit: number;
-        netRevenue: number;
-        refunds: number;
-        cancellations: number;
-      }
-    >
-  );
+  // Günlük satış verileri
+  const dailySales = salesData.reduce((acc, sale) => {
+    const date = new Date(sale.date).toLocaleDateString("tr-TR");
+    if (!acc[date]) {
+      acc[date] = {
+        total: 0,
+        count: 0,
+        profit: 0,
+        netRevenue: 0,
+        refunds: 0,
+        cancellations: 0,
+      };
+    }
+    acc[date].total += sale.total;
+    acc[date].count += 1;
+    const saleProfit = sale.items.reduce(
+      (sum, item) =>
+        sum + (item.salePrice - item.purchasePrice) * item.quantity,
+      0
+    );
+    acc[date].profit += saleProfit;
+    if (sale.status === "refunded") acc[date].refunds += 1;
+    if (sale.status === "cancelled") acc[date].cancellations += 1;
+    return acc;
+  }, {} as Record<string, { total: number; count: number; profit: number; netRevenue: number; refunds: number; cancellations: number }>);
 
   const dailySalesData = Object.entries(dailySales)
-    .map(([date, data]) => ({
-      date,
-      ...data,
-    }))
+    .map(([date, data]) => ({ date, ...data }))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(-7);
 
   // Ürün istatistikleri hesaplama
-  const productStats = filteredSales.reduce(
-    (acc, sale) => {
-      if (sale.status !== "completed") return acc;
-
-      sale.items.forEach((item) => {
-        if (!acc[item.name]) {
-          acc[item.name] = {
-            name: item.name,
-            category: item.category,
-            quantity: 0,
-            revenue: 0,
-            profit: 0,
-            averagePrice: item.salePrice,
-          };
-        }
-        acc[item.name].quantity += item.quantity;
-        acc[item.name].revenue += item.priceWithVat * item.quantity;
-        acc[item.name].profit +=
-          (item.salePrice - item.purchasePrice) * item.quantity;
-      });
-      return acc;
-    },
-    {} as Record<
-      string,
-      {
-        name: string;
-        category: string;
-        quantity: number;
-        revenue: number;
-        profit: number;
-        averagePrice: number;
+  const productStats = filteredSales.reduce((acc, sale) => {
+    if (sale.status !== "completed") return acc;
+    sale.items.forEach((item) => {
+      if (!acc[item.name]) {
+        acc[item.name] = {
+          name: item.name,
+          category: item.category,
+          quantity: 0,
+          revenue: 0,
+          profit: 0,
+          averagePrice: item.salePrice,
+        };
       }
-    >
-  );
+      acc[item.name].quantity += item.quantity;
+      acc[item.name].revenue += item.priceWithVat * item.quantity;
+      acc[item.name].profit +=
+        (item.salePrice - item.purchasePrice) * item.quantity;
+    });
+    return acc;
+  }, {} as Record<string, { name: string; category: string; quantity: number; revenue: number; profit: number; averagePrice: number }>);
 
-  // Sayfalama için ürünleri hazırla
   const sortedProducts = Object.values(productStats).sort(
     (a, b) => b.quantity - a.quantity
   );
@@ -314,64 +236,157 @@ const DashboardPage: React.FC = () => {
     indexOfFirstItem,
     indexOfLastItem
   );
-  const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
+  const totalPagesProducts = Math.ceil(sortedProducts.length / itemsPerPage);
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
   const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
 
-  return (
-    <div className="p-6 space-y-6">
-      <DashboardFilters
-        startDate={startDate}
-        endDate={endDate}
-        onDateChange={(start, end) => {
-          setStartDate(start);
-          setEndDate(end);
-        }}
-        period={period}
-        onPeriodChange={setPeriod}
-        onExport={handleExport}
-      />
+  // Stat kartlar için Card bileşeni ile kullanılacak statCards dizisi
+  const statCards: StatCardItem[] = [
+    {
+      title: "Toplam Satış",
+      icon: <ShoppingCart size={24} />,
+      value: totalStats.totalSales,
+    },
+    {
+      title: "Brüt Ciro",
+      icon: <DollarSign size={24} />,
+      value: new Intl.NumberFormat("tr-TR", {
+        style: "currency",
+        currency: "TRY",
+      }).format(totalStats.totalRevenue),
+    },
+    {
+      title: "Net Kâr",
+      icon: <TrendingUp size={24} />,
+      value: new Intl.NumberFormat("tr-TR", {
+        style: "currency",
+        currency: "TRY",
+      }).format(totalStats.netProfit),
+      trend: 5.3,
+      trendLabel: "Önceki döneme göre",
+      color: "green",
+    },
+    {
+      title: "Kâr Marjı",
+      icon: <ArrowUpRight size={24} />,
+      value: `%${totalStats.profitMargin.toFixed(1)}`,
+      color: "blue",
+    },
+    {
+      title: "İptal Oranı",
+      icon: <XCircle size={24} />,
+      value: `%${totalStats.cancelRate.toFixed(1)}`,
+      color: "red",
+    },
+    {
+      title: "İade Oranı",
+      icon: <RotateCcw size={24} />,
+      value: `%${totalStats.refundRate.toFixed(1)}`,
+      color: "orange",
+    },
+  ];
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-        <StatCard
-          title="Toplam Satış"
-          value={totalStats.totalSales.toString()}
-          icon={<ShoppingCart size={24} />}
-        />
-        <StatCard
-          title="Brüt Ciro"
-          value={`₺${totalStats.totalRevenue.toFixed(2)}`}
-          icon={<DollarSign size={24} />}
-        />
-        <StatCard
-          title="Net Kâr"
-          value={`₺${totalStats.netProfit.toFixed(2)}`}
-          icon={<TrendingUp size={24} />}
-          color="green"
-        />
-        <StatCard
-          title="Kâr Marjı"
-          value={`%${totalStats.profitMargin.toFixed(1)}`}
-          icon={<ArrowUpRight size={24} />}
-          color="blue"
-        />
-        <StatCard
-          title="İptal Oranı"
-          value={`%${totalStats.cancelRate.toFixed(1)}`}
-          icon={<XCircle size={24} />}
-          color="red"
-        />
-        <StatCard
-          title="İade Oranı"
-          value={`%${totalStats.refundRate.toFixed(1)}`}
-          icon={<RotateCcw size={24} />}
-          color="orange"
+  // Ürün satış performansı tablosu için columns tanımı (ProductStats tipi)
+  const columns: Column<ProductStats>[] = [
+    {
+      key: "name",
+      title: "Ürün",
+      render: (product) => (
+        <div className="text-sm font-medium text-gray-900">{product.name}</div>
+      ),
+    },
+    {
+      key: "category",
+      title: "Kategori",
+      render: (product) => (
+        <div className="text-sm text-gray-500">{product.category}</div>
+      ),
+    },
+    {
+      key: "quantity",
+      title: "Satış Adedi",
+      className: "text-right",
+      render: (product) => (
+        <div className="text-sm font-medium">{product.quantity}</div>
+      ),
+    },
+    {
+      key: "averagePrice",
+      title: "Birim Fiyat",
+      className: "text-right",
+      render: (product) => (
+        <div className="text-sm">{`₺${product.averagePrice.toFixed(2)}`}</div>
+      ),
+    },
+    {
+      key: "revenue",
+      title: "Toplam Ciro",
+      className: "text-right",
+      render: (product) => (
+        <div className="text-sm">{`₺${product.revenue.toFixed(2)}`}</div>
+      ),
+    },
+    {
+      key: "profit",
+      title: "Net Kâr",
+      className: "text-right",
+      render: (product) => (
+        <div className="text-sm font-medium text-green-600">{`₺${product.profit.toFixed(
+          2
+        )}`}</div>
+      ),
+    },
+    {
+      key: "profitMargin",
+      title: "Kâr Marjı",
+      className: "text-right",
+      render: (product) => (
+        <div className="text-sm">{`%${(
+          (product.profit / product.revenue) *
+          100
+        ).toFixed(1)}`}</div>
+      ),
+    },
+  ];
+
+  return (
+    <PageLayout title="Dashboard">
+
+      <div className="mt-6 mb-6">
+        <DashboardFilters
+          startDate={startDate}
+          endDate={endDate}
+          onDateChange={(start, end) => {
+            setStartDate(start);
+            setEndDate(end);
+          }}
+          period={period}
+          onPeriodChange={setPeriod}
+          onExport={handleExport}
         />
       </div>
+      
+      {/* Stat Kartları */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6 mt-6 mb-6">
+        {statCards.map((card, index) => (
+          <Card
+            key={index}
+            variant="stat"
+            title={card.title}
+            icon={card.icon}
+            value={card.value}
+            {...(card.trend !== undefined ? { trend: card.trend } : {})}
+            {...(card.trendLabel ? { trendLabel: card.trendLabel } : {})}
+            {...(card.color ? { color: card.color } : {})}
+          />
+        ))}
+      </div>
 
+      {/* Grafik ve Tablo Bölümleri */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Günlük Satışlar */}
         <div className="bg-white p-6 rounded-lg border">
           <h2 className="text-lg font-semibold mb-4">Günlük Satışlar</h2>
           <div className="h-80">
@@ -411,6 +426,8 @@ const DashboardPage: React.FC = () => {
             </ResponsiveContainer>
           </div>
         </div>
+
+        {/* Kategori Dağılımı */}
         <div className="bg-white p-6 rounded-lg border">
           <h2 className="text-lg font-semibold mb-4">Kategori Dağılımı</h2>
           <div className="h-80">
@@ -441,6 +458,8 @@ const DashboardPage: React.FC = () => {
             </ResponsiveContainer>
           </div>
         </div>
+
+        {/* Kategori Bazlı Kârlılık */}
         <div className="bg-white p-6 rounded-lg border lg:col-span-2">
           <h2 className="text-lg font-semibold mb-4">
             Kategori Bazlı Kârlılık
@@ -462,7 +481,8 @@ const DashboardPage: React.FC = () => {
             </ResponsiveContainer>
           </div>
         </div>
-        {/* Ürün Tablosu */}
+
+        {/* Ürün Satış Performansı Tablosu */}
         <div className="bg-white p-6 rounded-lg border lg:col-span-2">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-lg font-semibold">Ürün Satış Performansı</h2>
@@ -470,7 +490,6 @@ const DashboardPage: React.FC = () => {
               Toplam {sortedProducts.length} ürün
             </span>
           </div>
-
           <Table<ProductStats, string>
             data={currentProducts}
             columns={columns}
@@ -478,16 +497,15 @@ const DashboardPage: React.FC = () => {
             className="w-full"
             emptyMessage="Henüz satış verisi bulunmuyor."
           />
-
           <Pagination
             currentPage={currentPage}
-            totalPages={totalPages}
+            totalPages={totalPagesProducts}
             onPageChange={paginate}
             className="mt-4"
           />
-        </div>{" "}
+        </div>
       </div>
-    </div>
+    </PageLayout>
   );
 };
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { Product, Category, VatRate } from "../types/product";
-import { calculatePriceWithoutVat } from "../utils/vatUtils";
+import { Product, Category, VatRate } from "../../types/product";
+import { calculatePriceWithoutVat } from "../../utils/vatUtils";
 
 interface ProductModalProps {
   isOpen: boolean;

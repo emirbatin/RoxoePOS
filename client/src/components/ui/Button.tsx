@@ -2,13 +2,14 @@ import React, { ReactNode } from "react";
 import clsx from "clsx";
 
 interface ButtonProps {
-  onClick: () => void;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void | Promise<void>;
   disabled?: boolean;
-  children: ReactNode;
+  children?: ReactNode;
   variant?: "primary" | "secondary" | "danger" | "save";
-  icon?: React.ElementType; // Burada türü React.ElementType olarak değiştirdik
+  icon?: React.ElementType;
   className?: string;
   type?: "button" | "submit" | "reset";
+  title?: string;
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -22,7 +23,7 @@ const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseClasses =
-    "w-full py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 focus:outline-none";
+    "w-full py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 focus:outline-none transition-colors duration-200";
 
   const variants = {
     primary:
@@ -32,7 +33,7 @@ const Button: React.FC<ButtonProps> = ({
     danger:
       "bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed",
     save:
-      "bg-green-600 text-white hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed",
+      "bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed", // Düzeltildi
   };
 
   return (
@@ -43,8 +44,7 @@ const Button: React.FC<ButtonProps> = ({
       className={clsx(baseClasses, variants[variant], className)}
       {...props}
     >
-      {Icon && <Icon size={20} />}{" "}
-      {/* Burada size propsunu kullanmaya devam ediyoruz */}
+      {Icon && <Icon size={20} className="text-current" />} {/* İkon rengi uyumlu */}
       {children}
     </button>
   );

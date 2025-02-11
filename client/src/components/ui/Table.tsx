@@ -1,5 +1,5 @@
 import React from "react";
-import { Column, TableId, TableProps } from "../types/table";
+import { Column, TableId, TableProps } from "../../types/table";
 
 export function Table<
   T extends { [key: string]: any },

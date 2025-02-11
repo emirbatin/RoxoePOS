@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
-import { Customer } from '../types/credit';
+import { Customer } from '../../types/credit';
 
 interface CustomerModalProps {
   isOpen: boolean;

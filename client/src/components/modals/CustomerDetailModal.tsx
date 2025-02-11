@@ -9,7 +9,7 @@ import {
   CheckCircle,
   AlertCircle 
 } from 'lucide-react';
-import { Customer, CreditTransaction } from '../types/credit';
+import { Customer, CreditTransaction } from '../../types/credit';
 
 interface CustomerDetailModalProps {
   isOpen: boolean;

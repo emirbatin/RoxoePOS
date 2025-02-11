@@ -9,10 +9,10 @@ import {
   AlertCircle,
   Eye,
 } from "lucide-react";
-import { Customer, CustomerSummary } from "../types/credit";
-import { Column } from "../types/table"; // Import the Column type
-import { Table } from "../components/Table"; // Import the reusable Table component
-import { useAlert } from "./AlertProvider";
+import { Customer, CustomerSummary } from "../../types/credit";
+import { Column } from "../../types/table"; // Import the Column type
+import { Table } from "./Table"; // Import the reusable Table component
+import { useAlert } from "../AlertProvider";
 
 interface CustomerListProps {
   customers: Customer[];

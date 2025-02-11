@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, AlertTriangle, Calendar, DollarSign } from 'lucide-react';
-import { Customer } from '../types/credit';
+import { Customer } from '../../types/credit';
 
 interface TransactionModalProps {
   isOpen: boolean;

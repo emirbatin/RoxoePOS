@@ -3,7 +3,7 @@ import { Printer, Save, Barcode } from "lucide-react";
 import { POSConfig, SerialOptions } from "../types/pos";
 import { BarcodeConfig } from "../types/barcode";
 import clsx from "clsx";
-import Button from "../components/Button";
+import Button from "../components/ui/Button";
 import { ReceiptConfig } from "../types/receipt";
 // AlertProvider'dan gelen bildirim fonksiyonlarını import ediyoruz
 import { useAlert } from "../components/AlertProvider";

@@ -1,14 +1,12 @@
+// ProductsPage.tsx
 import React, { useState, useEffect } from "react";
 import {
-  Search,
   Plus,
-  Filter,
   Tag,
   Edit,
   Trash2,
   AlertTriangle,
   Calculator,
-  RefreshCw,
   Package,
   Barcode,
 } from "lucide-react";
@@ -19,27 +17,29 @@ import {
   formatVatRate,
 } from "../utils/vatUtils";
 import { initProductDB, productService } from "../services/productDB";
-import ProductModal from "../components/ProductModal";
+import ProductModal from "../components/modals/ProductModal";
 import BulkProductOperations from "../components/BulkProductOperations";
 import BatchPriceUpdate from "../components/BatchPriceUpdate";
 import CategoryManagement from "../components/CategoryManagement";
 import StockManagement from "../components/StockManagement";
 import BarcodeGenerator from "../components/BarcodeGenerator";
-import Button from "../components/Button";
+import Button from "../components/ui/Button";
 import { Column } from "../types/table";
-import { Table } from "../components/Table";
-import { Pagination } from "../components/Pagination";
-// AlertProvider'dan gelen fonksiyonları import ediyoruz
+import { Table } from "../components/ui/Table";
+import { Pagination } from "../components/ui/Pagination";
 import { useAlert } from "../components/AlertProvider";
 
+// Yeni eklediğimiz ortak bileşenler
+import PageLayout from "../components/layout/PageLayout";
+import SearchFilterPanel from "../components/SearchFilterPanel";
+
 const ProductsPage: React.FC = () => {
-  // AlertProvider fonksiyonları
   const { showError, showSuccess, confirm } = useAlert();
 
   // State tanımlamaları
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Tümü");
   const [showFilters, setShowFilters] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -52,7 +52,7 @@ const ProductsPage: React.FC = () => {
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [showBatchUpdate, setShowBatchUpdate] = useState(false);
 
-  // Sayfalama için state (diğerlerinin yanına eklenmiştir)
+  // Sayfalama için state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
@@ -165,7 +165,7 @@ const ProductsPage: React.FC = () => {
     },
   ];
 
-  // İlk yükleme
+  // Veri yükleme
   useEffect(() => {
     loadData();
   }, []);
@@ -253,7 +253,6 @@ const ProductsPage: React.FC = () => {
   const handleBatchPriceUpdate = async (updatedProducts: Product[]) => {
     try {
       for (const product of updatedProducts) {
-        // Burada sadece salePrice'ı güncelleyeceğiz, priceWithVat hesaplamasına gerek yok
         await productService.updateProduct({
           ...product,
           priceWithVat: product.priceWithVat,
@@ -270,19 +269,15 @@ const ProductsPage: React.FC = () => {
   async function handleBulkImport(importedProducts: Product[]) {
     let addedCount = 0;
     let updatedCount = 0;
-
     try {
       const db = await initProductDB();
       const tx = db.transaction("products", "readwrite");
       const store = tx.objectStore("products");
-
       for (const product of importedProducts) {
         try {
           const index = store.index("barcode");
           const existing = await index.get(product.barcode);
           const { id, ...productData } = product;
-
-          // Fiyat alanlarının doğru şekilde ayarlandığından emin olun
           const processedProduct = {
             ...productData,
             purchasePrice: Number(productData.purchasePrice),
@@ -292,7 +287,6 @@ const ProductsPage: React.FC = () => {
               productData.vatRate
             ),
           };
-
           if (existing) {
             await store.put({
               ...processedProduct,
@@ -307,12 +301,10 @@ const ProductsPage: React.FC = () => {
           console.error(`Ürün işleme hatası (${product.name}):`, err);
         }
       }
-
       await new Promise<void>((resolve, reject) => {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
-
       await loadData();
       showSuccess(
         `İçe aktarma tamamlandı:\n${addedCount} yeni ürün eklendi\n${updatedCount} ürün güncellendi`
@@ -343,19 +335,16 @@ const ProductsPage: React.FC = () => {
   // Kategori işlemleri
   const handleCategoryUpdate = async (updatedCategories: Category[]) => {
     try {
-      // Kategori güncellemesi için productService'e yeni metodlar eklenmeli
       const categoryNames = updatedCategories.map((c) => c.name);
       const productsToUpdate = products.filter(
         (p) => !categoryNames.includes(p.category)
       );
-
       for (const product of productsToUpdate) {
         await productService.updateProduct({
           ...product,
           category: "Genel",
         });
       }
-
       await loadData();
     } catch (error) {
       console.error("Kategori güncelleme sırasında hata:", error);
@@ -365,8 +354,8 @@ const ProductsPage: React.FC = () => {
   // Filtreleme
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.barcode.includes(searchQuery);
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.barcode.includes(searchTerm);
     const matchesCategory =
       selectedCategory === "Tümü" || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
@@ -381,44 +370,69 @@ const ProductsPage: React.FC = () => {
   );
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
 
+  // Reset filtre fonksiyonu
+  const resetFilters = () => {
+    setSearchTerm("");
+    setSelectedCategory("Tümü");
+    setShowFilters(false);
+  };
+
   return (
-    <div className="p-6">
-      {/* Üst Bar */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800">Ürünler</h1>
-        <div className="flex gap-2">
-          {selectedProductIds.length > 0 && (
-            <>
+    <PageLayout title="Ürünler">
+      {/* Arama & Filtre Paneli */}
+      <SearchFilterPanel
+        searchTerm={searchTerm}
+        onSearchTermChange={setSearchTerm}
+        onReset={resetFilters}
+        showFilter={showFilters}
+        toggleFilter={() => setShowFilters((prev) => !prev)}
+      />
+
+      {/* Kategori Butonları (Filtreler) */}
+      {showFilters && (
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+          <div className="flex flex-wrap gap-2 items-center">
+            {categories.map((category) => (
               <button
-                onClick={() => setShowBatchUpdate(!showBatchUpdate)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                key={category.id}
+                onClick={() => setSelectedCategory(category.name)}
+                className={`px-3 py-1.5 rounded-lg ${
+                  selectedCategory === category.name
+                    ? "bg-primary-50 text-primary-600"
+                    : "text-gray-600 hover:bg-gray-50"
+                }`}
               >
-                <Calculator size={20} />
-                Toplu Fiyat Güncelle ({selectedProductIds.length})
+                <span className="mr-2">{category.icon}</span>
+                {category.name}
               </button>
-              <button
-                onClick={handleBatchDelete}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                <Trash2 size={20} />
-                Toplu Sil ({selectedProductIds.length})
-              </button>
-            </>
-          )}
-          <Button
-            onClick={() => {
-              setSelectedProduct(undefined);
-              setShowProductModal(true);
-            }}
-            variant="primary"
-            icon={Plus} // İkonu buradan ekliyoruz
-          >
-            Ürün Ekle
-          </Button>
+            ))}
+            {/* Kategori Ekle Butonu */}
+            <button
+              onClick={() => setShowCategoryManagement(true)}
+              className="px-3 py-1.5 rounded-lg bg-primary-50 text-primary-600 hover:bg-primary-100"
+              title="Kategori Ekle"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
         </div>
+      )}
+
+      {/* Toplu İşlemler ve Ek Butonlar */}
+      <div className="flex flex-col items-start mb-6">
+        <Button
+          onClick={() => {
+            setSelectedProduct(undefined);
+            setShowProductModal(true);
+          }}
+          variant="primary"
+          icon={Plus}
+        >
+          Ürün Ekle
+        </Button>
       </div>
 
-      {/* Toplu Fiyat Güncelleme */}
+      {/* Toplu Fiyat Güncelleme Bileşeni */}
       {showBatchUpdate && (
         <div className="mb-6">
           <BatchPriceUpdate
@@ -430,75 +444,29 @@ const ProductsPage: React.FC = () => {
 
       {/* Bulk Operations */}
       <div className="mb-6">
-        <BulkProductOperations onImport={handleBulkImport} products={products} />
+        <BulkProductOperations
+          onImport={handleBulkImport}
+          products={products}
+        />
       </div>
-
-      {/* Arama ve Filtreler */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <div className="flex gap-4">
-          {/* Arama */}
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              placeholder="Ürün ara..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-            <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
-          </div>
-
-          {/* Filtre Butonları */}
-          <button
-            onClick={() => setShowCategoryManagement(true)}
-            className="p-2 border rounded-lg hover:bg-gray-50 text-primary-600"
-            title="Kategori Yönetimi"
-          >
-            <Tag size={20} />
-          </button>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`p-2 border rounded-lg hover:bg-gray-50 ${
-              showFilters
-                ? "bg-primary-50 border-primary-500 text-primary-600"
-                : ""
-            }`}
-          >
-            <Filter size={20} className="text-gray-600" />
-          </button>
-          <button
-            onClick={() => {
-              setSearchQuery("");
-              setSelectedCategory("Tümü");
-              setShowFilters(false);
-            }}
-            className="p-2 border rounded-lg hover:bg-gray-50"
-            title="Filtreleri Sıfırla"
-          >
-            <RefreshCw size={20} className="text-gray-600" />
-          </button>
-        </div>
-
-        {/* Filtreler */}
-        {showFilters && (
-          <div className="mt-4 pt-4 border-t">
-            <div className="flex flex-wrap gap-2">
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  onClick={() => setSelectedCategory(category.name)}
-                  className={`px-3 py-1.5 rounded-lg ${
-                    selectedCategory === category.name
-                      ? "bg-primary-50 text-primary-600"
-                      : "text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  <span className="mr-2">{category.icon}</span>
-                  {category.name}
-                </button>
-              ))}
-            </div>
-          </div>
+      <div className="flex flex-row justify-end">
+        {selectedProductIds.length > 0 && (
+          <>
+            <button
+              onClick={() => setShowBatchUpdate(!showBatchUpdate)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mr-2"
+            >
+              <Calculator size={20} />
+              Toplu Fiyat Güncelle ({selectedProductIds.length})
+            </button>
+            <button
+              onClick={handleBatchDelete}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 ml-2"
+            >
+              <Trash2 size={20} />
+              Toplu Sil ({selectedProductIds.length})
+            </button>
+          </>
         )}
       </div>
 
@@ -556,7 +524,7 @@ const ProductsPage: React.FC = () => {
           onClose={() => setSelectedBarcodeProduct(null)}
         />
       )}
-    </div>
+    </PageLayout>
   );
 };
 

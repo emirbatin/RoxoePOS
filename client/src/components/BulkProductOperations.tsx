@@ -3,7 +3,7 @@ import { Upload, Download, AlertTriangle, FileDown } from "lucide-react";
 import { Product } from "../types/product";
 import { importExportService } from "../services/importExportServices";
 import { productService } from "../services/productDB";
-import ColumnMappingModal from "./ColumnMappingModal";
+import ColumnMappingModal from "./modals/ColumnMappingModal";
 // AlertProvider'dan gelen fonksiyonları import ediyoruz:
 import { useAlert } from "../components/AlertProvider";
 

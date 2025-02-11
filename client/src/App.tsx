@@ -11,9 +11,10 @@ import AlertProvider from "./components/AlertProvider";
 
 function App() {
   return (
-    <AlertProvider>
+    
       <Router>
         <MainLayout>
+        <AlertProvider>
           <Routes>
             <Route path="/" element={<POSPage />} />
             <Route path="/pos" element={<POSPage />} />
@@ -24,9 +25,10 @@ function App() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/sales/:id" element={<SaleDetailPage />} />
           </Routes>
+          </AlertProvider>
         </MainLayout>
       </Router>
-    </AlertProvider>
+    
   );
 }
 

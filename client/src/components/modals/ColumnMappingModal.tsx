@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Save, X, AlertTriangle } from "lucide-react";
 import ExcelJS from "exceljs";
 import Papa from "papaparse";
-import { Product, VatRate } from "../types/product";
+import { Product, VatRate } from "../../types/product";
 
 interface ColumnMappingModalProps {
   isOpen: boolean;

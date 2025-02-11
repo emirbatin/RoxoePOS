@@ -1,25 +1,19 @@
+// CreditPage.tsx
 import React, { useState, useEffect } from "react";
-import {
-  Search,
-  Plus,
-  Filter,
-  RefreshCw,
-  DollarSign,
-  Users,
-  AlertTriangle,
-  CreditCard,
-} from "lucide-react";
+import { DollarSign, Users, AlertTriangle, CreditCard } from "lucide-react";
 import { Customer, CustomerSummary } from "../types/credit";
 import { creditService } from "../services/creditServices";
-import CustomerList from "../components/CustomerList";
-import CustomerModal from "../components/CustomerModal";
-import TransactionModal from "../components/TransactionModal";
-import CustomerDetailModal from "../components/CustomerDetailModal";
-import Button from "../components/Button";
-import { Pagination } from "../components/Pagination";
+import CustomerList from "../components/ui/CustomerList";
+import CustomerModal from "../components/modals/CustomerModal";
+import TransactionModal from "../components/modals/TransactionModal";
+import CustomerDetailModal from "../components/modals/CustomerDetailModal";
+import Button from "../components/ui/Button";
+import { Pagination } from "../components/ui/Pagination";
+import PageLayout from "../components/layout/PageLayout";
+import SearchFilterPanel from "../components/SearchFilterPanel";
 
 const CreditPage: React.FC = () => {
-  // State tanımlamaları
+  // Temel state tanımlamaları
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [summaries, setSummaries] = useState<Record<number, CustomerSummary>>(
@@ -30,7 +24,7 @@ const CreditPage: React.FC = () => {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<
     Customer | undefined
-  >();
+  >(undefined);
   const [loading, setLoading] = useState(true);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [transactionType, setTransactionType] = useState<"debt" | "payment">(
@@ -42,32 +36,18 @@ const CreditPage: React.FC = () => {
   const [selectedDetailCustomer, setSelectedDetailCustomer] =
     useState<Customer | null>(null);
 
-  const handleViewCustomerDetail = (customer: Customer) => {
-    setSelectedDetailCustomer(customer);
-    setShowCustomerDetail(true);
-  };
-
-  // State ekleyelim
+  // Pagination için state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  // Sayfalama hesaplamaları
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentCustomers = filteredCustomers.slice(
-    indexOfFirstItem,
-    indexOfLastItem
-  );
-  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
-
-  // Filtre state'leri
+  // Ek filtreler: vadesi geçen, borcu olan, limiti dolmak üzere
   const [filters, setFilters] = useState({
     hasOverdue: false,
     hasDebt: false,
     nearLimit: false,
   });
 
-  // Özet istatistikler
+  // İstatistikler
   const [stats, setStats] = useState({
     totalCustomers: 0,
     totalDebt: 0,
@@ -75,14 +55,15 @@ const CreditPage: React.FC = () => {
     customersWithOverdue: 0,
   });
 
+  // Veri yükleme
   const loadData = async () => {
     setLoading(true);
     try {
-      // Müşterileri yükle
+      // Tüm müşterileri yükle
       const allCustomers = await creditService.getAllCustomers();
       setCustomers(allCustomers);
 
-      // Müşteri özetlerini hesapla
+      // Her müşteri için özet bilgileri yükle
       const summaryData: Record<number, CustomerSummary> = {};
       for (const customer of allCustomers) {
         summaryData[customer.id] = await creditService.getCustomerSummary(
@@ -91,7 +72,7 @@ const CreditPage: React.FC = () => {
       }
       setSummaries(summaryData);
 
-      // İstatistikleri hesapla
+      // İstatistik hesaplamaları
       const totalCustomers = allCustomers.length;
       const totalDebt = allCustomers.reduce((sum, c) => sum + c.currentDebt, 0);
       const totalOverdue = Object.values(summaryData).reduce(
@@ -118,11 +99,10 @@ const CreditPage: React.FC = () => {
     loadData();
   }, []);
 
-  // Filtreleme
+  // Filtreleme işlemi: arama ve ek filtreler
   useEffect(() => {
     let result = [...customers];
 
-    // Arama
     if (searchQuery) {
       result = result.filter(
         (customer) =>
@@ -131,7 +111,6 @@ const CreditPage: React.FC = () => {
       );
     }
 
-    // Filtreler
     if (filters.hasOverdue) {
       result = result.filter(
         (customer) => summaries[customer.id]?.overdueTransactions > 0
@@ -147,7 +126,17 @@ const CreditPage: React.FC = () => {
     }
 
     setFilteredCustomers(result);
+    setCurrentPage(1);
   }, [customers, searchQuery, filters, summaries]);
+
+  // Sayfalama hesaplamaları
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentCustomers = filteredCustomers.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
+  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
 
   // Müşteri ekleme/düzenleme
   const handleSaveCustomer = async (
@@ -210,7 +199,6 @@ const CreditPage: React.FC = () => {
     dueDate?: Date;
   }) => {
     if (!selectedTransactionCustomer) return;
-
     try {
       await creditService.addTransaction({
         customerId: selectedTransactionCustomer.id,
@@ -220,7 +208,6 @@ const CreditPage: React.FC = () => {
         dueDate: data.dueDate,
         description: data.description,
       });
-
       loadData();
       setShowTransactionModal(false);
       setSelectedTransactionCustomer(null);
@@ -229,25 +216,13 @@ const CreditPage: React.FC = () => {
     }
   };
 
-  return (
-    <div className="p-6">
-      {/* Üst Bar */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800">Veresiye</h1>
-        <div className="flex gap-2">
-          <Button
-            onClick={() => {
-              setSelectedCustomer(undefined);
-              setShowCustomerModal(true);
-            }}
-            variant="primary"
-            icon={Plus} // İkonu buradan ekliyoruz
-          >
-            Müşteri Ekle
-          </Button>
-        </div>
-      </div>
+  const handleViewCustomerDetail = (customer: Customer) => {
+    setSelectedDetailCustomer(customer);
+    setShowCustomerDetail(true);
+  };
 
+  return (
+    <PageLayout title="Veresiye">
       {/* İstatistik Kartları */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <div className="bg-white rounded-lg border p-4">
@@ -304,105 +279,64 @@ const CreditPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Arama ve Filtreler */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <div className="flex gap-4">
-          {/* Arama */}
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              placeholder="Müşteri ara..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-            <Search
-              className="absolute left-3 top-2.5 text-gray-400"
-              size={20}
-            />
+      {/* Arama Barı */}
+      <SearchFilterPanel
+        searchTerm={searchQuery}
+        onSearchTermChange={setSearchQuery}
+        onReset={() => {
+          setSearchQuery("");
+          setFilters({ hasOverdue: false, hasDebt: false, nearLimit: false });
+          setShowFilters(false);
+        }}
+        showFilter={showFilters}
+        toggleFilter={() => setShowFilters((prev) => !prev)}
+      />
+      {/* Ek Filtre Alanı */}
+      {showFilters && (
+        <div className="p-4 border rounded-lg bg-white mb-6">
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={filters.hasOverdue}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    hasOverdue: e.target.checked,
+                  }))
+                }
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-700">Vadesi Geçenler</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={filters.hasDebt}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, hasDebt: e.target.checked }))
+                }
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-700">Borcu Olanlar</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={filters.nearLimit}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    nearLimit: e.target.checked,
+                  }))
+                }
+                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-700">Limiti Dolmak Üzere</span>
+            </label>
           </div>
-
-          {/* Filtre Butonları */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`p-2 border rounded-lg hover:bg-gray-50 ${
-              showFilters
-                ? "bg-primary-50 border-primary-500 text-primary-600"
-                : ""
-            }`}
-          >
-            <Filter size={20} className="text-gray-600" />
-          </button>
-          <button
-            onClick={() => {
-              setSearchQuery("");
-              setFilters({
-                hasOverdue: false,
-                hasDebt: false,
-                nearLimit: false,
-              });
-              setShowFilters(false);
-            }}
-            className="p-2 border rounded-lg hover:bg-gray-50"
-            title="Filtreleri Sıfırla"
-          >
-            <RefreshCw size={20} className="text-gray-600" />
-          </button>
         </div>
-
-        {/* Filtreler */}
-        {showFilters && (
-          <div className="mt-4 pt-4 border-t">
-            <div className="flex flex-wrap gap-4">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={filters.hasOverdue}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      hasOverdue: e.target.checked,
-                    }))
-                  }
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <span className="text-sm text-gray-700">Vadesi Geçenler</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={filters.hasDebt}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      hasDebt: e.target.checked,
-                    }))
-                  }
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <span className="text-sm text-gray-700">Borcu Olanlar</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={filters.nearLimit}
-                  onChange={(e) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      nearLimit: e.target.checked,
-                    }))
-                  }
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <span className="text-sm text-gray-700">
-                  Limiti Dolmak Üzere
-                </span>
-              </label>
-            </div>
-          </div>
-        )}
-      </div>
-
+      )}
       {/* Müşteri Listesi */}
       {loading ? (
         <div className="text-center py-12">
@@ -424,7 +358,6 @@ const CreditPage: React.FC = () => {
             onViewDetail={handleViewCustomerDetail}
           />
 
-          {/* Pagination Component */}
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
@@ -473,7 +406,7 @@ const CreditPage: React.FC = () => {
           onAddPayment={handleAddPayment}
         />
       )}
-    </div>
+    </PageLayout>
   );
 };
 
