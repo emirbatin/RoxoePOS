@@ -30,6 +30,7 @@ import { salesDB } from "../services/salesDB";
 import { creditService } from "../services/creditServices";
 import { Sale } from "../types/sales";
 import { BarcodeConfig } from "../types/barcode";
+import { focusManager } from "../utils/FocusManager";
 
 const POSPage: React.FC = () => {
   // Temel state'ler
@@ -65,6 +66,18 @@ const POSPage: React.FC = () => {
   // Veri yükleme
   useEffect(() => {
     loadData();
+  }, []);
+
+  useEffect(() => {
+    if (searchInputRef.current) {
+      focusManager.setFocus(searchInputRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      focusManager.clearFocus();
+    };
   }, []);
 
   const loadData = async () => {
@@ -126,6 +139,9 @@ const POSPage: React.FC = () => {
   // Yeni satış başlat
   const startNewSale = (): void => {
     if (!activeTab?.cart.length) {
+      if (searchInputRef.current) {
+        focusManager.setFocus(searchInputRef.current);
+      }
       searchInputRef.current?.focus();
       return;
     }
@@ -490,15 +506,18 @@ const POSPage: React.FC = () => {
 
   useEffect(() => {
     if (!barcodeConfig.enabled) return;
-
+  
     const handleBarcodeScan = (event: KeyboardEvent) => {
-      // suffix genelde Enter (\n) olur
-      if (event.key === barcodeConfig.suffix && searchQuery) {
+      const currentFocus = focusManager.getCurrentFocus();
+      
+      if (event.key === barcodeConfig.suffix && 
+          searchQuery && 
+          currentFocus === searchInputRef.current) {
         event.preventDefault();
         handleBarcodeSearch();
       }
     };
-
+  
     window.addEventListener("keydown", handleBarcodeScan);
     return () => window.removeEventListener("keydown", handleBarcodeScan);
   }, [searchQuery, barcodeConfig]);

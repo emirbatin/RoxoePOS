@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Save, X } from 'lucide-react';
-import ExcelJS from 'exceljs';
-import Papa from 'papaparse';
-import { Product, VatRate } from '../types/product';
+import React, { useState, useEffect } from "react";
+import { Save, X, AlertTriangle } from "lucide-react";
+import ExcelJS from "exceljs";
+import Papa from "papaparse";
+import { Product, VatRate } from "../types/product";
 
 interface ColumnMappingModalProps {
   isOpen: boolean;
@@ -13,23 +13,43 @@ interface ColumnMappingModalProps {
 
 type SystemColumnKey = keyof typeof SYSTEM_COLUMNS;
 
-const REQUIRED_FIELDS = ['name', 'barcode', 'purchasePrice', 'salePrice', 'vatRate', 'stock', 'category'] as const;
+const REQUIRED_FIELDS = [
+  "name",
+  "barcode",
+  "purchasePrice",
+  "salePrice",
+  "vatRate",
+  "stock",
+  "category",
+] as const;
 
 const SYSTEM_COLUMNS = {
-  name: 'Ürün Adı',
-  barcode: 'Barkod',
-  purchasePrice: 'Alış Fiyatı',
-  salePrice: 'Satış Fiyatı',
-  vatRate: 'KDV Oranı',
-  stock: 'Stok',
-  category: 'Kategori'
+  name: "Ürün Adı",
+  barcode: "Barkod",
+  purchasePrice: "Alış Fiyatı",
+  salePrice: "Satış Fiyatı",
+  vatRate: "KDV Oranı",
+  stock: "Stok",
+  category: "Kategori",
 } as const;
 
-const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({ isOpen, onClose, file, onImport }) => {
+const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
+  isOpen,
+  onClose,
+  file,
+  onImport,
+}) => {
   const [headers, setHeaders] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<Record<SystemColumnKey, string>>({} as Record<SystemColumnKey, string>);
+  const [mapping, setMapping] = useState<Record<SystemColumnKey, string>>(
+    {} as Record<SystemColumnKey, string>
+  );
   const [previewData, setPreviewData] = useState<any[][]>([]);
-  const [errors, setErrors] = useState<Record<SystemColumnKey, string>>({} as Record<SystemColumnKey, string>);
+  const [errors, setErrors] = useState<Record<SystemColumnKey, string>>(
+    {} as Record<SystemColumnKey, string>
+  );
+  const [processingErrors, setProcessingErrors] = useState<string[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
 
   useEffect(() => {
     if (file) {
@@ -37,217 +57,215 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({ isOpen, onClose
     }
   }, [file]);
 
+  const suggestMapping = (headers: string[]) => {
+    const suggestedMapping: Record<SystemColumnKey, string> = {} as Record<SystemColumnKey, string>;
+    
+    // Başlıkları normalize et ve eşleştir
+    headers.forEach((header) => {
+      const normalizedHeader = header.toLowerCase()
+        .replace(/\s+/g, '') // boşlukları kaldır
+        .replace(/[iıİI]/g, 'i') // Türkçe karakterleri normalize et
+        .replace(/[şŞ]/g, 's')
+        .replace(/[çÇ]/g, 'c')
+        .replace(/[ğĞ]/g, 'g')
+        .replace(/[üÜ]/g, 'u')
+        .replace(/[öÖ]/g, 'o');
+
+      // Sistem kolonlarını kontrol et
+      Object.entries(SYSTEM_COLUMNS).forEach(([key, value]) => {
+        const normalizedValue = value.toLowerCase()
+          .replace(/\s+/g, '')
+          .replace(/[iıİI]/g, 'i')
+          .replace(/[şŞ]/g, 's')
+          .replace(/[çÇ]/g, 'c')
+          .replace(/[ğĞ]/g, 'g')
+          .replace(/[üÜ]/g, 'u')
+          .replace(/[öÖ]/g, 'o');
+
+        // Tam eşleşme veya benzer eşleşme kontrolü
+        if (normalizedHeader === normalizedValue ||
+            normalizedHeader.includes(normalizedValue) ||
+            normalizedValue.includes(normalizedHeader)) {
+          suggestedMapping[key as SystemColumnKey] = header;
+        }
+      });
+    });
+
+    setMapping(suggestedMapping);
+  };
+
+
   const readFileHeaders = async () => {
+    setProcessingErrors([]);
     try {
-      if (file.name.endsWith('.csv')) {
+      if (file.name.endsWith(".csv")) {
         await readCSV();
       } else {
         await readExcel();
       }
     } catch (error) {
-      console.error('Dosya okuma hatası:', error);
+      setProcessingErrors([
+        `Dosya okuma hatası: ${
+          error instanceof Error ? error.message : "Bilinmeyen hata"
+        }`,
+      ]);
     }
   };
 
-  // CSV için
-const readCSV = () => {
+  const readCSV = () => {
     return new Promise<void>((resolve, reject) => {
       Papa.parse<Record<string, string>>(file, {
         header: true,
         preview: 4,
-        encoding: 'utf-8',
+        encoding: "utf-8",
+        skipEmptyLines: true,
         complete: (results) => {
           if (results.data.length > 0) {
             const headers = Object.keys(results.data[0]);
             setHeaders(headers);
-            setPreviewData(results.data.slice(0, 3).map(row => headers.map(h => row[h])));
+            setPreviewData(
+              results.data.slice(0, 3).map((row) => headers.map((h) => row[h]))
+            );
             suggestMapping(headers);
+          } else {
+            reject(new Error("CSV dosyası boş veya geçersiz"));
           }
           resolve();
         },
         error: (error) => {
-          reject(error);
-        }
+          reject(new Error(`CSV okuma hatası: ${error}`));
+        },
       });
     });
   };
-  
 
   const readExcel = async () => {
     const arrayBuffer = await file.arrayBuffer();
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(arrayBuffer);
-    
+
     const worksheet = workbook.getWorksheet(1);
-    if (!worksheet) throw new Error('Excel dosyası boş');
+    if (!worksheet) throw new Error("Excel dosyası boş");
 
     const headers: string[] = [];
     const previewRows: any[][] = [];
-    
+
     worksheet.eachRow((row, rowNumber) => {
       const rowData = row.values as any[];
-      rowData.shift();
+      rowData.shift(); // İlk boş hücreyi atla
 
       if (rowNumber === 1) {
-        headers.push(...rowData);
+        headers.push(
+          ...rowData.map((cell) => cell?.toString().trim()).filter(Boolean)
+        );
       } else if (rowNumber <= 4) {
-        previewRows.push(rowData);
+        previewRows.push(rowData.map((cell) => cell?.toString().trim()));
       }
     });
+
+    if (headers.length === 0) {
+      throw new Error("Excel başlıkları bulunamadı");
+    }
 
     setHeaders(headers);
     setPreviewData(previewRows);
     suggestMapping(headers);
   };
 
-  const suggestMapping = (headers: string[]) => {
-    const suggestedMapping: Record<SystemColumnKey, string> = {} as Record<SystemColumnKey, string>;
-    headers.forEach((header) => {
-      const normalizedHeader = header.toLowerCase().replace(/\s+/g, '');
-      (Object.entries(SYSTEM_COLUMNS) as [SystemColumnKey, string][]).forEach(([key, value]) => {
-        if (normalizedHeader === value.toLowerCase().replace(/\s+/g, '')) {
-          suggestedMapping[key] = header;
-        }
-      });
-    });
-    setMapping(suggestedMapping);
+  const cleanValue = (value: any): string => {
+    if (value === null || value === undefined) return "";
+    return value.toString().trim();
   };
 
-  const validateMapping = () => {
-    const newErrors: Record<SystemColumnKey, string> = {} as Record<SystemColumnKey, string>;
-    REQUIRED_FIELDS.forEach(field => {
-      if (!mapping[field]) {
-        newErrors[field as SystemColumnKey] = `${SYSTEM_COLUMNS[field as SystemColumnKey]} alanı eşleştirilmeli`;
-      }
-    });
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleImport = async () => {
-    if (!validateMapping()) return;
-
-    try {
-      let products: Product[] = [];
-
-      if (file.name.endsWith('.csv')) {
-        products = await processCSV();
-      } else {
-        products = await processExcel();
-      }
-
-      onImport(products);
-      onClose();
-    } catch (error) {
-      console.error('Veri dönüştürme hatası:', error);
+  const parseNumber = (value: any, fieldName: string): number => {
+    const cleaned = cleanValue(value);
+    const number = Number(cleaned.replace(/,/g, "."));
+    if (isNaN(number)) {
+      throw new Error(`${fieldName} sayısal bir değer olmalıdır`);
     }
+    return number;
   };
 
-  const processCSV = (): Promise<Product[]> => {
-    return new Promise((resolve, reject) => {
-      Papa.parse<Record<string, string>>(file, {
-        header: true,
-        complete: (results) => {
-          const products = results.data
-            .map((row) => processRow(row))
-            .filter((p): p is Product => p !== null);
-          resolve(products);
-        },
-        error: reject
-      });
-    });
-  };
-
-  const processExcel = async (): Promise<Product[]> => {
-    const arrayBuffer = await file.arrayBuffer();
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(arrayBuffer);
-    
-    const worksheet = workbook.getWorksheet(1);
-    if (!worksheet) throw new Error('Excel dosyası boş');
-
-    const products: Product[] = [];
-    const headerRow = worksheet.getRow(1).values as string[];
-    
-    worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return;
-      
-      const rowData: Record<string, any> = {};
-      headerRow.forEach((header, index) => {
-        if (index > 0) {
-          rowData[header] = row.getCell(index).value;
-        }
-      });
-      
-      const product = processRow(rowData);
-      if (product) products.push(product);
-    });
-
-    return products;
-  };
-
-  const processRow = (row: Record<string, any>): Product | null => {
+  const processRow = (
+    row: Record<string, any>,
+    rowIndex: number
+  ): Product | null => {
     try {
       const product: Partial<Product> = {};
 
-      for (const [systemField, fileField] of Object.entries(mapping)) {
-        const value = row[fileField];
-
-        if (value === null || value === undefined) {
-          if (REQUIRED_FIELDS.includes(systemField as any)) {
-            throw new Error(`${SYSTEM_COLUMNS[systemField as SystemColumnKey]} boş olamaz`);
-          }
-          continue;
-        }
-
-        switch(systemField) {
-          case 'vatRate': {
-            const vatRate = Number(value);
-            if (![0, 1, 8, 18, 20].includes(vatRate)) {
-              throw new Error(`Geçersiz KDV oranı: ${vatRate}. Geçerli değerler: 0, 1, 8, 18, 20`);
-            }
-            product.vatRate = vatRate as VatRate;
-            break;
-          }
-          case 'purchasePrice':
-          case 'salePrice': {
-            const price = Number(value);
-            if (isNaN(price) || price < 0) {
-              throw new Error(`${SYSTEM_COLUMNS[systemField as SystemColumnKey]} geçersiz`);
-            }
-            product[systemField] = price;
-            break;
-          }
-          case 'stock': {
-            const stock = Number(value);
-            if (isNaN(stock) || stock < 0) {
-              throw new Error('Stok miktarı negatif olamaz');
-            }
-            product.stock = stock;
-            break;
-          }
-          case 'name':
-          case 'barcode': {
-            const strValue = value.toString().trim();
-            if (!strValue) {
-              throw new Error(`${SYSTEM_COLUMNS[systemField as SystemColumnKey]} boş olamaz`);
-            }
-            product[systemField] = strValue;
-            break;
-          }
-          default:
-            product[systemField as keyof Product] = value.toString();
+      // Tüm zorunlu alanları kontrol et
+      for (const field of REQUIRED_FIELDS) {
+        const fileField = mapping[field];
+        if (!fileField || !row[fileField]) {
+          throw new Error(`${SYSTEM_COLUMNS[field]} alanı boş olamaz`);
         }
       }
 
-      // Zorunlu alanları kontrol et
-      REQUIRED_FIELDS.forEach(field => {
-        if (!product[field]) {
-          throw new Error(`${SYSTEM_COLUMNS[field]} alanı zorunludur`);
-        }
-      });
+      // Değerleri dönüştür ve doğrula
+      for (const [systemField, fileField] of Object.entries(mapping)) {
+        const rawValue = row[fileField];
 
-      // KDV'li fiyat hesapla
+        try {
+          switch (systemField) {
+            case "vatRate": {
+              const vatRate = parseNumber(
+                rawValue,
+                SYSTEM_COLUMNS[systemField]
+              );
+              if (![0, 1, 8, 18, 20].includes(vatRate)) {
+                throw new Error(
+                  `Geçersiz KDV oranı: ${vatRate}. Geçerli değerler: 0, 1, 8, 18, 20`
+                );
+              }
+              product.vatRate = vatRate as VatRate;
+              break;
+            }
+            case "purchasePrice":
+            case "salePrice": {
+              const price = parseNumber(rawValue, SYSTEM_COLUMNS[systemField]);
+              if (price < 0) {
+                throw new Error(
+                  `${SYSTEM_COLUMNS[systemField]} negatif olamaz`
+                );
+              }
+              product[systemField] = price;
+              break;
+            }
+            case "stock": {
+              const stock = parseNumber(rawValue, SYSTEM_COLUMNS[systemField]);
+              if (stock < 0) {
+                throw new Error("Stok miktarı negatif olamaz");
+              }
+              product.stock = stock;
+              break;
+            }
+            case "name":
+            case "barcode": {
+              const strValue = cleanValue(rawValue);
+              if (!strValue) {
+                throw new Error(`${SYSTEM_COLUMNS[systemField]} boş olamaz`);
+              }
+              product[systemField] = strValue;
+              break;
+            }
+            case "category": {
+              const strValue = cleanValue(rawValue);
+              if (!strValue) {
+                throw new Error("Kategori boş olamaz");
+              }
+              product.category = strValue;
+              break;
+            }
+          }
+        } catch (error) {
+          throw new Error(
+            `Satır ${rowIndex + 2}: ${
+              error instanceof Error ? error.message : "Bilinmeyen hata"
+            }`
+          );
+        }
+      }
+
       const completeProduct: Product = {
         id: 0,
         name: product.name!,
@@ -255,16 +273,111 @@ const readCSV = () => {
         purchasePrice: product.purchasePrice!,
         salePrice: product.salePrice!,
         vatRate: product.vatRate!,
-        priceWithVat: product.salePrice! * (1 + (product.vatRate! / 100)),
-        category: product.category || 'Genel',
-        stock: product.stock!
+        priceWithVat: Number(
+          (product.salePrice! * (1 + product.vatRate! / 100)).toFixed(2)
+        ),
+        category: product.category!,
+        stock: product.stock!,
       };
 
       return completeProduct;
     } catch (error) {
-      console.warn('Satır işleme hatası:', error);
+      setProcessingErrors((prev) => [
+        ...prev,
+        error instanceof Error ? error.message : "Bilinmeyen hata",
+      ]);
       return null;
     }
+  };
+
+  const handleImport = async () => {
+    if (!validateMapping()) return;
+
+    setIsProcessing(true);
+    setProcessingErrors([]);
+
+    try {
+      let rawData: Record<string, any>[] = [];
+
+      if (file.name.endsWith(".csv")) {
+        const result = await new Promise<
+          Papa.ParseResult<Record<string, string>>
+        >((resolve, reject) => {
+          Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: resolve,
+            error: reject,
+          });
+        });
+        rawData = result.data;
+      } else {
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(arrayBuffer);
+
+        const worksheet = workbook.getWorksheet(1);
+        if (!worksheet) throw new Error("Excel dosyası boş");
+
+        const headers = worksheet.getRow(1).values as string[];
+        headers.shift(); // İlk boş hücreyi atla
+
+        rawData = [];
+        worksheet.eachRow((row, rowNumber) => {
+          if (rowNumber === 1) return; // Başlık satırını atla
+
+          const rowData: Record<string, any> = {};
+          const values = row.values as any[];
+          values.shift(); // İlk boş hücreyi atla
+
+          headers.forEach((header, index) => {
+            rowData[header] = values[index];
+          });
+
+          rawData.push(rowData);
+        });
+      }
+
+      const products: Product[] = [];
+      rawData.forEach((row, index) => {
+        const product = processRow(row, index);
+        if (product) products.push(product);
+      });
+
+      if (processingErrors.length === 0 && products.length > 0) {
+        onImport(products);
+        onClose();
+      }
+    } catch (error) {
+      setProcessingErrors((prev) => [
+        ...prev,
+        `İşlem hatası: ${
+          error instanceof Error ? error.message : "Bilinmeyen hata"
+        }`,
+      ]);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const validateMapping = () => {
+    const newErrors: Record<SystemColumnKey, string> = {} as Record<
+      SystemColumnKey,
+      string
+    >;
+    let isValid = true;
+
+    REQUIRED_FIELDS.forEach((field) => {
+      if (!mapping[field]) {
+        newErrors[
+          field as SystemColumnKey
+        ] = `${SYSTEM_COLUMNS[field]} alanı eşleştirilmeli`;
+        isValid = false;
+      }
+    });
+
+    setErrors(newErrors);
+    return isValid;
   };
 
   if (!isOpen) return null;
@@ -274,11 +387,31 @@ const readCSV = () => {
       <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-semibold">Excel Başlıklarını Eşleştir</h2>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <h2 className="text-lg font-semibold">
+              Excel Başlıklarını Eşleştir
+            </h2>
+            <button
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-700"
+              disabled={isProcessing}
+            >
               <X size={20} />
             </button>
           </div>
+
+          {processingErrors.length > 0 && (
+            <div className="mb-4 p-4 bg-red-50 rounded-lg">
+              <div className="flex items-center gap-2 text-red-800 mb-2">
+                <AlertTriangle size={20} />
+                <span className="font-medium">Hatalar tespit edildi:</span>
+              </div>
+              <ul className="list-disc list-inside space-y-1 text-red-700">
+                {processingErrors.map((error, index) => (
+                  <li key={index}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="space-y-4">
             {REQUIRED_FIELDS.map((field) => (
@@ -286,21 +419,26 @@ const readCSV = () => {
                 <div className="w-1/3">
                   <label className="text-sm font-medium text-gray-700">
                     {SYSTEM_COLUMNS[field]}
-                    {errors[field] && <span className="text-red-500 ml-1">*</span>}
+                    <span className="text-red-500 ml-1">*</span>
                   </label>
                 </div>
                 <div className="w-2/3">
                   <select
-                    value={mapping[field] || ''}
-                    onChange={(e) => setMapping(prev => ({
-                      ...prev,
-                      [field]: e.target.value
-                    }))}
-                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={mapping[field] || ""}
+                    onChange={(e) =>
+                      setMapping((prev) => ({
+                        ...prev,
+                        [field]: e.target.value,
+                      }))
+                    }
+                    disabled={isProcessing}
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                   >
                     <option value="">Seçiniz</option>
                     {headers.map((header) => (
-                      <option key={header} value={header}>{header}</option>
+                      <option key={header} value={header}>
+                        {header}
+                      </option>
                     ))}
                   </select>
                   {errors[field] && (
@@ -321,7 +459,10 @@ const readCSV = () => {
                   <thead className="bg-gray-50">
                     <tr>
                       {headers.map((header) => (
-                        <th key={header} className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th
+                          key={header}
+                          className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
                           {header}
                         </th>
                       ))}
@@ -331,8 +472,11 @@ const readCSV = () => {
                     {previewData.map((row, idx) => (
                       <tr key={idx}>
                         {row.map((cell, cellIdx) => (
-                          <td key={cellIdx} className="px-3 py-2 text-sm text-gray-500">
-                            {cell?.toString()}
+                          <td
+                            key={cellIdx}
+                            className="px-3 py-2 text-sm text-gray-500 whitespace-nowrap"
+                          >
+                            {cell?.toString() || ""}
                           </td>
                         ))}
                       </tr>
@@ -346,16 +490,18 @@ const readCSV = () => {
           <div className="mt-6 flex justify-end gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+              disabled={isProcessing}
+              className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               İptal
             </button>
             <button
               onClick={handleImport}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              disabled={isProcessing}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <Save size={16} />
-              İçe Aktar
+              {isProcessing ? "İşleniyor..." : "İçe Aktar"}
             </button>
           </div>
         </div>
