@@ -8,27 +8,28 @@ import ProductsPage from "./pages/ProductsPage";
 import CreditPage from "./pages/CreditPage";
 import SettingsPage from "./pages/SettingsPage";
 import AlertProvider from "./components/AlertProvider";
+import { NotificationProvider } from "./contexts/NotificationContext";
 
 function App() {
   return (
-    
-      <Router>
+    <Router>
+      <NotificationProvider>
         <MainLayout>
-        <AlertProvider>
-          <Routes>
-            <Route path="/" element={<POSPage />} />
-            <Route path="/pos" element={<POSPage />} />
-            <Route path="/products" element={<ProductsPage />} />
-            <Route path="/credit" element={<CreditPage />} />
-            <Route path="/history" element={<SalesHistoryPage />} />
-            <Route path="/reports" element={<DashboardPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/sales/:id" element={<SaleDetailPage />} />
-          </Routes>
+          <AlertProvider>
+            <Routes>
+              <Route path="/" element={<POSPage />} />
+              <Route path="/pos" element={<POSPage />} />
+              <Route path="/products" element={<ProductsPage />} />
+              <Route path="/credit" element={<CreditPage />} />
+              <Route path="/history" element={<SalesHistoryPage />} />
+              <Route path="/reports" element={<DashboardPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/sales/:id" element={<SaleDetailPage />} />
+            </Routes>
           </AlertProvider>
         </MainLayout>
-      </Router>
-    
+      </NotificationProvider>
+    </Router>
   );
 }
 

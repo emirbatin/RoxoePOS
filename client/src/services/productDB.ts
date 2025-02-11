@@ -67,31 +67,25 @@ export const initProductDB = async () => {
   return db;
 };
 
+type StockChangeCallback = (product: Product) => void;
+let stockChangeCallbacks: StockChangeCallback[] = [];
+
+export const emitStockChange = (product: Product) => {
+  stockChangeCallbacks.forEach(callback => callback(product));
+};
+
 export const productService = {
-  async initializeWithSampleData(products: Product[], categories: Category[]) {
-    const db = await initProductDB();
-    const tx = db.transaction(["products", "categories"], "readwrite");
-
-    try {
-      for (const product of products) {
-        await tx.objectStore("products").add(product);
-      }
-      for (const category of categories) {
-        await tx.objectStore("categories").add(category);
-      }
-
-      await new Promise((resolve, reject) => {
-        tx.oncomplete = resolve;
-        tx.onerror = () => reject(tx.error);
-      });
-    } catch (error) {
-      tx.abort();
-      throw error;
-    }
+  onStockChange(callback: StockChangeCallback) {
+    stockChangeCallbacks.push(callback);
   },
 
+  offStockChange(callback: StockChangeCallback) {
+    stockChangeCallbacks = stockChangeCallbacks.filter(cb => cb !== callback);
+  },
+
+
   async getAllProducts(): Promise<Product[]> {
-    const db = await initProductDB();
+    const db = await openDB("posDB", 2);
     return db.getAll("products");
   },
 
@@ -249,20 +243,19 @@ export const productService = {
   },
 
   async updateStock(id: number, quantity: number): Promise<void> {
-    const db = await initProductDB();
+    const db = await openDB("posDB", 2);
     const tx = db.transaction("products", "readwrite");
-    
+
     try {
       const product = await tx.store.get(id);
       if (product) {
         product.stock += quantity;
         await tx.store.put(product);
+
+        emitStockChange(product);
       }
       
-      await new Promise((resolve, reject) => {
-        tx.oncomplete = resolve;
-        tx.onerror = () => reject(tx.error);
-      });
+      await tx.done;
     } catch (error) {
       tx.abort();
       throw error;

@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react";
+import React, { ReactNode, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Home,
@@ -10,9 +10,13 @@ import {
   Bell,
   History,
 } from "lucide-react";
+import { useNotifications } from "../contexts/NotificationContext";
+import NotificationPopup from "../components/NotificationPopup";
 
 const TopNav = () => {
   const navigate = useNavigate();
+  const { unreadCount } = useNotifications();
+  const [showNotifications, setShowNotifications] = useState(false);
 
   return (
     <header className="bg-white shadow-soft h-16 flex justify-between px-6 items-center">
@@ -57,10 +61,24 @@ const TopNav = () => {
         </nav>
       </div>
       <div className="flex items-center gap-4">
-        <button className="p-2 hover:bg-gray-100 rounded-full relative">
-          <Bell size={20} className="text-gray-600" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-primary-500 rounded-full"></span>
-        </button>
+        <div className="relative">
+          <button
+            className="p-2 hover:bg-gray-100 rounded-full relative"
+            onClick={() => setShowNotifications(!showNotifications)}
+          >
+            <Bell size={20} className="text-gray-600" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
+          <NotificationPopup
+            isOpen={showNotifications}
+            onClose={() => setShowNotifications(false)}
+          />
+        </div>
         <div className="flex items-center gap-3">
           <div className="hidden md:block text-right">
             <div className="text-sm font-medium text-gray-900">Admin</div>

@@ -16,7 +16,7 @@ import {
   formatCurrency,
   formatVatRate,
 } from "../utils/vatUtils";
-import { initProductDB, productService } from "../services/productDB";
+import { emitStockChange, initProductDB, productService } from "../services/productDB";
 import ProductModal from "../components/modals/ProductModal";
 import BulkProductOperations from "../components/BulkProductOperations";
 import BatchPriceUpdate from "../components/BatchPriceUpdate";
@@ -319,8 +319,12 @@ const ProductsPage: React.FC = () => {
     try {
       const product = products.find((p) => p.id === productId);
       if (product) {
-        await productService.updateProduct({ ...product, stock: newStock });
-        await loadData();
+        const updatedProduct = { ...product, stock: newStock };
+        await productService.updateProduct(updatedProduct);
+  
+        emitStockChange(updatedProduct);  // Manually emit the event
+  
+        await loadData();  // Refresh UI
       }
     } catch (error) {
       console.error("Stok güncellenirken hata:", error);
@@ -346,8 +350,8 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-   // Filtreleme
-   const filteredProducts = products.filter((product) => {
+  // Filtreleme
+  const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.barcode.includes(searchTerm);
@@ -369,7 +373,7 @@ const ProductsPage: React.FC = () => {
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       // Filtrelenmiş TÜM ürünlerin ID'lerini seç
-      const allFilteredIds = filteredProducts.map(p => p.id);
+      const allFilteredIds = filteredProducts.map((p) => p.id);
       setSelectedProductIds(allFilteredIds);
     } else {
       setSelectedProductIds([]);
@@ -497,9 +501,13 @@ const ProductsPage: React.FC = () => {
                   {selectedProductIds.length > 0 ? (
                     <div className="flex items-center gap-2">
                       <span>
-                        <span className="font-medium">{selectedProductIds.length}</span> ürün seçildi
+                        <span className="font-medium">
+                          {selectedProductIds.length}
+                        </span>{" "}
+                        ürün seçildi
                       </span>
-                      {selectedProductIds.length !== filteredProducts.length && (
+                      {selectedProductIds.length !==
+                        filteredProducts.length && (
                         <button
                           onClick={() => handleSelectAll(true)}
                           className="text-primary-600 hover:text-primary-700"
@@ -514,11 +522,11 @@ const ProductsPage: React.FC = () => {
                 </div>
               )}
             </div>
-            
+
             {/* Filtreleme Bilgisi */}
             {(searchTerm || selectedCategory !== "Tümü") && (
               <div className="text-sm text-gray-500">
-                Filtreleniyor: {searchTerm && `"${searchTerm}"`} 
+                Filtreleniyor: {searchTerm && `"${searchTerm}"`}
                 {searchTerm && selectedCategory !== "Tümü" && " + "}
                 {selectedCategory !== "Tümü" && selectedCategory}
               </div>
@@ -536,9 +544,11 @@ const ProductsPage: React.FC = () => {
           allSelected={selectedProductIds.length === filteredProducts.length}
           onSelect={(id, checked) => {
             if (checked) {
-              setSelectedProductIds(prev => [...prev, id]);
+              setSelectedProductIds((prev) => [...prev, id]);
             } else {
-              setSelectedProductIds(prev => prev.filter(prevId => prevId !== id));
+              setSelectedProductIds((prev) =>
+                prev.filter((prevId) => prevId !== id)
+              );
             }
           }}
           idField="id"
