@@ -62,7 +62,27 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
         new: 0,
         update: 0,
       };
-
+  
+      // Mevcut kategorileri al
+      const existingCategories = await productService.getCategories();
+      const existingCategoryNames = new Set(existingCategories.map(c => c.name));
+  
+      // Yeni kategorileri topla
+      const newCategories = new Set<string>();
+      mappedProducts.forEach(product => {
+        if (product.category && !existingCategoryNames.has(product.category)) {
+          newCategories.add(product.category);
+        }
+      });
+  
+      // Yeni kategorileri ekle
+      for (const categoryName of newCategories) {
+        await productService.addCategory({
+          name: categoryName,
+          icon: "📦", // Varsayılan icon
+        });
+      }
+  
       mappedProducts.forEach((product) => {
         if (existingBarcodes.has(product.barcode)) {
           stats.update++;
@@ -70,17 +90,17 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
           stats.new++;
         }
       });
-
+  
       setImportStats(stats);
-
-      // AlertProvider confirm fonksiyonu kullanılarak onay alınıyor:
+  
       const shouldImport = await confirm(
         `${stats.total} ürün içe aktarılacak:\n` +
-          `${stats.new} yeni ürün\n` +
-          `${stats.update} güncellenecek ürün\n\n` +
-          `Devam etmek istiyor musunuz?`
+        `${stats.new} yeni ürün\n` +
+        `${stats.update} güncellenecek ürün\n` +
+        `${newCategories.size} yeni kategori eklenecek\n\n` +
+        `Devam etmek istiyor musunuz?`
       );
-
+  
       if (shouldImport) {
         await productService.bulkInsertProducts(mappedProducts);
         const updatedProducts = await productService.getAllProducts();
@@ -93,6 +113,7 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
     } finally {
       setIsProcessing(false);
       setSelectedFile(null);
+      setShowMappingModal(false);
     }
   };
 

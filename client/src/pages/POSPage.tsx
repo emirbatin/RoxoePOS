@@ -1,19 +1,12 @@
 // POSPage.tsx
-import React, { useState, useRef, useEffect } from "react";
-import {
-  ShoppingCart,
-  Plus,
-  Minus,
-  X,
-  CreditCard,
-  Trash2,
-} from "lucide-react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { ShoppingCart, Plus, Minus, X, CreditCard, Trash2 } from "lucide-react";
 import { useHotkeys, HotkeysHelper } from "../hooks/useHotkeys";
 import { CartItem, CartTab, PaymentMethod, PaymentResult } from "../types/pos";
 import { Category, Product } from "../types/product";
 import { ReceiptInfo } from "../types/receipt";
 import { Customer } from "../types/credit";
-import { productService } from "../services/productDB";
+import { ProductGroup, productService } from "../services/productDB";
 import {
   calculateCartTotals,
   calculateCartItemTotals,
@@ -31,6 +24,10 @@ import { useAlert } from "../components/AlertProvider";
 import PageLayout from "../components/layout/PageLayout";
 import SearchFilterPanel from "../components/SearchFilterPanel";
 import Card from "../components/ui/Card";
+import { useProductGroups } from "../hooks/useProductGroups";
+import AddProductToGroupCard from "../components/AddProductToGroupCard";
+import ProductGroupTabs from "../components/ProductGroupTabs";
+import SelectProductsModal from "../components/modals/SelectProductModal";
 
 const POSPage: React.FC = () => {
   // Temel state'ler
@@ -54,6 +51,22 @@ const POSPage: React.FC = () => {
   });
 
   const { showError, showSuccess, confirm } = useAlert();
+
+  const [showFilters, setShowFilters] = useState(false);
+
+  const [showSelectProductsModal, setShowSelectProductsModal] = useState(false);
+
+  const {
+    groups: productGroups,
+    loading: groupsLoading,
+    addGroup,
+    renameGroup,
+    addProductToGroup,
+    removeProductFromGroup,
+    refreshGroups,
+  } = useProductGroups();
+
+  const [activeGroupId, setActiveGroupId] = useState<number>(1);
 
   // Sepet sekmeleri için state'ler
   const [cartTabs, setCartTabs] = useState<CartTab[]>([
@@ -80,6 +93,101 @@ const POSPage: React.FC = () => {
     };
     loadData();
   }, []);
+
+  // useEffect güncellemesi
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [dbProducts, dbCategories, dbCustomers] = await Promise.all([
+          productService.getAllProducts(),
+          productService.getCategories(),
+          creditService.getAllCustomers(),
+        ]);
+        setProducts(dbProducts);
+        setCategories(dbCategories);
+        setCustomers(dbCustomers);
+      } catch (error) {
+        console.error("Veri yüklenirken hata:", error);
+      }
+    };
+    loadData();
+  }, []);
+
+  // Grup işlemleri için fonksiyonlar
+  const handleAddGroup = async () => {
+    try {
+      const newGroup = await addGroup("Yeni Grup");
+      setActiveGroupId(newGroup.id);
+    } catch (error) {
+      console.error("Grup eklenirken hata:", error);
+    }
+  };
+
+  const handleAddMultipleProducts = async (productIds: number[]) => {
+    if (activeGroupId === 1) return; // Varsayılan gruba ekleme yapılamaz
+
+    try {
+      // Seçilen tüm ürünleri gruba ekle
+      await Promise.all(
+        productIds.map((productId) =>
+          productService.addProductToGroup(activeGroupId, productId)
+        )
+      );
+
+      // Grupları yenile
+      await refreshGroups();
+
+      showSuccess("Ürünler gruba eklendi");
+    } catch (error) {
+      showError("Ürünler eklenirken bir hata oluştu");
+    }
+  };
+
+  const handleRenameGroup = async (groupId: number, newName: string) => {
+    try {
+      await renameGroup(groupId, newName);
+    } catch (error) {
+      console.error("Grup adı değiştirilirken hata:", error);
+    }
+  };
+
+  const handleAddProductToGroup = async (productId: number) => {
+    if (activeGroupId === 1) return; // Varsayılan gruba ekleme yapılamaz
+
+    try {
+      await addProductToGroup(activeGroupId, productId);
+      showSuccess("Ürün gruba eklendi");
+    } catch (error) {
+      showError("Ürün eklenirken hata oluştu");
+    }
+  };
+
+  const handleDeleteGroup = async (groupId: number) => {
+    try {
+      await confirm(
+        "Bu grubu silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+      );
+      await productService.deleteProductGroup(groupId);
+      await refreshGroups();
+      if (activeGroupId === groupId) {
+        setActiveGroupId(1); // Varsayılan gruba dön
+      }
+      showSuccess("Grup başarıyla silindi");
+    } catch (error) {
+      showError("Grup silinirken bir hata oluştu");
+    }
+  };
+
+  const handleRemoveProductFromGroup = async (productId: number) => {
+    if (activeGroupId === 1) return;
+
+    try {
+      await removeProductFromGroup(activeGroupId, productId);
+      showSuccess("Ürün gruptan çıkarıldı");
+    } catch (error) {
+      showError("Ürün çıkarılırken hata oluştu");
+    }
+  };
 
   // Sepet sekmesi işlemleri
   const addNewTab = () => {
@@ -421,14 +529,27 @@ const POSPage: React.FC = () => {
     onQuantityUpdate: handleQuantityUpdate,
   });
 
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.barcode.includes(searchQuery);
-    const matchesCategory =
-      selectedCategory === "Tümü" || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const matchesSearch =
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.barcode.includes(searchQuery);
+      const matchesCategory =
+        selectedCategory === "Tümü" || product.category === selectedCategory;
+
+      if (activeGroupId === 1) {
+        // Varsayılan grup (Tümü)
+        return matchesSearch && matchesCategory;
+      } else {
+        const activeGroup = productGroups.find((g) => g.id === activeGroupId);
+        return (
+          matchesSearch &&
+          matchesCategory &&
+          activeGroup?.productIds?.includes(product.id)
+        );
+      }
+    });
+  }, [products, searchQuery, selectedCategory, activeGroupId, productGroups]);
 
   useEffect(() => {
     if (!barcodeConfig.enabled) return;
@@ -459,40 +580,74 @@ const POSPage: React.FC = () => {
       <div className="flex h-[calc(100vh-11rem)] gap-6">
         {/* Sol Panel - Ürün Arama ve Hızlı Erişim */}
         <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden h-full">
-          {/* Arama Çubuğu - SearchFilterPanel kullanılarak */}
+          {/* Arama ve Filtre Alanı */}
           <div className="p-4 border-b">
             <SearchFilterPanel
               searchTerm={searchQuery}
               onSearchTermChange={setSearchQuery}
-              onReset={() => setSearchQuery("")}
-              showFilter={false}
-              toggleFilter={() => {}}
+              onReset={() => {
+                setSearchQuery("");
+                setSelectedCategory("Tümü");
+                setShowFilters(false);
+              }}
+              showFilter={showFilters}
+              toggleFilter={() => setShowFilters((prev) => !prev)}
             />
+
+            {/* Kategori Filtreleri */}
+            {showFilters && (
+              <div className="mt-4">
+                <div className="flex flex-wrap gap-2 items-center">
+                  <button
+                    onClick={() => setSelectedCategory("Tümü")}
+                    className={`px-3 py-1.5 rounded-lg ${
+                      selectedCategory === "Tümü"
+                        ? "bg-primary-50 text-primary-600"
+                        : "text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    Tümü
+                  </button>
+                  {categories.map((category) => (
+                    <button
+                      key={category.id}
+                      onClick={() => setSelectedCategory(category.name)}
+                      className={`px-3 py-1.5 rounded-lg ${
+                        selectedCategory === category.name
+                          ? "bg-primary-50 text-primary-600"
+                          : "text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="mr-2">{category.icon}</span>
+                      {category.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Kategori Seçimi */}
-          <div className="p-4 border-b overflow-x-auto">
-            <div className="flex gap-2">
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  onClick={() => setSelectedCategory(category.name)}
-                  className={`px-4 py-2 rounded-lg whitespace-nowrap ${
-                    selectedCategory === category.name
-                      ? "bg-primary-50 text-primary-600"
-                      : "text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  <span className="mr-2">{category.icon}</span>
-                  {category.name}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Ürün Grup Sekmeleri */}
+          <ProductGroupTabs
+            groups={productGroups}
+            activeGroupId={activeGroupId}
+            onGroupChange={setActiveGroupId}
+            onAddGroup={handleAddGroup}
+            onRenameGroup={handleRenameGroup}
+            onDeleteGroup={handleDeleteGroup} // Yeni eklenen prop
+          />
 
           {/* Ürün Grid */}
           <div className="flex-1 p-4 overflow-y-auto">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {/* Grup için Ürün Ekleme Kartı */}
+              {activeGroupId !== 1 && (
+                <Card
+                  variant="addProduct"
+                  onClick={() => setShowSelectProductsModal(true)}
+                />
+              )}
+              {/* Ürün Kartları */}
               {filteredProducts.map((product) => (
                 <Card
                   key={product.id}
@@ -501,9 +656,26 @@ const POSPage: React.FC = () => {
                   imageUrl={product.imageUrl}
                   category={product.category}
                   price={formatCurrency(product.priceWithVat)}
+                  vatRate={formatVatRate(product.vatRate)}
                   stock={product.stock}
                   onClick={() => addToCart(product)}
                   disabled={product.stock === 0}
+                  onAddToGroup={
+                    activeGroupId !== 1 &&
+                    !productGroups
+                      .find((g) => g.id === activeGroupId)
+                      ?.productIds?.includes(product.id)
+                      ? () => handleAddProductToGroup(product.id)
+                      : undefined
+                  }
+                  onRemoveFromGroup={
+                    activeGroupId !== 1 &&
+                    productGroups
+                      .find((g) => g.id === activeGroupId)
+                      ?.productIds?.includes(product.id)
+                      ? () => handleRemoveProductFromGroup(product.id)
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -718,6 +890,16 @@ const POSPage: React.FC = () => {
             receiptData={currentReceipt}
           />
         )}
+
+        <SelectProductsModal
+          isOpen={showSelectProductsModal}
+          onClose={() => setShowSelectProductsModal(false)}
+          onSelect={handleAddMultipleProducts}
+          products={products}
+          existingProductIds={
+            productGroups.find((g) => g.id === activeGroupId)?.productIds || []
+          }
+        />
 
         {/* Klavye Kısayolları Yardımcısı */}
         <HotkeysHelper />

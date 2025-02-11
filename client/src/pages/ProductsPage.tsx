@@ -221,11 +221,6 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  // Toplu işlemler
-  const handleSelectAll = (checked: boolean) => {
-    setSelectedProductIds(checked ? filteredProducts.map((p) => p.id) : []);
-  };
-
   const handleSelectProduct = (productId: number, checked: boolean) => {
     setSelectedProductIds((prev) =>
       checked ? [...prev, productId] : prev.filter((id) => id !== productId)
@@ -351,8 +346,8 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  // Filtreleme
-  const filteredProducts = products.filter((product) => {
+   // Filtreleme
+   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.barcode.includes(searchTerm);
@@ -369,6 +364,17 @@ const ProductsPage: React.FC = () => {
     indexOfLastItem
   );
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+
+  // Tüm ürünleri seçme fonksiyonu güncellendi
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      // Filtrelenmiş TÜM ürünlerin ID'lerini seç
+      const allFilteredIds = filteredProducts.map(p => p.id);
+      setSelectedProductIds(allFilteredIds);
+    } else {
+      setSelectedProductIds([]);
+    }
+  };
 
   // Reset filtre fonksiyonu
   const resetFilters = () => {
@@ -392,6 +398,16 @@ const ProductsPage: React.FC = () => {
       {showFilters && (
         <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
           <div className="flex flex-wrap gap-2 items-center">
+            <button
+              onClick={() => setSelectedCategory("Tümü")}
+              className={`px-3 py-1.5 rounded-lg ${
+                selectedCategory === "Tümü"
+                  ? "bg-primary-50 text-primary-600"
+                  : "text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Tümü
+            </button>
             {categories.map((category) => (
               <button
                 key={category.id}
@@ -418,8 +434,8 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Toplu İşlemler ve Ek Butonlar */}
-      <div className="flex flex-col items-start mb-6">
+      {/* Ana İşlem Butonları */}
+      <div className="flex justify-between items-start mb-6">
         <Button
           onClick={() => {
             setSelectedProduct(undefined);
@@ -430,9 +446,29 @@ const ProductsPage: React.FC = () => {
         >
           Ürün Ekle
         </Button>
+
+        {/* Seçili Ürün İşlemleri */}
+        {selectedProductIds.length > 0 && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowBatchUpdate(!showBatchUpdate)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              <Calculator size={20} />
+              Toplu Fiyat Güncelle ({selectedProductIds.length})
+            </button>
+            <button
+              onClick={handleBatchDelete}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              <Trash2 size={20} />
+              Toplu Sil ({selectedProductIds.length})
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Toplu Fiyat Güncelleme Bileşeni */}
+      {/* Toplu Fiyat Güncelleme */}
       {showBatchUpdate && (
         <div className="mb-6">
           <BatchPriceUpdate
@@ -442,44 +478,73 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Bulk Operations */}
+      {/* Toplu İşlemler (Import/Export) */}
       <div className="mb-6">
         <BulkProductOperations
           onImport={handleBulkImport}
           products={products}
         />
       </div>
-      <div className="flex flex-row justify-end">
-        {selectedProductIds.length > 0 && (
-          <>
-            <button
-              onClick={() => setShowBatchUpdate(!showBatchUpdate)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mr-2"
-            >
-              <Calculator size={20} />
-              Toplu Fiyat Güncelle ({selectedProductIds.length})
-            </button>
-            <button
-              onClick={handleBatchDelete}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 ml-2"
-            >
-              <Trash2 size={20} />
-              Toplu Sil ({selectedProductIds.length})
-            </button>
-          </>
-        )}
-      </div>
 
-      {/* Ürün Listesi */}
+      {/* Ürün Tablosu */}
       <div className="bg-white rounded-lg shadow-sm">
+        {/* Tablo Başlık ve Seçim Bilgisi */}
+        <div className="p-4 border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {filteredProducts.length > 0 && (
+                <div className="text-sm text-gray-600">
+                  {selectedProductIds.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <span>
+                        <span className="font-medium">{selectedProductIds.length}</span> ürün seçildi
+                      </span>
+                      {selectedProductIds.length !== filteredProducts.length && (
+                        <button
+                          onClick={() => handleSelectAll(true)}
+                          className="text-primary-600 hover:text-primary-700"
+                        >
+                          Tümünü Seç ({filteredProducts.length})
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    `Toplam ${filteredProducts.length} ürün`
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* Filtreleme Bilgisi */}
+            {(searchTerm || selectedCategory !== "Tümü") && (
+              <div className="text-sm text-gray-500">
+                Filtreleniyor: {searchTerm && `"${searchTerm}"`} 
+                {searchTerm && selectedCategory !== "Tümü" && " + "}
+                {selectedCategory !== "Tümü" && selectedCategory}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Ürün Tablosu */}
         <Table<Product, number>
           data={currentProducts}
           columns={columns}
           selectable
           selected={selectedProductIds}
-          onSelect={setSelectedProductIds}
+          onSelectAll={handleSelectAll}
+          allSelected={selectedProductIds.length === filteredProducts.length}
+          onSelect={(id, checked) => {
+            if (checked) {
+              setSelectedProductIds(prev => [...prev, id]);
+            } else {
+              setSelectedProductIds(prev => prev.filter(prevId => prevId !== id));
+            }
+          }}
           idField="id"
         />
+
+        {/* Sayfalama */}
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
@@ -488,7 +553,7 @@ const ProductsPage: React.FC = () => {
         />
       </div>
 
-      {/* Ürün Modalı */}
+      {/* Modallar */}
       <ProductModal
         isOpen={showProductModal}
         onClose={() => {
@@ -508,7 +573,6 @@ const ProductsPage: React.FC = () => {
         />
       )}
 
-      {/* Stok Yönetim Modalı */}
       {selectedStockProduct && (
         <StockManagement
           product={selectedStockProduct}
@@ -517,7 +581,6 @@ const ProductsPage: React.FC = () => {
         />
       )}
 
-      {/* Barkod Yazdırma Modalı */}
       {selectedBarcodeProduct && (
         <BarcodeGenerator
           product={selectedBarcodeProduct}

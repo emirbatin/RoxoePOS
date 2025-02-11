@@ -1,5 +1,20 @@
 import React from "react";
-import { Column, TableId, TableProps } from "../../types/table";
+import { Column, TableId } from "../../types/table";
+
+interface TableProps<T extends { [key: string]: any }, K extends TableId = TableId> {
+  data: T[];
+  columns: Column<T>[];
+  onRowClick?: (item: T) => void;
+  className?: string;
+  selected?: K[];
+  onSelect?: (id: K, checked: boolean) => void;
+  onSelectAll?: (checked: boolean) => void;
+  allSelected?: boolean;
+  idField?: keyof T;
+  selectable?: boolean;
+  loading?: boolean;
+  emptyMessage?: string;
+}
 
 export function Table<
   T extends { [key: string]: any },
@@ -11,28 +26,22 @@ export function Table<
   className = "",
   selected = [],
   onSelect,
+  onSelectAll,
+  allSelected = false,
   idField = "id" as keyof T,
   selectable = false,
   loading = false,
   emptyMessage = "Veri bulunamadı.",
 }: TableProps<T, K>) {
   const handleSelectAll = (checked: boolean) => {
-    if (!onSelect) return;
-    if (checked) {
-      const allIds = data.map((item) => item[idField] as K);
-      onSelect(allIds);
-    } else {
-      onSelect([] as K[]);
+    if (onSelectAll) {
+      onSelectAll(checked);
     }
   };
 
   const handleSelectRow = (item: T, checked: boolean) => {
-    if (!onSelect) return;
-    const id = item[idField] as K;
-    if (checked) {
-      onSelect([...selected, id]);
-    } else {
-      onSelect(selected.filter((selectedId) => selectedId !== id));
+    if (onSelect) {
+      onSelect(item[idField] as K, checked);
     }
   };
 
@@ -59,7 +68,7 @@ export function Table<
               <th className="px-6 py-4 text-sm font-semibold text-gray-900">
                 <input
                   type="checkbox"
-                  checked={selected.length === data.length}
+                  checked={allSelected}
                   onChange={(e) => handleSelectAll(e.target.checked)}
                   className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                 />
@@ -79,7 +88,11 @@ export function Table<
         </thead>
         <tbody className="divide-y divide-gray-200">
           {data.map((item, index) => (
-            <tr key={index}>
+            <tr
+              key={index}
+              onClick={() => onRowClick?.(item)}
+              className={onRowClick ? "cursor-pointer hover:bg-gray-50" : ""}
+            >
               {selectable && (
                 <td className="px-6 py-4">
                   <input
@@ -96,9 +109,7 @@ export function Table<
                   key={column.key}
                   className={`px-6 py-4 ${column.className || ""}`}
                 >
-                  {column.render
-                    ? column.render(item)
-                    : (item as any)[column.key]}
+                  {column.render ? column.render(item) : (item as any)[column.key]}
                 </td>
               ))}
             </tr>

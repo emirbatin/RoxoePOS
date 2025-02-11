@@ -4,13 +4,13 @@ export interface Product {
   id: number;
   name: string;
   purchasePrice: number; // Alış fiyatı (KDV'siz)
-  salePrice: number;     // Satış fiyatı (KDV'siz)
-  vatRate: VatRate;     // KDV oranı
+  salePrice: number; // Satış fiyatı (KDV'siz)
+  vatRate: VatRate; // KDV oranı
   priceWithVat: number; // KDV'li fiyat
   category: string;
   stock: number;
   barcode: string;
-  imageUrl?: string;    // Ürün resmi (opsiyonel)
+  imageUrl?: string; // Ürün resmi (opsiyonel)
 }
 
 export interface ProductStats {
@@ -22,9 +22,16 @@ export interface ProductStats {
   averagePrice: number;
 }
 
-
 export interface Category {
   id: number;
   name: string;
   icon: string;
+}
+
+export interface ProductGroup {
+  id: number;
+  name: string;
+  order: number;
+  isDefault?: boolean;
+  productIds?: number[]; // İlişkili ürün ID'leri
 }
