@@ -2,6 +2,9 @@ import React, { useState } from "react";
 import { Plus, Edit2, Trash2, AlertTriangle, X } from "lucide-react";
 import { Category } from "../types/product";
 import { productService } from "../services/productDB";
+import ColumnMappingModal from "./ColumnMappingModal";
+// AlertProvider'dan gelen fonksiyonları import ediyoruz
+import { useAlert } from "../components/AlertProvider";
 
 interface CategoryManagementProps {
   categories: Category[];
@@ -35,6 +38,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
   onUpdate,
   onClose,
 }) => {
+  const { confirm } = useAlert(); // AlertProvider confirm fonksiyonunu alıyoruz
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [newCategory, setNewCategory] = useState<Partial<Category>>({
     name: "",
@@ -93,7 +97,8 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
       return;
     }
 
-    const confirmed = window.confirm(
+    // AlertProvider'dan gelen confirm fonksiyonu kullanılarak onay alınıyor:
+    const confirmed = await confirm(
       `"${category.name}" kategorisini silmek istediğinize emin misiniz?\n` +
         'Bu kategorideki ürünler "Genel" kategorisine taşınacaktır.'
     );

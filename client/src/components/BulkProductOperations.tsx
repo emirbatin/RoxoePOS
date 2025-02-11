@@ -4,6 +4,8 @@ import { Product } from "../types/product";
 import { importExportService } from "../services/importExportServices";
 import { productService } from "../services/productDB";
 import ColumnMappingModal from "./ColumnMappingModal";
+// AlertProvider'dan gelen fonksiyonları import ediyoruz:
+import { useAlert } from "../components/AlertProvider";
 
 interface BulkProductOperationsProps {
   onImport: (products: Product[]) => void;
@@ -14,6 +16,8 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
   onImport,
   products,
 }) => {
+  const { confirm, showError } = useAlert();
+
   const [error, setError] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [importStats, setImportStats] = useState<{
@@ -28,8 +32,14 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls") && !file.name.endsWith(".csv")) {
-      setError("Desteklenmeyen dosya formatı. Lütfen .xlsx, .xls veya .csv dosyası yükleyin.");
+    if (
+      !file.name.endsWith(".xlsx") &&
+      !file.name.endsWith(".xls") &&
+      !file.name.endsWith(".csv")
+    ) {
+      setError(
+        "Desteklenmeyen dosya formatı. Lütfen .xlsx, .xls veya .csv dosyası yükleyin."
+      );
       return;
     }
 
@@ -37,7 +47,7 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
     setShowMappingModal(true);
     setError("");
     setImportStats(null);
-    
+
     if (event.target) {
       event.target.value = "";
     }
@@ -63,18 +73,23 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
 
       setImportStats(stats);
 
-      if (window.confirm(
+      // AlertProvider confirm fonksiyonu kullanılarak onay alınıyor:
+      const shouldImport = await confirm(
         `${stats.total} ürün içe aktarılacak:\n` +
-        `${stats.new} yeni ürün\n` +
-        `${stats.update} güncellenecek ürün\n\n` +
-        `Devam etmek istiyor musunuz?`
-      )) {
+          `${stats.new} yeni ürün\n` +
+          `${stats.update} güncellenecek ürün\n\n` +
+          `Devam etmek istiyor musunuz?`
+      );
+
+      if (shouldImport) {
         await productService.bulkInsertProducts(mappedProducts);
         const updatedProducts = await productService.getAllProducts();
         onImport(updatedProducts);
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu");
+      setError(
+        error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu"
+      );
     } finally {
       setIsProcessing(false);
       setSelectedFile(null);
@@ -90,7 +105,11 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
         importExportService.exportToCSV(products, `${fileName}.csv`);
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Dışa aktarma sırasında bir hata oluştu");
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Dışa aktarma sırasında bir hata oluştu"
+      );
     }
   };
 
@@ -98,7 +117,11 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
     try {
       await importExportService.generateTemplate(type);
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Şablon indirme sırasında bir hata oluştu");
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Şablon indirme sırasında bir hata oluştu"
+      );
     }
   };
 

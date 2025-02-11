@@ -29,8 +29,13 @@ import Button from "../components/Button";
 import { Column } from "../types/table";
 import { Table } from "../components/Table";
 import { Pagination } from "../components/Pagination";
+// AlertProvider'dan gelen fonksiyonları import ediyoruz
+import { useAlert } from "../components/AlertProvider";
 
 const ProductsPage: React.FC = () => {
+  // AlertProvider fonksiyonları
+  const { showError, showSuccess, confirm } = useAlert();
+
   // State tanımlamaları
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -47,7 +52,7 @@ const ProductsPage: React.FC = () => {
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [showBatchUpdate, setShowBatchUpdate] = useState(false);
 
-  // State ekleyelim (en üstte diğer state'lerin yanına)
+  // Sayfalama için state (diğerlerinin yanına eklenmiştir)
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
@@ -203,7 +208,7 @@ const ProductsPage: React.FC = () => {
   };
 
   const handleDeleteProduct = async (productId: number) => {
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       "Bu ürünü silmek istediğinize emin misiniz?"
     );
     if (confirmed) {
@@ -229,7 +234,7 @@ const ProductsPage: React.FC = () => {
 
   const handleBatchDelete = async () => {
     if (selectedProductIds.length === 0) return;
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       `Seçili ${selectedProductIds.length} ürünü silmek istediğinize emin misiniz?`
     );
     if (confirmed) {
@@ -251,7 +256,6 @@ const ProductsPage: React.FC = () => {
         // Burada sadece salePrice'ı güncelleyeceğiz, priceWithVat hesaplamasına gerek yok
         await productService.updateProduct({
           ...product,
-          // Yalnızca satış fiyatını güncelle
           priceWithVat: product.priceWithVat,
         });
       }
@@ -310,12 +314,12 @@ const ProductsPage: React.FC = () => {
       });
 
       await loadData();
-      alert(
+      showSuccess(
         `İçe aktarma tamamlandı:\n${addedCount} yeni ürün eklendi\n${updatedCount} ürün güncellendi`
       );
     } catch (err: any) {
       console.error("İçe aktarma hatası:", err);
-      alert(
+      showError(
         `İçe aktarma sırasında hata:\n${addedCount} ürün eklendi\n${updatedCount} ürün güncellendi\nHata: ${
           err?.message || "Bilinmeyen hata"
         }`
@@ -359,7 +363,6 @@ const ProductsPage: React.FC = () => {
   };
 
   // Filtreleme
-  // Filtreleme (Move this section up)
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -369,7 +372,7 @@ const ProductsPage: React.FC = () => {
     return matchesSearch && matchesCategory;
   });
 
-  // Sayfalama hesaplamalarını yapalım
+  // Sayfalama hesaplamaları
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentProducts = filteredProducts.slice(
@@ -427,10 +430,7 @@ const ProductsPage: React.FC = () => {
 
       {/* Bulk Operations */}
       <div className="mb-6">
-        <BulkProductOperations
-          onImport={handleBulkImport}
-          products={products}
-        />
+        <BulkProductOperations onImport={handleBulkImport} products={products} />
       </div>
 
       {/* Arama ve Filtreler */}
@@ -445,10 +445,7 @@ const ProductsPage: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
-            <Search
-              className="absolute left-3 top-2.5 text-gray-400"
-              size={20}
-            />
+            <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
           </div>
 
           {/* Filtre Butonları */}
@@ -508,7 +505,7 @@ const ProductsPage: React.FC = () => {
       {/* Ürün Listesi */}
       <div className="bg-white rounded-lg shadow-sm">
         <Table<Product, number>
-          data={currentProducts} // filteredProducts yerine currentProducts kullanıyoruz
+          data={currentProducts}
           columns={columns}
           selectable
           selected={selectedProductIds}

@@ -18,6 +18,8 @@ import ReceiptModal from "../components/ReceiptModal";
 import { Column } from "../types/table";
 import { CartItem } from "../types/pos";
 import { Table } from "../components/Table";
+// AlertProvider fonksiyonlarını import ediyoruz
+import { useAlert } from "../components/AlertProvider";
 
 const SaleDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -28,9 +30,10 @@ const SaleDetailPage: React.FC = () => {
   const [showRefundModal, setShowRefundModal] = useState(false);
   // ReceiptModal ile fiş görüntüleme için state'ler:
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
-  const [currentReceipt, setCurrentReceipt] = useState<ReceiptInfo | null>(
-    null
-  );
+  const [currentReceipt, setCurrentReceipt] = useState<ReceiptInfo | null>(null);
+
+  // AlertProvider'dan gelen fonksiyonlar
+  const { showSuccess, showError } = useAlert();
 
   const columns: Column<CartItem>[] = [
     {
@@ -114,13 +117,13 @@ const SaleDetailPage: React.FC = () => {
       const updatedSale = await salesDB.cancelSale(sale.id, reason);
       if (updatedSale) {
         setSale(updatedSale);
-        alert("Satış başarıyla iptal edildi.");
+        showSuccess("Satış başarıyla iptal edildi.");
       } else {
-        alert("Satış iptal edilirken bir hata oluştu!");
+        showError("Satış iptal edilirken bir hata oluştu!");
       }
     } catch (error) {
       console.error("Satış iptali sırasında hata:", error);
-      alert("Satış iptal edilirken bir hata oluştu!");
+      showError("Satış iptal edilirken bir hata oluştu!");
     } finally {
       setShowCancelModal(false);
     }
@@ -133,13 +136,13 @@ const SaleDetailPage: React.FC = () => {
       const updatedSale = await salesDB.refundSale(sale.id, reason);
       if (updatedSale) {
         setSale(updatedSale);
-        alert("İade işlemi başarıyla tamamlandı.");
+        showSuccess("İade işlemi başarıyla tamamlandı.");
       } else {
-        alert("İade işlemi sırasında bir hata oluştu!");
+        showError("İade işlemi sırasında bir hata oluştu!");
       }
     } catch (error) {
       console.error("İade işlemi sırasında hata:", error);
-      alert("İade işlemi sırasında bir hata oluştu!");
+      showError("İade işlemi sırasında bir hata oluştu!");
     } finally {
       setShowRefundModal(false);
     }
@@ -315,7 +318,7 @@ const SaleDetailPage: React.FC = () => {
               emptyMessage="Bu satışta ürün bulunmuyor."
             />
 
-            {/* Toplam Bilgileri - Table'dan hemen sonra */}
+            {/* Toplam Bilgileri */}
             <div className="bg-gray-50 p-4 border-t">
               <div className="flex justify-end space-y-2 text-sm">
                 <div className="w-48 space-y-2">

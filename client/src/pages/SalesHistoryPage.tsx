@@ -16,6 +16,8 @@ import { VatRate } from "../types/product";
 import { Table } from "../components/Table";
 import { Column } from "../types/table";
 import { Pagination } from "../components/Pagination";
+// AlertProvider'dan gelen bildirim fonksiyonlarını import ediyoruz
+import { useAlert } from "../components/AlertProvider";
 
 const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -41,9 +43,12 @@ const SalesHistoryPage: React.FC = () => {
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
-  // State ekleyelim
+  // Sayfalama için state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+
+  // AlertProvider'dan gelen bildirim fonksiyonları
+  const { showSuccess, showError } = useAlert();
 
   // Sayfalama hesaplamaları
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -82,7 +87,6 @@ const SalesHistoryPage: React.FC = () => {
             <span className="text-sm text-gray-500">Karışık (Split)</span>
           ) : (
             <span className="text-sm text-gray-500">
-              {/* Buraya kart/nakit/veresiye gibi diğer ödeme gösterimleri */}
               {sale.paymentMethod === "veresiye" && "Veresiye"}
               {sale.paymentMethod === "kart" && "Kredi Kartı"}
               {sale.paymentMethod === "nakit" && "Nakit"}
@@ -307,13 +311,13 @@ const SalesHistoryPage: React.FC = () => {
             sale.id === selectedSaleId ? updatedSale : sale
           )
         );
-        alert("Satış başarıyla iptal edildi.");
+        showSuccess("Satış başarıyla iptal edildi.");
       } else {
-        alert("Satış iptal edilirken bir hata oluştu!");
+        showError("Satış iptal edilirken bir hata oluştu!");
       }
     } catch (error) {
       console.error("Satış iptali sırasında hata:", error);
-      alert("Satış iptali sırasında bir hata oluştu!");
+      showError("Satış iptali sırasında bir hata oluştu!");
     } finally {
       setShowCancelModal(false);
       setSelectedSaleId(null);
@@ -331,13 +335,13 @@ const SalesHistoryPage: React.FC = () => {
             sale.id === selectedSaleId ? updatedSale : sale
           )
         );
-        alert("İade işlemi başarıyla tamamlandı.");
+        showSuccess("İade işlemi başarıyla tamamlandı.");
       } else {
-        alert("İade işlemi sırasında bir hata oluştu!");
+        showError("İade işlemi sırasında bir hata oluştu!");
       }
     } catch (error) {
       console.error("İade işlemi sırasında hata:", error);
-      alert("İade işlemi sırasında bir hata oluştu!");
+      showError("İade işlemi sırasında bir hata oluştu!");
     } finally {
       setShowRefundModal(false);
       setSelectedSaleId(null);

@@ -5,8 +5,12 @@ import { BarcodeConfig } from "../types/barcode";
 import clsx from "clsx";
 import Button from "../components/Button";
 import { ReceiptConfig } from "../types/receipt";
+// AlertProvider'dan gelen bildirim fonksiyonlarını import ediyoruz
+import { useAlert } from "../components/AlertProvider";
 
 const SettingsPage: React.FC = () => {
+  const { showSuccess, showError } = useAlert();
+
   const [posConfig, setPosConfig] = useState<POSConfig>({
     type: "Ingenico",
     baudRate: 9600,
@@ -40,6 +44,21 @@ const SettingsPage: React.FC = () => {
   >("unknown");
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
+  const [receiptConfig, setReceiptConfig] = useState<ReceiptConfig>({
+    storeName: "",
+    legalName: "",
+    address: ["", ""],
+    phone: "",
+    taxOffice: "",
+    taxNumber: "",
+    mersisNo: "",
+    footer: {
+      message: "Bizi tercih ettiğiniz için teşekkür ederiz",
+      returnPolicy:
+        "Ürün iade ve değişimlerinde bu fiş ve ambalaj gereklidir",
+    },
+  });
+
   useEffect(() => {
     const loadSettings = () => {
       const savedPosConfig = localStorage.getItem("posConfig");
@@ -60,7 +79,7 @@ const SettingsPage: React.FC = () => {
     if (posConfig.manualMode) {
       setConnectionStatus("connected");
       setLastChecked(new Date());
-      alert("Manuel mod aktif - Bağlantı testi atlandı!");
+      showSuccess("Manuel mod aktif - Bağlantı testi atlandı!");
       return;
     }
 
@@ -80,7 +99,7 @@ const SettingsPage: React.FC = () => {
       if (value) {
         setConnectionStatus("connected");
         setLastChecked(new Date());
-        alert("POS bağlantısı başarılı ve cihaz yanıt verdi!");
+        showSuccess("POS bağlantısı başarılı ve cihaz yanıt verdi!");
       }
 
       await port.close();
@@ -88,7 +107,7 @@ const SettingsPage: React.FC = () => {
       const error = err as Error;
       setConnectionStatus("disconnected");
       setLastChecked(new Date());
-      alert("Bağlantı hatası: " + error.message);
+      showError("Bağlantı hatası: " + error.message);
     }
   };
 
@@ -98,26 +117,12 @@ const SettingsPage: React.FC = () => {
       localStorage.setItem("serialOptions", JSON.stringify(serialOptions));
       localStorage.setItem("barcodeConfig", JSON.stringify(barcodeConfig));
       localStorage.setItem("receiptConfig", JSON.stringify(receiptConfig));
-      alert("Ayarlar başarıyla kaydedildi");
+      showSuccess("Ayarlar başarıyla kaydedildi");
     } catch (err) {
       const error = err as Error;
-      alert("Ayarlar kaydedilirken hata oluştu: " + error.message);
+      showError("Ayarlar kaydedilirken hata oluştu: " + error.message);
     }
   };
-
-  const [receiptConfig, setReceiptConfig] = useState<ReceiptConfig>({
-    storeName: "",
-    legalName: "",
-    address: ["", ""],
-    phone: "",
-    taxOffice: "",
-    taxNumber: "",
-    mersisNo: "",
-    footer: {
-      message: "Bizi tercih ettiğiniz için teşekkür ederiz",
-      returnPolicy: "Ürün iade ve değişimlerinde bu fiş ve ambalaj gereklidir",
-    },
-  });
 
   return (
     <div className="p-6">

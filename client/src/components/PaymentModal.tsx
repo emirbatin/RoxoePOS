@@ -4,7 +4,7 @@ import { formatCurrency } from "../utils/vatUtils";
 import { posService } from "../services/posServices";
 import { PaymentModalProps, PaymentMethod } from "../types/pos";
 import { Customer } from "../types/credit";
-import { focusManager } from "../utils/FocusManager";
+import { useAlert } from "./AlertProvider";
 
 const PaymentModal: React.FC<PaymentModalProps> = ({
   isOpen,
@@ -18,6 +18,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   setSelectedCustomer,
   items = [],
 }) => {
+  // AlertProvider’dan gelen fonksiyonlar
+  const { showSuccess, showError, confirm } = useAlert();
+
   // Ödeme modları: "normal" (tek sefer), "split" (bölünmüş)
   const [mode, setMode] = useState<"normal" | "split">("normal");
   // Eğer split seçildiyse: "product" (ürün bazında) veya "equal" (eşit bölüşüm)
@@ -28,7 +31,6 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const [receivedAmount, setReceivedAmount] = useState("");
   const [processingPOS, setProcessingPOS] = useState(false);
   const receivedInputRef = useRef<HTMLInputElement>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
 
   // ÜRÜN BAZINDA SPLIT
   const [remainingItems, setRemainingItems] = useState(items);
@@ -56,64 +58,26 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   // Modal açılınca miktar inputuna odaklanmak
   useEffect(() => {
     if (isOpen && receivedInputRef.current) {
-      focusManager.setFocus(receivedInputRef.current);
+      receivedInputRef.current.focus();
     }
   }, [isOpen]);
 
-  // ESC tuşu ile kapatma
+  // Modal kapandığında tüm stateleri sıfırlama
   useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        handleClose();
-      }
-    };
-
-    if (isOpen) {
-      window.addEventListener("keydown", handleEscape);
-      return () => {
-        window.removeEventListener("keydown", handleEscape);
-      };
+    if (!isOpen) {
+      setMode("normal");
+      setSplitType("product");
+      setPaymentMethod("nakit");
+      setReceivedAmount("");
+      setSelectedCustomer(null);
+      setProcessingPOS(false);
+      setRemainingItems(items);
+      setProductPayments([]);
+      setProductPaymentInputs({});
+      setFriendCount(2);
+      setEqualPayments([]);
     }
-  }, [isOpen]);
-
-  // Modal dışı tıklama ile kapatma
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        modalRef.current &&
-        !modalRef.current.contains(event.target as Node)
-      ) {
-        handleClose();
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => {
-        document.removeEventListener("mousedown", handleClickOutside);
-      };
-    }
-  }, [isOpen]);
-
-  // Modal kapandığında cleanup
-  const handleClose = () => {
-    // State temizleme
-    setMode("normal");
-    setSplitType("product");
-    setPaymentMethod("nakit");
-    setReceivedAmount("");
-    setSelectedCustomer(null);
-    setProcessingPOS(false);
-    setRemainingItems(items);
-    setProductPayments([]);
-    setProductPaymentInputs({});
-    setFriendCount(2);
-    setEqualPayments([]);
-
-    // Focus'u temizle
-    focusManager.clearFocus();
-    onClose();
-  };
+  }, [isOpen, items, setSelectedCustomer]);
 
   // Veresiye limiti kontrol yardımı
   const checkVeresiyeLimit = (cust: Customer, amount: number) => {
@@ -132,20 +96,18 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       (paymentMethod === "nakit" || paymentMethod === "nakitpos") &&
       parsedReceived < total
     ) {
-      alert(
-        "Lütfen en az toplam tutar kadar nakit veya nakit pos ödemesi girin."
-      );
+      showError("Lütfen en az toplam tutar kadar nakit veya nakit pos ödemesi girin.");
       return;
     }
 
     // Veresiye müşteri + limit kontrolü
     if (paymentMethod === "veresiye") {
       if (!selectedCustomer) {
-        alert("Veresiye için müşteri seçmeniz gerekiyor.");
+        showError("Veresiye için müşteri seçmeniz gerekiyor.");
         return;
       }
       if (!checkVeresiyeLimit(selectedCustomer, total)) {
-        alert("Seçilen müşterinin limiti yetersiz!");
+        showError("Seçilen müşterinin limiti yetersiz!");
         return;
       }
     }
@@ -170,12 +132,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         // Normal modda POS bağlantısı ve işlem
         const connected = await posService.connect("Ingenico");
         if (!connected) {
-          alert("POS cihazına bağlanılamadı!");
+          showError("POS cihazına bağlanılamadı!");
           return;
         }
         const result = await posService.processPayment(total);
         if (!result.success) {
-          alert(result.message);
+          showError(result.message);
         } else {
           onComplete({
             mode: "normal",
@@ -184,7 +146,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           });
         }
       } catch (error) {
-        alert("POS işlemi sırasında bir hata oluştu!");
+        showError("POS işlemi sırasında bir hata oluştu!");
         console.error(error);
       } finally {
         setProcessingPOS(false);
@@ -203,7 +165,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   const handleProductPay = async (itemId: number) => {
     const input = productPaymentInputs[itemId];
     if (!input) {
-      alert("Bu ürün için ödeme yöntemi ve tutar girilmedi!");
+      showError("Bu ürün için ödeme yöntemi ve tutar girilmedi!");
       return;
     }
 
@@ -211,17 +173,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     const receivedNum = parseFloat(received);
     const item = remainingItems.find((i) => i.id === itemId);
     if (!item) {
-      alert("Ürün bulunamadı!");
+      showError("Ürün bulunamadı!");
       return;
     }
 
     // Nakit veya NakitPOS için para üstü kontrolü
     if ((pm === "nakit" || pm === "nakitpos") && receivedNum > item.amount) {
       const change = receivedNum - item.amount;
-      const shouldContinue = window.confirm(
-        `Para üstü: ${formatCurrency(
-          change
-        )}. Ödemeyi tamamlamak istiyor musunuz?`
+      const shouldContinue = await confirm(
+        `Para üstü: ${formatCurrency(change)}. Ödemeyi tamamlamak istiyor musunuz?`
       );
       if (!shouldContinue) {
         return;
@@ -229,31 +189,27 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     }
 
     if (isNaN(receivedNum) || receivedNum <= 0) {
-      alert("Geçerli bir ödeme tutarı girin!");
+      showError("Geçerli bir ödeme tutarı girin!");
       return;
     }
     if (receivedNum < item.amount) {
-      alert(
-        `Eksik ödeme! Bu ürün için en az ${formatCurrency(
-          item.amount
-        )} girmelisiniz.`
-      );
+      showError(`Eksik ödeme! Bu ürün için en az ${formatCurrency(item.amount)} girmelisiniz.`);
       return;
     }
 
     let cust: Customer | null = null;
     if (pm === "veresiye") {
       if (!customerId) {
-        alert("Veresiye seçtiniz, lütfen müşteri belirleyin.");
+        showError("Veresiye seçtiniz, lütfen müşteri belirleyin.");
         return;
       }
       const foundCust = customers.find((c) => c.id.toString() === customerId);
       if (!foundCust) {
-        alert("Geçersiz müşteri!");
+        showError("Geçersiz müşteri!");
         return;
       }
       if (!checkVeresiyeLimit(foundCust, item.amount)) {
-        alert("Müşteri limiti yetersiz!");
+        showError("Müşteri limiti yetersiz!");
         return;
       }
       cust = foundCust;
@@ -289,7 +245,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         // Normal modda POS bağlantısı ve işlem
         const connected = await posService.connect("Ingenico");
         if (!connected) {
-          alert("POS cihazına bağlanılamadı!");
+          showError("POS cihazına bağlanılamadı!");
           setProcessingPOS(false);
           return;
         }
@@ -298,12 +254,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         await posService.disconnect();
 
         if (!result.success) {
-          alert(result.message);
+          showError(result.message);
           return;
         }
       } catch (error) {
         setProcessingPOS(false);
-        alert("POS işlemi sırasında bir hata oldu!");
+        showError("POS işlemi sırasında bir hata oldu!");
         console.error(error);
         return;
       }
@@ -342,15 +298,13 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     if (splitType === "equal") {
       let sum = 0;
       const perPersonAmount = total / friendCount;
-
-      // POS işlemleri için manuel mod kontrolü
       const isManualMode = await posService.isManualMode();
 
       // Her bir kişinin ödemesini kontrol et
       for (let i = 0; i < friendCount; i++) {
         const p = equalPayments[i];
         if (!p) {
-          alert(`${i + 1}. kişi için ödeme bilgisi eksik!`);
+          showError(`${i + 1}. kişi için ödeme bilgisi eksik!`);
           return;
         }
 
@@ -363,10 +317,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           val > perPersonAmount
         ) {
           const change = val - perPersonAmount;
-          const shouldContinue = window.confirm(
-            `${i + 1}. kişi için para üstü: ${formatCurrency(
-              change
-            )}. Devam etmek istiyor musunuz?`
+          const shouldContinue = await confirm(
+            `${i + 1}. kişi için para üstü: ${formatCurrency(change)}. Devam etmek istiyor musunuz?`
           );
           if (!shouldContinue) {
             return;
@@ -376,18 +328,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         // Veresiye kontrolleri
         if (p.paymentMethod === "veresiye" && val > 0) {
           if (!p.customerId) {
-            alert(`${i + 1}. kişi veresiye seçti ama müşteri belirlenmedi!`);
+            showError(`${i + 1}. kişi veresiye seçti ama müşteri belirlenmedi!`);
             return;
           }
-          const c = customers.find(
-            (cust) => cust.id.toString() === p.customerId
-          );
+          const c = customers.find((cust) => cust.id.toString() === p.customerId);
           if (!c) {
-            alert(`${i + 1}. kişi için seçilen müşteri hatalı!`);
+            showError(`${i + 1}. kişi için seçilen müşteri hatalı!`);
             return;
           }
           if (!checkVeresiyeLimit(c, val)) {
-            alert(`${i + 1}. kişinin veresiye limiti yetersiz!`);
+            showError(`${i + 1}. kişinin veresiye limiti yetersiz!`);
             return;
           }
         }
@@ -400,20 +350,17 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           setProcessingPOS(true);
 
           try {
-            // Manuel modda kontrole gerek yok, direkt devam et
             if (!isManualMode) {
               const connected = await posService.connect("Ingenico");
               if (!connected) {
-                alert(`${i + 1}. kişi için POS cihazına bağlanılamadı!`);
+                showError(`${i + 1}. kişi için POS cihazına bağlanılamadı!`);
                 setProcessingPOS(false);
                 return;
               }
 
               const result = await posService.processPayment(val);
               if (!result.success) {
-                alert(
-                  `${i + 1}. kişi için POS işlemi başarısız: ${result.message}`
-                );
+                showError(`${i + 1}. kişi için POS işlemi başarısız: ${result.message}`);
                 setProcessingPOS(false);
                 await posService.disconnect();
                 return;
@@ -423,7 +370,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
             }
           } catch (error) {
             setProcessingPOS(false);
-            alert(`${i + 1}. kişi için POS işlemi sırasında hata oluştu!`);
+            showError(`${i + 1}. kişi için POS işlemi sırasında hata oluştu!`);
             console.error(error);
             return;
           }
@@ -434,18 +381,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
       // Toplam tutar kontrolü
       if (sum < total) {
-        alert(
-          `Toplam tutar: ${formatCurrency(
-            total
-          )}. Şu an girilen toplam: ${formatCurrency(sum)}. Eksik ödeme!`
+        showError(
+          `Toplam tutar: ${formatCurrency(total)}. Şu an girilen toplam: ${formatCurrency(
+            sum
+          )}. Eksik ödeme!`
         );
         return;
       } else if (sum > total) {
         const totalChange = sum - total;
-        const shouldContinue = window.confirm(
-          `Toplam para üstü: ${formatCurrency(
-            totalChange
-          )}. Ödemeyi tamamlamak istiyor musunuz?`
+        const shouldContinue = await confirm(
+          `Toplam para üstü: ${formatCurrency(totalChange)}. Ödemeyi tamamlamak istiyor musunuz?`
         );
         if (!shouldContinue) {
           return;
@@ -465,8 +410,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               received: parseFloat(p.received) || 0,
               customer:
                 p.paymentMethod === "veresiye"
-                  ? customers.find((c) => c.id.toString() === p.customerId) ||
-                    null
+                  ? customers.find((c) => c.id.toString() === p.customerId) || null
                   : null,
             }))
           : undefined,
@@ -486,9 +430,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         <div className="px-8 py-6 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-semibold text-gray-900">
-                Ödeme Yap
-              </h2>
+              <h2 className="text-2xl font-semibold text-gray-900">Ödeme Yap</h2>
               <p className="text-gray-500 mt-1">Ödemeyi Tamamlayın</p>
             </div>
 
@@ -500,7 +442,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 </p>
               </div>
               <button
-                onClick={handleClose}
+                onClick={onClose}
                 className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <svg
@@ -539,22 +481,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               <div className="space-y-3">
                 <div className="flex justify-between text-gray-600">
                   <span>Ara Tutar</span>
-                  <span className="font-medium">
-                    {formatCurrency(subtotal)}
-                  </span>
+                  <span className="font-medium">{formatCurrency(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>KDV</span>
-                  <span className="font-medium">
-                    {formatCurrency(vatAmount)}
-                  </span>
+                  <span className="font-medium">{formatCurrency(vatAmount)}</span>
                 </div>
                 <div className="h-px bg-gray-200 my-2" />
                 <div className="flex justify-between text-lg font-semibold text-gray-900">
                   <span>Toplam</span>
-                  <span className="text-primary-600">
-                    {formatCurrency(total)}
-                  </span>
+                  <span className="text-primary-600">{formatCurrency(total)}</span>
                 </div>
               </div>
             </div>
@@ -970,8 +906,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                   Kişi {i + 1}
                                 </h4>
                                 <span className="text-sm text-gray-500">
-                                  Ödenecek Tutar:{" "}
-                                  {formatCurrency(perPersonAmount)}
+                                  Ödenecek Tutar: {formatCurrency(perPersonAmount)}
                                 </span>
                               </div>
 
@@ -1114,7 +1049,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
         <div className="px-8 py-6 border-t border-gray-100 bg-white">
           <div className="flex justify-between items-center">
             <button
-              onClick={handleClose}
+              onClick={onClose}
               className="px-6 py-3 text-gray-600 hover:text-gray-800 font-medium transition-colors"
             >
               İptal

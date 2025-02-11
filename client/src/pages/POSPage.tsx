@@ -30,7 +30,7 @@ import { salesDB } from "../services/salesDB";
 import { creditService } from "../services/creditServices";
 import { Sale } from "../types/sales";
 import { BarcodeConfig } from "../types/barcode";
-import { focusManager } from "../utils/FocusManager";
+import { useAlert } from "../components/AlertProvider";
 
 const POSPage: React.FC = () => {
   // Temel state'ler
@@ -54,6 +54,8 @@ const POSPage: React.FC = () => {
     return saved ? JSON.parse(saved) : { enabled: true, suffix: "\n" };
   });
 
+  const { showError, showSuccess, confirm } = useAlert();
+
   // Sepet sekmeleri için state'ler
   const [cartTabs, setCartTabs] = useState<CartTab[]>([
     { id: "1", cart: [], title: "Sepet 1" },
@@ -66,18 +68,6 @@ const POSPage: React.FC = () => {
   // Veri yükleme
   useEffect(() => {
     loadData();
-  }, []);
-
-  useEffect(() => {
-    if (searchInputRef.current) {
-      focusManager.setFocus(searchInputRef.current);
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      focusManager.clearFocus();
-    };
   }, []);
 
   const loadData = async () => {
@@ -122,9 +112,9 @@ const POSPage: React.FC = () => {
     ? calculateCartTotals(activeTab.cart) // 'sale' parametresi eklenebilir
     : { subtotal: 0, vatAmount: 0, total: 0, vatBreakdown: [] };
 
-  const clearCart = (): void => {
+  const clearCart = async (): Promise<void> => {
     if (!activeTab || activeTab.cart.length === 0) return;
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       "Sepeti temizlemek istediğinize emin misiniz?"
     );
     if (confirmed) {
@@ -137,16 +127,12 @@ const POSPage: React.FC = () => {
   };
 
   // Yeni satış başlat
-  const startNewSale = (): void => {
+  const startNewSale = async (): Promise<void> => {
     if (!activeTab?.cart.length) {
-      if (searchInputRef.current) {
-        focusManager.setFocus(searchInputRef.current);
-      }
       searchInputRef.current?.focus();
       return;
     }
-
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       "Mevcut satışı iptal edip yeni satış başlatmak istiyor musunuz?"
     );
     if (confirmed) {
@@ -390,10 +376,10 @@ const POSPage: React.FC = () => {
       // 9) Modalı kapat
       setShowPaymentModal(false);
 
-      alert(`Satış başarıyla tamamlandı! Fiş No: ${newSale.receiptNo}`);
+      showSuccess(`Satış başarıyla tamamlandı! Fiş No: ${newSale.receiptNo}`);
     } catch (error) {
       console.error("Satış kaydedilirken hata:", error);
-      alert("Satış sırasında bir hata oluştu!");
+      showError("Satış sırasında bir hata oluştu!");
     }
   };
 
@@ -506,18 +492,15 @@ const POSPage: React.FC = () => {
 
   useEffect(() => {
     if (!barcodeConfig.enabled) return;
-  
+
     const handleBarcodeScan = (event: KeyboardEvent) => {
-      const currentFocus = focusManager.getCurrentFocus();
-      
-      if (event.key === barcodeConfig.suffix && 
-          searchQuery && 
-          currentFocus === searchInputRef.current) {
+      // suffix genelde Enter (\n) olur
+      if (event.key === barcodeConfig.suffix && searchQuery) {
         event.preventDefault();
         handleBarcodeSearch();
       }
     };
-  
+
     window.addEventListener("keydown", handleBarcodeScan);
     return () => window.removeEventListener("keydown", handleBarcodeScan);
   }, [searchQuery, barcodeConfig]);
@@ -667,14 +650,13 @@ const POSPage: React.FC = () => {
               </div>
               {cartTabs.length > 1 && (
                 <button
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
                     if (tab.cart.length > 0) {
-                      if (
-                        window.confirm(
-                          `${tab.title} sepetini silmek istediğinize emin misiniz?`
-                        )
-                      ) {
+                      const confirmed = await confirm(
+                        `${tab.title} sepetini silmek istediğinize emin misiniz?`
+                      );
+                      if (confirmed) {
                         removeTab(tab.id);
                       }
                     } else {
