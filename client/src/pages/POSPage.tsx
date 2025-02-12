@@ -1,14 +1,6 @@
 // pages/POSPage.tsx
-
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import {
-  ShoppingCart,
-  Plus,
-  Minus,
-  X,
-  CreditCard,
-  Trash2,
-} from "lucide-react";
+import { ShoppingCart, Plus, Minus, X, CreditCard, Trash2 } from "lucide-react";
 import { useHotkeys, HotkeysHelper } from "../hooks/useHotkeys";
 import { CartTab, PaymentMethod, PaymentResult } from "../types/pos";
 import { Product } from "../types/product";
@@ -34,21 +26,23 @@ import Card from "../components/ui/Card";
 import SelectProductsModal from "../components/modals/SelectProductModal";
 import ProductGroupTabs from "../components/ProductGroupTabs";
 
-// --- Yeni eklenen custom hook importları ---
+// Yeni eklenen custom hook importları
 import { useProducts } from "../hooks/useProducts";
 import { useCart } from "../hooks/useCart";
 import { useProductGroups } from "../hooks/useProductGroups";
 
 /**
- * POSPage: Satış ekranı
- *  - Ürünleri ve kategorileri useProducts() ile çekiyor.
- *  - Sepet (çoklu sekme) mantığını useCart() ile yönetiyor.
- *  - Barkod, kısayollar, ödeme, veresiye, vb. önceki mantıklar aynı.
+ * POSPage: Satış ekranı (son hâl)
+ *  - useProducts ile ürün/kategori çekme + arama + kategori filtre
+ *  - useCart ile çoklu sepet sekmesi, sepete ekleme, silme, vs.
+ *  - Barkod okuyucu suffix ile otomatik ekleme
+ *  - '*' + sayı(lar) + Enter ile son ürünün miktarını değiştirme (multi-digit starMode)
+ *  - PaymentModal, ReceiptModal vb. önceki bileşenler aynı mantık
  */
 const POSPage: React.FC = () => {
   const { showError, showSuccess, confirm } = useAlert();
 
-  // 1) Ürün/kategori yönetimi: useProducts
+  // 1) Ürün / Kategori Yönetimi
   const {
     products,
     categories,
@@ -57,10 +51,10 @@ const POSPage: React.FC = () => {
     setSearchTerm,
     selectedCategory,
     setSelectedCategory,
-    filteredProducts, // arama + kategori ile otomatik filtrelenmiş
+    filteredProducts,
   } = useProducts({ enableCategories: true });
 
-  // 2) Sepet yönetimi: useCart
+  // 2) Sepet Yönetimi
   const {
     cartTabs,
     activeTabId,
@@ -74,35 +68,31 @@ const POSPage: React.FC = () => {
     clearCart,
   } = useCart();
 
-  // 3) Müşteri verileri (veresiye için)
+  // 3) Müşteriler (veresiye için)
   const [customers, setCustomers] = useState<Customer[]>([]);
   useEffect(() => {
-    // Müşteri listesini yükle
-    const loadCustomers = async () => {
-      try {
-        const allCustomers = await creditService.getAllCustomers();
-        setCustomers(allCustomers);
-      } catch (error) {
-        console.error("Müşteriler yüklenirken hata:", error);
-      }
-    };
-    loadCustomers();
+    creditService
+      .getAllCustomers()
+      .then(setCustomers)
+      .catch((e) => console.error("Müşteriler yüklenemedi:", e));
   }, []);
 
-  // 4) Seçili müşteri (veresiye satış için)
+  // 4) Seçili müşteri (veresiye vs.)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null
   );
 
-  // 5) Diğer UI state
+  // 5) UI state’leri (Payment, Receipt, Filtre, SelectProductsModal)
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [currentReceipt, setCurrentReceipt] = useState<ReceiptInfo | null>(null);
+  const [currentReceipt, setCurrentReceipt] = useState<ReceiptInfo | null>(
+    null
+  );
   const [showHotkeysHelper, setShowHotkeysHelper] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showSelectProductsModal, setShowSelectProductsModal] = useState(false);
 
-  // 6) Ürün grupları (isteğe bağlı)
+  // 6) Ürün Grupları
   const {
     groups: productGroups,
     addGroup,
@@ -113,50 +103,84 @@ const POSPage: React.FC = () => {
   } = useProductGroups();
   const [activeGroupId, setActiveGroupId] = useState<number>(1);
 
-  // Barkod config (LocalStorage’dan okunuyor, opsiyonel)
+  // 7) Barkod config + input ref
   const [barcodeConfig] = useState(() => {
     const saved = localStorage.getItem("barcodeConfig");
     return saved ? JSON.parse(saved) : { enabled: true, suffix: "\n" };
   });
-
-  // Arama input referansı
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Filtre sıfırlama
+  // Filtre reset
   const resetFilters = () => {
     setSearchTerm("");
     setSelectedCategory("Tümü");
     setShowFilters(false);
   };
 
-  // Barkod araması
-  const handleBarcodeSearch = async (): Promise<void> => {
-    if (searchTerm) {
-      const product = products.find((p) => p.barcode === searchTerm);
+  useEffect(() => {
+    if (!barcodeConfig.enabled || !barcodeConfig.suffix) return;
+    if (searchTerm.endsWith(barcodeConfig.suffix)) {
+      const scannedValue = searchTerm.slice(0, -barcodeConfig.suffix.length);
+      const product = products.find((p) => p.barcode === scannedValue);
       if (product) {
-        addToCart(product);
-        setSearchTerm("");
+        addToCart(product); // Burada Enter tuşu ile ekleme yapılabilir
       }
+      setSearchTerm("");
     }
-  };
+  }, [searchTerm, barcodeConfig, products, addToCart, setSearchTerm]);
 
-  // Yeni satış başlatma (sepeti temizleme)
-  const startNewSale = async (): Promise<void> => {
-    if (!activeTab?.cart.length) {
-      searchInputRef.current?.focus();
+  // 9) starMode (çok basamaklı rakam girip son ürün miktarı set etme)
+  const [starMode, setStarMode] = useState(false);
+  const [typedQty, setTypedQty] = useState("");
+
+  function setLastItemQuantity(q: number) {
+    if (!activeTab || activeTab.cart.length === 0) return;
+
+    const lastItem = activeTab.cart[activeTab.cart.length - 1];
+
+    if (lastItem.quantity === q) {
       return;
     }
-    const confirmed = await confirm(
-      "Mevcut satışı iptal edip yeni satış başlatmak istiyor musunuz?"
-    );
-    if (confirmed) {
-      clearCart();
-      setSearchTerm("");
-      searchInputRef.current?.focus();
-    }
-  };
 
-  // Kısayollar
+    const updateSuccess = updateQuantity(lastItem.id, q - lastItem.quantity);
+
+    if (!updateSuccess) {
+      showError(`Stokta sadece ${lastItem.stock} tane ürün var.`);
+    }
+
+    setStarMode(false);
+    setTypedQty("");
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !starMode) {
+        e.preventDefault(); // Yıldız modu aktif değilse Enter tuşunu tamamen etkisiz hale getir
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [starMode]);
+
+  useEffect(() => {
+    if (starMode) return; // Yıldız modu aktifken barkod işlemini engelle
+
+    if (!barcodeConfig.enabled || !barcodeConfig.suffix) return;
+    if (searchTerm.endsWith(barcodeConfig.suffix)) {
+      const scannedValue = searchTerm.slice(0, -barcodeConfig.suffix.length);
+      const product = products.find((p) => p.barcode === scannedValue);
+      if (product) {
+        addToCart(product);
+      }
+      setSearchTerm("");
+    }
+  }, [searchTerm, barcodeConfig, products, addToCart, setSearchTerm, starMode]);
+
+  // 10) Hotkeys
   useHotkeys({
     hotkeys: [
       {
@@ -177,19 +201,46 @@ const POSPage: React.FC = () => {
       },
       {
         key: "Escape",
-        callback: () => {
+        callback: async () => {
+          // Make the callback async
           if (showPaymentModal) {
             setShowPaymentModal(false);
           } else if (searchTerm) {
             setSearchTerm("");
           } else {
-            clearCart();
+            const confirmed = await confirm(
+              "Sepeti tamamen temizlemek istediğinize emin misiniz?"
+            ); // Await the Promise
+            if (confirmed) {
+              clearCart();
+            }
           }
         },
       },
       {
         key: "Enter",
-        callback: handleBarcodeSearch,
+        callback: (e) => {
+          if (starMode && typedQty) {
+            e?.preventDefault();
+            const q = parseInt(typedQty, 10);
+            if (!isNaN(q) && q > 0) {
+              if (activeTab && activeTab.cart.length > 0) {
+                const lastItem = activeTab.cart[activeTab.cart.length - 1];
+                if (q > lastItem.stock) {
+                  showError(`Only ${lastItem.stock} items are in stock.`);
+                  setStarMode(false);
+                  setTypedQty("");
+                  return;
+                }
+              }
+              setLastItemQuantity(q);
+            }
+            setStarMode(false);
+            setTypedQty("");
+          } else if (starMode && !typedQty) {
+            e?.preventDefault();
+          }
+        },
       },
       {
         key: "k",
@@ -228,11 +279,32 @@ const POSPage: React.FC = () => {
         ctrlKey: true,
         callback: (e) => {
           e?.preventDefault();
-          const currentIndex = cartTabs.findIndex((tab) => tab.id === activeTabId);
+          const currentIndex = cartTabs.findIndex(
+            (tab) => tab.id === activeTabId
+          );
           const nextIndex = (currentIndex + 1) % cartTabs.length;
           setActiveTabId(cartTabs[nextIndex].id);
         },
       },
+      // starMode logic
+      {
+        key: "*",
+        callback: (e) => {
+          e?.preventDefault();
+          setStarMode(true);
+          setTypedQty("");
+        },
+      },
+      ...Array.from({ length: 10 }, (_, i) => ({
+        // 0-9 tuşları
+        key: i.toString(),
+        callback: (e?: KeyboardEvent) => {
+          if (starMode) {
+            e?.preventDefault();
+            setTypedQty((prev) => prev + i.toString());
+          }
+        },
+      })),
     ],
     onQuantityUpdate: (newQuantity) => {
       if (!activeTab?.cart.length) return;
@@ -241,19 +313,25 @@ const POSPage: React.FC = () => {
     },
   });
 
-  // Gruplara özel ek fonksiyonlar (örn. yeni grup ekle)
-  const handleAddGroup = async () => {
-    try {
-      const newGroup = await addGroup("Yeni Grup");
-      setActiveGroupId(newGroup.id);
-    } catch (error) {
-      console.error("Grup eklenirken hata:", error);
+  // 11) Final: Start new sale
+  async function startNewSale(): Promise<void> {
+    if (!activeTab?.cart.length) {
+      searchInputRef.current?.focus();
+      return;
     }
-  };
+    const confirmed = await confirm(
+      "Mevcut satışı iptal edip yeni satış başlatmak istiyor musunuz?"
+    );
+    if (confirmed) {
+      clearCart();
+      setSearchTerm("");
+      searchInputRef.current?.focus();
+    }
+  }
 
-  // Çoklu ürün ekleme (SelectProductsModal kapanırken tetikleniyor)
+  // 12) product group ekleme (SelectProductsModal)
   const handleAddMultipleProducts = async (productIds: number[]) => {
-    if (activeGroupId === 1) return; // Varsayılan gruba ekleme yok
+    if (activeGroupId === 1) return;
     try {
       await Promise.all(
         productIds.map((pid) =>
@@ -263,24 +341,25 @@ const POSPage: React.FC = () => {
       await refreshGroups();
       showSuccess("Ürünler gruba eklendi");
     } catch (error) {
-      showError("Ürünler eklenirken bir hata oluştu");
+      showError("Ürün eklenirken hata oluştu");
     }
   };
 
-  // Arama+kategori filtreli ürünlerin, grup filtreli son hâli
+  // Son filtre: group'a göre
   const finalFilteredProducts = useMemo(() => {
     if (activeGroupId === 1) {
       // Varsayılan grup (hepsi)
       return filteredProducts;
     }
     const group = productGroups.find((g) => g.id === activeGroupId);
-  
+
     // `group?.productIds ?? []` => Eğer group yoksa veya productIds tanımsızsa boş dizi dön
-    return filteredProducts.filter((p) => (group?.productIds ?? []).includes(p.id));
+    return filteredProducts.filter((p) =>
+      (group?.productIds ?? []).includes(p.id)
+    );
   }, [filteredProducts, activeGroupId, productGroups]);
 
-
-  // Sepetin Toplamları
+  // Sepet toplamları
   const cartTotals = activeTab
     ? calculateCartTotals(activeTab.cart)
     : { subtotal: 0, vatAmount: 0, total: 0, vatBreakdown: [] };
@@ -288,7 +367,7 @@ const POSPage: React.FC = () => {
   // Ödeme tamamlandığında
   const handlePaymentComplete = async (paymentResult: PaymentResult) => {
     if (!activeTab) return;
-    const { subtotal, vatAmount, total } = calculateCartTotals(activeTab.cart);
+    const { subtotal, vatAmount, total } = cartTotals;
 
     let paymentMethodForSale: PaymentMethod = "nakit";
     let cashReceived: number | undefined;
@@ -333,7 +412,7 @@ const POSPage: React.FC = () => {
 
     try {
       const newSale = await salesDB.addSale(saleData);
-      // Veresiye işlemi
+      // Veresiye
       if (paymentResult.mode === "normal") {
         if (paymentResult.paymentMethod === "veresiye" && selectedCustomer) {
           await creditService.addTransaction({
@@ -345,7 +424,7 @@ const POSPage: React.FC = () => {
           });
         }
       } else {
-        // split => item bazında ya da equalPayments veresiye kısımları
+        // split detail
         if (paymentResult.productPayments) {
           for (const pp of paymentResult.productPayments) {
             if (pp.paymentMethod === "veresiye" && pp.customer) {
@@ -394,9 +473,9 @@ const POSPage: React.FC = () => {
   return (
     <PageLayout title="Satış">
       <div className="flex h-[calc(100vh-11rem)] gap-6">
-        {/* Sol Panel - Arama, Filtre, Gruplar, Ürün Grid */}
+        {/* Sol Panel */}
         <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden h-full">
-          {/* Arama + Filtre Butonu */}
+          {/* Arama & Filtre */}
           <div className="p-4 border-b">
             <SearchFilterPanel
               searchTerm={searchTerm}
@@ -404,10 +483,8 @@ const POSPage: React.FC = () => {
               onReset={resetFilters}
               showFilter={showFilters}
               toggleFilter={() => setShowFilters((prev) => !prev)}
-              inputRef={searchInputRef} // Barkod/kısayol için odak
+              inputRef={searchInputRef}
             />
-
-            {/* Kategori Filtreleri */}
             {showFilters && (
               <div className="mt-4">
                 <div className="flex flex-wrap gap-2 items-center">
@@ -421,18 +498,18 @@ const POSPage: React.FC = () => {
                   >
                     Tümü
                   </button>
-                  {categories.map((category) => (
+                  {categories.map((c) => (
                     <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.name)}
+                      key={c.id}
+                      onClick={() => setSelectedCategory(c.name)}
                       className={`px-3 py-1.5 rounded-lg ${
-                        selectedCategory === category.name
+                        selectedCategory === c.name
                           ? "bg-primary-50 text-primary-600"
                           : "text-gray-600 hover:bg-gray-50"
                       }`}
                     >
-                      <span className="mr-2">{category.icon}</span>
-                      {category.name}
+                      <span className="mr-2">{c.icon}</span>
+                      {c.name}
                     </button>
                   ))}
                 </div>
@@ -440,40 +517,44 @@ const POSPage: React.FC = () => {
             )}
           </div>
 
-          {/* Ürün Grup Sekmeleri */}
+          {/* Grup Sekmeleri */}
           <ProductGroupTabs
             groups={productGroups}
             activeGroupId={activeGroupId}
             onGroupChange={setActiveGroupId}
-            onAddGroup={handleAddGroup}
+            onAddGroup={async () => {
+              try {
+                const g = await addGroup("Yeni Grup");
+                setActiveGroupId(g.id);
+              } catch (error) {
+                console.error("Grup eklenirken hata:", error);
+              }
+            }}
             onRenameGroup={renameGroup}
-            onDeleteGroup={async (groupId: number) => {
-              const confirmed = await confirm(
+            onDeleteGroup={async (gid) => {
+              const c = await confirm(
                 "Bu grubu silmek istediğinize emin misiniz?"
               );
-              if (confirmed) {
-                await productService.deleteProductGroup(groupId);
-                await refreshGroups();
-                if (activeGroupId === groupId) {
-                  setActiveGroupId(1);
-                }
-                showSuccess("Grup başarıyla silindi");
+              if (!c) return;
+              await productService.deleteProductGroup(gid);
+              await refreshGroups();
+              if (activeGroupId === gid) {
+                setActiveGroupId(1);
               }
+              showSuccess("Grup başarıyla silindi");
             }}
           />
 
           {/* Ürün Grid */}
           <div className="flex-1 p-4 overflow-y-auto">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {/* Grup için çoklu ürün ekleme butonu (Varsayılan grup değilse) */}
+              {/* Grup'a çoklu ekleme butonu (aktif grup != 1) */}
               {activeGroupId !== 1 && (
                 <Card
                   variant="addProduct"
                   onClick={() => setShowSelectProductsModal(true)}
                 />
               )}
-
-              {/* Filtrelenmiş + Grup bazlı ürünler */}
               {finalFilteredProducts.map((product) => (
                 <Card
                   key={product.id}
@@ -486,7 +567,6 @@ const POSPage: React.FC = () => {
                   stock={product.stock}
                   onClick={() => addToCart(product)}
                   disabled={product.stock === 0}
-                  // Grup'a ekle / çıkar butonları
                   onAddToGroup={
                     activeGroupId !== 1 &&
                     !productGroups
@@ -514,7 +594,10 @@ const POSPage: React.FC = () => {
           {/* Sepet Sekmeleri */}
           <div className="flex items-center gap-2 p-2 border-b overflow-x-auto">
             {cartTabs.map((tab) => {
-              const itemCount = tab.cart.reduce((acc, i) => acc + i.quantity, 0);
+              const itemCount = tab.cart.reduce(
+                (sum, i) => sum + i.quantity,
+                0
+              );
               return (
                 <div
                   key={tab.id}
@@ -525,12 +608,9 @@ const POSPage: React.FC = () => {
                   }`}
                   onClick={() => setActiveTabId(tab.id)}
                 >
-                  <div className="flex items-center gap-2">
-                    <ShoppingCart size={14} />
-                    <span>{tab.title}</span>
-                    <span className="text-xs text-gray-500">({itemCount})</span>
-                  </div>
-                  {/* Sekme kapatma butonu */}
+                  <ShoppingCart size={14} />
+                  <span>{tab.title}</span>
+                  <span className="text-xs text-gray-500">({itemCount})</span>
                   {cartTabs.length > 1 && (
                     <button
                       onClick={async (e) => {
@@ -568,11 +648,22 @@ const POSPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                     <ShoppingCart size={20} />
-                    {activeTab.cart.reduce((sum, i) => sum + i.quantity, 0)} Ürün
+                    {activeTab.cart.reduce(
+                      (sum, i) => sum + i.quantity,
+                      0
+                    )}{" "}
+                    Ürün
                   </h2>
                   {activeTab.cart.length > 0 && (
                     <button
-                      onClick={() => clearCart()}
+                      onClick={async () => {
+                        const confirmed = await confirm(
+                          "Sepeti tamamen temizlemek istediğinize emin misiniz?"
+                        );
+                        if (confirmed) {
+                          clearCart();
+                        }
+                      }}
                       className="text-red-500 hover:text-red-600"
                       title="Sepeti Temizle"
                     >
@@ -636,7 +727,7 @@ const POSPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Toplam & Ödeme Butonu */}
+              {/* Toplam & Ödeme */}
               <div className="border-t p-4">
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between text-sm text-gray-600">
@@ -667,7 +758,6 @@ const POSPage: React.FC = () => {
           )}
         </div>
 
-        {/* Kısayol Yardımcısı */}
         <HotkeysHelper />
       </div>
 
@@ -705,7 +795,7 @@ const POSPage: React.FC = () => {
         />
       )}
 
-      {/* Ürünleri gruba çoklu ekleme Modal */}
+      {/* Çoklu ürün ekleme Modal (aktif gruba) */}
       <SelectProductsModal
         isOpen={showSelectProductsModal}
         onClose={() => setShowSelectProductsModal(false)}
@@ -715,6 +805,15 @@ const POSPage: React.FC = () => {
           productGroups.find((g) => g.id === activeGroupId)?.productIds || []
         }
       />
+
+      {/* Yıldız Modu (opsiyonel debug) */}
+      {starMode && (
+        <div className="fixed bottom-4 right-4 bg-gray-200 text-gray-800 p-2 rounded shadow-md">
+          <div>Yıldız Modu Aktif</div>
+          <div>Miktar: {typedQty || "?"}</div>
+          <div className="text-xs text-gray-500">(Enter ile onayla)</div>
+        </div>
+      )}
     </PageLayout>
   );
 };

@@ -82,24 +82,41 @@ export function useCart() {
     );
   }
 
-  // Sepet miktar güncelle
-  function updateQuantity(productId: number, change: number) {
-    if (!activeTab) return;
+  function updateQuantity(productId: number, change: number): boolean {
+    if (!activeTab) return false;
+  
+    const tab = cartTabs.find((t) => t.id === activeTabId);
+    if (!tab) return false;
+  
+    const item = tab.cart.find((i) => i.id === productId);
+    if (!item) return false;
+  
+    const newQuantity = item.quantity + change;
+  
+    // Check if new quantity exceeds stock
+    if (newQuantity > item.stock) {
+      return false;  // Indicate failure due to stock limit
+    }
+  
+    // Prevent quantity from going below 1
+    if (newQuantity <= 0) {
+      return false;  // Or you can handle item removal here if needed
+    }
+  
+    // If stock is sufficient, update the cart
     setCartTabs((prev) =>
       prev.map((tab) => {
         if (tab.id !== activeTabId) return tab;
-        const updatedCart = tab.cart.map((item) => {
-          if (item.id !== productId) return item;
-          const newQuantity = item.quantity + change;
-
-          // Miktar 0 veya stok üstüne çıkmasın
-          if (newQuantity <= 0) return item;
-
-          return calculateCartItemTotals({ ...item, quantity: newQuantity });
-        });
+        const updatedCart = tab.cart.map((i) =>
+          i.id === productId
+            ? calculateCartItemTotals({ ...i, quantity: newQuantity })
+            : i
+        );
         return { ...tab, cart: updatedCart };
       })
     );
+  
+    return true;  // Update was successful
   }
 
   // Sepetten ürün kaldır
