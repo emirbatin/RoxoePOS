@@ -1,10 +1,5 @@
-// SalesHistoryPage.tsx
 import React, { useState, useEffect } from "react";
-import {
-  FileText,
-  XCircle,
-  RotateCcw,
-} from "lucide-react";
+import { FileText, XCircle, RotateCcw } from "lucide-react";
 import { Sale, SalesFilter, SalesSummary } from "../types/sales";
 import { salesDB } from "../services/salesDB";
 import ReasonModal from "../components/modals/ReasonModal";
@@ -21,9 +16,12 @@ const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
   const { showSuccess, showError } = useAlert();
 
+  // 1) Satış verileri ve filtreli liste
   const [sales, setSales] = useState<Sale[]>([]);
   const [filteredSales, setFilteredSales] = useState<Sale[]>([]);
+  // 2) Filtre (opsiyonel alanlar)
   const [filter, setFilter] = useState<SalesFilter>({});
+  // 3) Özet (istatistikler)
   const [summary, setSummary] = useState<SalesSummary>({
     totalSales: 0,
     subtotal: 0,
@@ -36,6 +34,7 @@ const SalesHistoryPage: React.FC = () => {
     averageAmount: 0,
     vatBreakdown: [],
   });
+  // 4) Arama ve diğer state’ler
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,16 +42,15 @@ const SalesHistoryPage: React.FC = () => {
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
-  // Sayfalama için state
+  // Sayfalama
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-
-  // Sayfalama hesaplamaları
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentSales = filteredSales.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredSales.length / itemsPerPage);
 
+  // Kolonlar
   const columns: Column<Sale>[] = [
     {
       key: "receiptNo",
@@ -162,7 +160,7 @@ const SalesHistoryPage: React.FC = () => {
     },
   ];
 
-  // Veri yükleme
+  // 1) Veri yükleme
   useEffect(() => {
     const loadSales = async () => {
       try {
@@ -174,17 +172,18 @@ const SalesHistoryPage: React.FC = () => {
         setIsLoading(false);
       }
     };
-
     loadSales();
 
+    // 30 sn'de bir yenilemek isterseniz
     const interval = setInterval(loadSales, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Arama ve filtreleme işlemi
+  // 2) Arama ve filtreleme
   useEffect(() => {
     let result = [...sales];
 
+    // Arama
     if (searchTerm) {
       result = result.filter(
         (sale) =>
@@ -193,35 +192,38 @@ const SalesHistoryPage: React.FC = () => {
       );
     }
 
+    // Tarih aralığı
     if (filter.startDate) {
+      // filter.startDate! => TypeScript'e "burada undefined değil" diyoruz
       result = result.filter((sale) => sale.date >= filter.startDate!);
     }
     if (filter.endDate) {
       result = result.filter((sale) => sale.date <= filter.endDate!);
     }
 
+    // Durum
     if (filter.status) {
       result = result.filter((sale) => sale.status === filter.status);
     }
 
-    if (filter.minAmount) {
+    // Min / Max Tutar
+    if (filter.minAmount != null) {
       result = result.filter((sale) => sale.total >= filter.minAmount!);
     }
-    if (filter.maxAmount) {
+    if (filter.maxAmount != null) {
       result = result.filter((sale) => sale.total <= filter.maxAmount!);
     }
 
+    // Ödeme Yöntemi
     if (filter.paymentMethod) {
-      result = result.filter(
-        (sale) => sale.paymentMethod === filter.paymentMethod
-      );
+      result = result.filter((sale) => sale.paymentMethod === filter.paymentMethod);
     }
 
     setFilteredSales(result);
-    setCurrentPage(1); // Filtre değişince sayfayı sıfırla
+    setCurrentPage(1);
   }, [sales, filter, searchTerm]);
 
-  // Özet hesaplamaları
+  // 3) Özet hesaplamaları
   useEffect(() => {
     const newSummary: SalesSummary = {
       totalSales: filteredSales.length,
@@ -245,18 +247,12 @@ const SalesHistoryPage: React.FC = () => {
         0
       ),
       totalAmount: filteredSales.reduce((sum, sale) => sum + sale.total, 0),
-      cancelledCount: filteredSales.filter(
-        (sale) => sale.status === "cancelled"
-      ).length,
-      refundedCount: filteredSales.filter((sale) => sale.status === "refunded")
-        .length,
-      cashSales: filteredSales.filter((sale) => sale.paymentMethod === "nakit")
-        .length,
-      cardSales: filteredSales.filter((sale) => sale.paymentMethod === "kart")
-        .length,
+      cancelledCount: filteredSales.filter((s) => s.status === "cancelled").length,
+      refundedCount: filteredSales.filter((s) => s.status === "refunded").length,
+      cashSales: filteredSales.filter((s) => s.paymentMethod === "nakit").length,
+      cardSales: filteredSales.filter((s) => s.paymentMethod === "kart").length,
       averageAmount: filteredSales.length
-        ? filteredSales.reduce((sum, sale) => sum + sale.total, 0) /
-          filteredSales.length
+        ? filteredSales.reduce((sum, s) => sum + s.total, 0) / filteredSales.length
         : 0,
       vatBreakdown: filteredSales.reduce((breakdown, sale) => {
         sale.items.forEach((item) => {
@@ -265,9 +261,7 @@ const SalesHistoryPage: React.FC = () => {
           const itemVatAmount =
             (item.priceWithVat - item.salePrice) * item.quantity;
 
-          const vatRateEntry = breakdown.find(
-            (entry) => entry.rate === vatRate
-          );
+          const vatRateEntry = breakdown.find((entry) => entry.rate === vatRate);
 
           if (vatRateEntry) {
             vatRateEntry.baseAmount += itemBaseAmount;
@@ -283,13 +277,17 @@ const SalesHistoryPage: React.FC = () => {
           }
         });
         return breakdown;
-      }, [] as { rate: VatRate; baseAmount: number; vatAmount: number; totalAmount: number }[]),
+      }, [] as {
+        rate: VatRate;
+        baseAmount: number;
+        vatAmount: number;
+        totalAmount: number;
+      }[]),
     };
-
     setSummary(newSummary);
   }, [filteredSales]);
 
-  // Satış iptal ve iade işlemleri
+  // 4) Satış iptal/iade
   const handleCancelSale = (saleId: string) => {
     setSelectedSaleId(saleId);
     setShowCancelModal(true);
@@ -305,10 +303,8 @@ const SalesHistoryPage: React.FC = () => {
     try {
       const updatedSale = await salesDB.cancelSale(selectedSaleId, reason);
       if (updatedSale) {
-        setSales((prevSales) =>
-          prevSales.map((sale) =>
-            sale.id === selectedSaleId ? updatedSale : sale
-          )
+        setSales((prev) =>
+          prev.map((sale) => (sale.id === selectedSaleId ? updatedSale : sale))
         );
         showSuccess("Satış başarıyla iptal edildi.");
       } else {
@@ -328,10 +324,8 @@ const SalesHistoryPage: React.FC = () => {
     try {
       const updatedSale = await salesDB.refundSale(selectedSaleId, reason);
       if (updatedSale) {
-        setSales((prevSales) =>
-          prevSales.map((sale) =>
-            sale.id === selectedSaleId ? updatedSale : sale
-          )
+        setSales((prev) =>
+          prev.map((sale) => (sale.id === selectedSaleId ? updatedSale : sale))
         );
         showSuccess("İade işlemi başarıyla tamamlandı.");
       } else {
@@ -346,7 +340,7 @@ const SalesHistoryPage: React.FC = () => {
     }
   };
 
-  // Reset filtre fonksiyonu
+  // 5) Filtre reset
   const resetFilters = () => {
     setSearchTerm("");
     setFilter({});
@@ -369,6 +363,7 @@ const SalesHistoryPage: React.FC = () => {
         <div className="p-4 border rounded-lg bg-white mb-6">
           <h3 className="font-medium mb-4">Filtreler</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Başlangıç Tarihi */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Başlangıç Tarihi
@@ -379,13 +374,12 @@ const SalesHistoryPage: React.FC = () => {
                 onChange={(e) =>
                   setFilter((prev) => ({
                     ...prev,
-                    startDate: e.target.value
-                      ? new Date(e.target.value)
-                      : undefined,
+                    startDate: e.target.value ? new Date(e.target.value) : undefined,
                   }))
                 }
               />
             </div>
+            {/* Bitiş Tarihi */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Bitiş Tarihi
@@ -396,13 +390,12 @@ const SalesHistoryPage: React.FC = () => {
                 onChange={(e) =>
                   setFilter((prev) => ({
                     ...prev,
-                    endDate: e.target.value
-                      ? new Date(e.target.value)
-                      : undefined,
+                    endDate: e.target.value ? new Date(e.target.value) : undefined,
                   }))
                 }
               />
             </div>
+            {/* Durum */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Durum
@@ -419,7 +412,6 @@ const SalesHistoryPage: React.FC = () => {
                       | undefined,
                   }))
                 }
-                value={filter.status || ""}
               >
                 <option value="">Tümü</option>
                 <option value="completed">Tamamlandı</option>
@@ -427,6 +419,7 @@ const SalesHistoryPage: React.FC = () => {
                 <option value="refunded">İade Edildi</option>
               </select>
             </div>
+            {/* Min Tutar */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Minimum Tutar
@@ -445,6 +438,7 @@ const SalesHistoryPage: React.FC = () => {
                 }
               />
             </div>
+            {/* Max Tutar */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Maksimum Tutar
@@ -463,6 +457,7 @@ const SalesHistoryPage: React.FC = () => {
                 }
               />
             </div>
+            {/* Ödeme Yöntemi */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Ödeme Yöntemi
@@ -477,16 +472,17 @@ const SalesHistoryPage: React.FC = () => {
                       | "kart"
                       | "veresiye"
                       | "nakitpos"
+                      | "mixed"
                       | undefined,
                   }))
                 }
-                value={filter.paymentMethod || ""}
               >
                 <option value="">Tümü</option>
                 <option value="nakit">Nakit</option>
                 <option value="kart">Kredi Kartı</option>
                 <option value="veresiye">Veresiye</option>
                 <option value="nakitpos">POS (Nakit)</option>
+                <option value="mixed">Karışık (Split)</option>
               </select>
             </div>
           </div>

@@ -1,9 +1,8 @@
 // contexts/NotificationContext.tsx
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { Product } from "../types/product";
 import { productService } from "../services/productDB";
-import { formatDistanceToNow } from "date-fns";
-import { tr } from "date-fns/locale";
 
 interface StockNotification {
   id: number;
@@ -27,73 +26,103 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [notifications, setNotifications] = useState<StockNotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [previousStock, setPreviousStock] = useState<Record<number, number>>(
-    {}
+
+  // unreadCount değerini doğrudan notifications üzerinden türet
+  const unreadCount = notifications.reduce(
+    (count, notif) => (notif.isRead ? count : count + 1),
+    0
   );
 
   useEffect(() => {
     const handleStockChange = (product: Product) => {
-      if (product.stock <= 4) {
-        // Aynı ürün için aynı stok seviyesinde bildirim kontrolü
-        const existingNotification = notifications.find(
-          (notif) =>
-            notif.productId === product.id &&
-            notif.currentStock === product.stock
-        );
-
-        if (!existingNotification) {
-          addNotification(product); // Stok seviyesi farklıysa yeni bildirim oluştur
+      // setNotifications içine callback vererek her zaman güncel 'prev' değerine erişiyoruz
+      setNotifications((prev) => {
+        // Stok 4'ün altına (veya eşit) inmişse henüz ekli olmayan bildirim ekle
+        if (product.stock <= 4) {
+          const existingNotification = prev.find(
+            (notif) =>
+              notif.productId === product.id &&
+              notif.currentStock === product.stock
+          );
+          if (!existingNotification) {
+            const newNotification: StockNotification = {
+              id: Date.now() + Math.random(),
+              productId: product.id,
+              productName: product.name,
+              currentStock: product.stock,
+              isRead: false,
+              createdAt: new Date(),
+            };
+            return [newNotification, ...prev];
+          }
+          return prev;
+        } else {
+          // Stok 4'ün üzerine çıkarsa o ürüne ait tüm bildirimleri sil
+          return prev.filter((notif) => notif.productId !== product.id);
         }
-      } else {
-        // Stok 4'ün üzerine çıkarsa ürünle ilgili tüm bildirimleri sil
-        removeNotificationsForProduct(product.id);
-      }
+      });
     };
 
-    // Stok değişikliklerini dinle
+    // Uygulama ilk yüklendiğinde tüm ürünlerin stoklarını kontrol et
+    const checkAllProductsForLowStock = async () => {
+      const products = await productService.getAllProducts();
+      setNotifications((prev) => {
+        let updated = [...prev];
+
+        products.forEach((product) => {
+          if (product.stock <= 4) {
+            const existingNotification = updated.find(
+              (notif) =>
+                notif.productId === product.id &&
+                notif.currentStock === product.stock
+            );
+            if (!existingNotification) {
+              updated = [
+                {
+                  id: Date.now() + Math.random(),
+                  productId: product.id,
+                  productName: product.name,
+                  currentStock: product.stock,
+                  isRead: false,
+                  createdAt: new Date(),
+                },
+                ...updated,
+              ];
+            }
+          } else {
+            // Stok 4'ün üzerindeyse ilgili bildirimi sil
+            updated = updated.filter(
+              (notif) => notif.productId !== product.id
+            );
+          }
+        });
+
+        return updated;
+      });
+    };
+
+    checkAllProductsForLowStock();
     productService.onStockChange(handleStockChange);
 
-    // Temizlik yaparak çift dinlemeyi engelle
     return () => {
       productService.offStockChange(handleStockChange);
     };
-  }, [notifications]); // Bildirimler değiştiğinde tekrar çalışır
+  }, []);
 
-  const addNotification = (product: Product) => {
-    const newNotification: StockNotification = {
-      id: Date.now() + Math.random(), // Her bildirim için benzersiz ID
-      productId: product.id,
-      productName: product.name,
-      currentStock: product.stock, // Mevcut stok seviyesini kaydet
-      isRead: false,
-      createdAt: new Date(),
-    };
-
-    setNotifications((prev) => [newNotification, ...prev]);
-    setUnreadCount((prev) => prev + 1);
-  };
-
-  const removeNotificationsForProduct = (productId: number) => {
-    setNotifications((prev) =>
-      prev.filter((notif) => notif.productId !== productId)
-    );
-  };
-
+  // Tek bir bildirimi "okundu" olarak işaretle
   const markAsRead = (id: number) => {
     setNotifications((prev) =>
       prev.map((notif) =>
         notif.id === id ? { ...notif, isRead: true } : notif
       )
     );
-    setUnreadCount((prev) => Math.max(0, prev - 1));
   };
 
+  // Tüm bildirimleri "okundu" yap
   const markAllAsRead = () => {
     setNotifications((prev) =>
       prev.map((notif) => ({ ...notif, isRead: true }))
     );
-    setUnreadCount(0);
   };
 
   return (

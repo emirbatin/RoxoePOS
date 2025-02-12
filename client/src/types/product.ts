@@ -19,7 +19,7 @@ export interface ProductStats {
   quantity: number;
   revenue: number;
   profit: number;
-  averagePrice: number;
+  averagePrice?: number;
 }
 
 export interface Category {

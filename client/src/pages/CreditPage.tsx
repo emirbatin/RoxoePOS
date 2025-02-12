@@ -1,8 +1,8 @@
-// CreditPage.tsx
+// pages/CreditPage.tsx
+
 import React, { useState, useEffect } from "react";
 import { DollarSign, Users, AlertTriangle, CreditCard } from "lucide-react";
-import { Customer, CustomerSummary } from "../types/credit";
-import { creditService } from "../services/creditServices";
+import { Customer } from "../types/credit";
 import CustomerList from "../components/ui/CustomerList";
 import CustomerModal from "../components/modals/CustomerModal";
 import TransactionModal from "../components/modals/TransactionModal";
@@ -11,36 +11,45 @@ import Button from "../components/ui/Button";
 import { Pagination } from "../components/ui/Pagination";
 import PageLayout from "../components/layout/PageLayout";
 import SearchFilterPanel from "../components/SearchFilterPanel";
+import { useAlert } from "../components/AlertProvider";
+import { useCustomers } from "../hooks/useCustomers";  // <-- YENİ
+import { creditService } from "../services/creditServices"; 
+import { CustomerSummary } from "../types/credit";
 
 const CreditPage: React.FC = () => {
-  // Temel state tanımlamaları
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
-  const [summaries, setSummaries] = useState<Record<number, CustomerSummary>>(
-    {}
-  );
+  const { showError } = useAlert();
+
+  // 1) Müşteri hook'u (tüm müşteri listesi burada geliyor)
+  const {
+    customers,
+    loading: customersLoading,
+    addCustomer,
+    updateCustomer,
+    deleteCustomer,
+    loadCustomers,
+  } = useCustomers();
+
+  // Müşterinin Transaction özetlerini hâlâ sayfa içinde tutabiliriz (ya da custom hook yapabilirsiniz)
+  const [summaries, setSummaries] = useState<Record<number, CustomerSummary>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+
+  // Modallar
   const [showCustomerModal, setShowCustomerModal] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<
-    Customer | undefined
-  >(undefined);
-  const [loading, setLoading] = useState(true);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>();
   const [showTransactionModal, setShowTransactionModal] = useState(false);
-  const [transactionType, setTransactionType] = useState<"debt" | "payment">(
-    "debt"
+  const [transactionType, setTransactionType] = useState<"debt" | "payment">("debt");
+  const [selectedTransactionCustomer, setSelectedTransactionCustomer] = useState<Customer | null>(
+    null
   );
-  const [selectedTransactionCustomer, setSelectedTransactionCustomer] =
-    useState<Customer | null>(null);
   const [showCustomerDetail, setShowCustomerDetail] = useState(false);
-  const [selectedDetailCustomer, setSelectedDetailCustomer] =
-    useState<Customer | null>(null);
+  const [selectedDetailCustomer, setSelectedDetailCustomer] = useState<Customer | null>(null);
 
-  // Pagination için state
+  // Sayfalama
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const itemsPerPage = 10;
 
-  // Ek filtreler: vadesi geçen, borcu olan, limiti dolmak üzere
+  // Filtreler
   const [filters, setFilters] = useState({
     hasOverdue: false,
     hasDebt: false,
@@ -55,54 +64,49 @@ const CreditPage: React.FC = () => {
     customersWithOverdue: 0,
   });
 
-  // Veri yükleme
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      // Tüm müşterileri yükle
-      const allCustomers = await creditService.getAllCustomers();
-      setCustomers(allCustomers);
-
-      // Her müşteri için özet bilgileri yükle
-      const summaryData: Record<number, CustomerSummary> = {};
-      for (const customer of allCustomers) {
-        summaryData[customer.id] = await creditService.getCustomerSummary(
-          customer.id
-        );
-      }
-      setSummaries(summaryData);
-
-      // İstatistik hesaplamaları
-      const totalCustomers = allCustomers.length;
-      const totalDebt = allCustomers.reduce((sum, c) => sum + c.currentDebt, 0);
-      const totalOverdue = Object.values(summaryData).reduce(
-        (sum, s) => sum + s.totalOverdue,
-        0
-      );
-      const customersWithOverdue = Object.values(summaryData).filter(
-        (s) => s.overdueTransactions > 0
-      ).length;
-
-      setStats({
-        totalCustomers,
-        totalDebt,
-        totalOverdue,
-        customersWithOverdue,
-      });
-    } catch (error) {
-      console.error("Veri yükleme hatası:", error);
-    }
-    setLoading(false);
-  };
-
+  // Veri yükleme: Müşteri summary’leri
   useEffect(() => {
-    loadData();
-  }, []);
+    const loadSummaries = async () => {
+      try {
+        // customers state hook'tan geliyor
+        const summaryData: Record<number, CustomerSummary> = {};
+        for (const cust of customers) {
+          summaryData[cust.id] = await creditService.getCustomerSummary(cust.id);
+        }
+        setSummaries(summaryData);
 
-  // Filtreleme işlemi: arama ve ek filtreler
+        // İstatistik hesaplama
+        const totalCustomers = customers.length;
+        const totalDebt = customers.reduce((sum, c) => sum + c.currentDebt, 0);
+        const totalOverdue = Object.values(summaryData).reduce(
+          (sum, s) => sum + s.totalOverdue,
+          0
+        );
+        const customersWithOverdue = Object.values(summaryData).filter(
+          (s) => s.overdueTransactions > 0
+        ).length;
+
+        setStats({
+          totalCustomers,
+          totalDebt,
+          totalOverdue,
+          customersWithOverdue,
+        });
+      } catch (error) {
+        console.error("Özet verileri yüklenirken hata:", error);
+      }
+    };
+    if (!customersLoading) {
+      loadSummaries();
+    }
+  }, [customers, customersLoading]);
+
+  // Filtreleme
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   useEffect(() => {
     let result = [...customers];
 
+    // Arama
     if (searchQuery) {
       result = result.filter(
         (customer) =>
@@ -111,17 +115,16 @@ const CreditPage: React.FC = () => {
       );
     }
 
+    // Ek filtreler
     if (filters.hasOverdue) {
-      result = result.filter(
-        (customer) => summaries[customer.id]?.overdueTransactions > 0
-      );
+      result = result.filter((c) => summaries[c.id]?.overdueTransactions > 0);
     }
     if (filters.hasDebt) {
-      result = result.filter((customer) => customer.currentDebt > 0);
+      result = result.filter((c) => c.currentDebt > 0);
     }
     if (filters.nearLimit) {
       result = result.filter(
-        (customer) => customer.currentDebt / customer.creditLimit > 0.8
+        (c) => c.currentDebt / c.creditLimit > 0.8
       );
     }
 
@@ -129,35 +132,26 @@ const CreditPage: React.FC = () => {
     setCurrentPage(1);
   }, [customers, searchQuery, filters, summaries]);
 
-  // Sayfalama hesaplamaları
+  // Sayfalama
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentCustomers = filteredCustomers.slice(
-    indexOfFirstItem,
-    indexOfLastItem
-  );
+  const currentCustomers = filteredCustomers.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
 
-  // Müşteri ekleme/düzenleme
+  // Modal işlemleri
   const handleSaveCustomer = async (
     customerData: Omit<Customer, "id" | "currentDebt" | "createdAt">
   ) => {
     try {
       if (selectedCustomer) {
-        const updatedCustomer = await creditService.updateCustomer(
-          selectedCustomer.id,
-          customerData
-        );
-        if (updatedCustomer) {
-          setCustomers((prev) =>
-            prev.map((c) =>
-              c.id === selectedCustomer.id ? updatedCustomer : c
-            )
-          );
+        // güncelle
+        const updated = await updateCustomer(selectedCustomer.id, customerData);
+        if (!updated) {
+          showError("Müşteri güncellenirken hata oluştu");
         }
       } else {
-        const newCustomer = await creditService.addCustomer(customerData);
-        setCustomers((prev) => [...prev, newCustomer]);
+        // ekle
+        await addCustomer(customerData);
       }
     } catch (error) {
       console.error("Müşteri kaydedilemedi:", error);
@@ -166,13 +160,10 @@ const CreditPage: React.FC = () => {
     setSelectedCustomer(undefined);
   };
 
-  // Müşteri silme
   const handleDeleteCustomer = async (customerId: number) => {
     try {
-      const success = await creditService.deleteCustomer(customerId);
-      if (success) {
-        setCustomers((prev) => prev.filter((c) => c.id !== customerId));
-      } else {
+      const success = await deleteCustomer(customerId);
+      if (!success) {
         alert("Borcu olan müşteri silinemez!");
       }
     } catch (error) {
@@ -208,7 +199,8 @@ const CreditPage: React.FC = () => {
         dueDate: data.dueDate,
         description: data.description,
       });
-      loadData();
+      // Tekrar verileri yenile
+      loadCustomers();
       setShowTransactionModal(false);
       setSelectedTransactionCustomer(null);
     } catch (error) {
@@ -219,6 +211,13 @@ const CreditPage: React.FC = () => {
   const handleViewCustomerDetail = (customer: Customer) => {
     setSelectedDetailCustomer(customer);
     setShowCustomerDetail(true);
+  };
+
+  // Filtre reset
+  const resetFilters = () => {
+    setSearchQuery("");
+    setFilters({ hasOverdue: false, hasDebt: false, nearLimit: false });
+    setShowFilters(false);
   };
 
   return (
@@ -283,14 +282,11 @@ const CreditPage: React.FC = () => {
       <SearchFilterPanel
         searchTerm={searchQuery}
         onSearchTermChange={setSearchQuery}
-        onReset={() => {
-          setSearchQuery("");
-          setFilters({ hasOverdue: false, hasDebt: false, nearLimit: false });
-          setShowFilters(false);
-        }}
+        onReset={resetFilters}
         showFilter={showFilters}
         toggleFilter={() => setShowFilters((prev) => !prev)}
       />
+
       {/* Ek Filtre Alanı */}
       {showFilters && (
         <div className="p-4 border rounded-lg bg-white mb-6">
@@ -337,8 +333,9 @@ const CreditPage: React.FC = () => {
           </div>
         </div>
       )}
+
       {/* Müşteri Listesi */}
-      {loading ? (
+      {customersLoading ? (
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
           <div className="mt-4 text-gray-500">Yükleniyor...</div>
@@ -401,7 +398,7 @@ const CreditPage: React.FC = () => {
             setSelectedDetailCustomer(null);
           }}
           customer={selectedDetailCustomer}
-          transactions={[]}
+          transactions={[]} // lazımsa ekleyin
           onAddDebt={handleAddDebt}
           onAddPayment={handleAddPayment}
         />

@@ -1,5 +1,6 @@
-// ProductsPage.tsx
-import React, { useState, useEffect } from "react";
+// pages/ProductsPage.tsx
+
+import React, { useState } from "react";
 import {
   Plus,
   Tag,
@@ -10,13 +11,12 @@ import {
   Package,
   Barcode,
 } from "lucide-react";
-import { Category, Product } from "../types/product";
+import { calculatePriceWithVat, formatCurrency, formatVatRate } from "../utils/vatUtils";
 import {
-  calculatePriceWithVat,
-  formatCurrency,
-  formatVatRate,
-} from "../utils/vatUtils";
-import { emitStockChange, initProductDB, productService } from "../services/productDB";
+  emitStockChange,
+  initProductDB,
+  productService,
+} from "../services/productDB";
 import ProductModal from "../components/modals/ProductModal";
 import BulkProductOperations from "../components/BulkProductOperations";
 import BatchPriceUpdate from "../components/BatchPriceUpdate";
@@ -28,34 +28,44 @@ import { Column } from "../types/table";
 import { Table } from "../components/ui/Table";
 import { Pagination } from "../components/ui/Pagination";
 import { useAlert } from "../components/AlertProvider";
-
-// Yeni eklediğimiz ortak bileşenler
 import PageLayout from "../components/layout/PageLayout";
 import SearchFilterPanel from "../components/SearchFilterPanel";
+import { Product, Category } from "../types/product";
+import { useProducts } from "../hooks/useProducts"; // <-- useProducts import
 
 const ProductsPage: React.FC = () => {
   const { showError, showSuccess, confirm } = useAlert();
 
-  // State tanımlamaları
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("Tümü");
+  // useProducts hook'unu çağırarak ürünleri, kategorileri ve filtreleri yönetiyoruz
+  const {
+    products,
+    categories,
+    loading,
+    searchTerm,
+    setSearchTerm,
+    selectedCategory,
+    setSelectedCategory,
+    filteredProducts,
+    refreshProducts,
+  } = useProducts({ enableCategories: true });
+
+  // Üst kısımlarda kullanacağımız ek state'ler
   const [showFilters, setShowFilters] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>();
   const [showCategoryManagement, setShowCategoryManagement] = useState(false);
-  const [selectedStockProduct, setSelectedStockProduct] =
-    useState<Product | null>(null);
-  const [selectedBarcodeProduct, setSelectedBarcodeProduct] =
-    useState<Product | null>(null);
+  const [selectedStockProduct, setSelectedStockProduct] = useState<Product | null>(null);
+  const [selectedBarcodeProduct, setSelectedBarcodeProduct] = useState<Product | null>(null);
+
+  // Toplu işlem seçimleri
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [showBatchUpdate, setShowBatchUpdate] = useState(false);
 
-  // Sayfalama için state
+  // Sayfalama state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const itemsPerPage = 10;
 
+  // Tabloda göstereceğimiz kolonlar
   const columns: Column<Product>[] = [
     {
       key: "name",
@@ -165,33 +175,18 @@ const ProductsPage: React.FC = () => {
     },
   ];
 
-  // Veri yükleme
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      const dbProducts = await productService.getAllProducts();
-      const dbCategories = await productService.getCategories();
-      setProducts(dbProducts);
-      setCategories(dbCategories);
-    } catch (error) {
-      console.error("Veri yüklenirken hata:", error);
-    }
-  };
-
-  // CRUD İşlemleri
+  // Ürün ekleme
   const handleAddProduct = async (productData: Omit<Product, "id">) => {
     try {
       await productService.addProduct(productData);
-      await loadData();
+      await refreshProducts();
       setShowProductModal(false);
     } catch (error) {
       console.error("Ürün eklenirken hata:", error);
     }
   };
 
+  // Ürün güncelleme
   const handleEditProduct = async (productData: Omit<Product, "id">) => {
     if (!selectedProduct) return;
     try {
@@ -199,7 +194,7 @@ const ProductsPage: React.FC = () => {
         ...productData,
         id: selectedProduct.id,
       });
-      await loadData();
+      await refreshProducts();
       setShowProductModal(false);
       setSelectedProduct(undefined);
     } catch (error) {
@@ -207,26 +202,27 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  // Ürün silme
   const handleDeleteProduct = async (productId: number) => {
-    const confirmed = await confirm(
-      "Bu ürünü silmek istediğinize emin misiniz?"
-    );
+    const confirmed = await confirm("Bu ürünü silmek istediğinize emin misiniz?");
     if (confirmed) {
       try {
         await productService.deleteProduct(productId);
-        await loadData();
+        await refreshProducts();
       } catch (error) {
         console.error("Ürün silinirken hata:", error);
       }
     }
   };
 
+  // Tabloda checkbox ile seçme
   const handleSelectProduct = (productId: number, checked: boolean) => {
     setSelectedProductIds((prev) =>
       checked ? [...prev, productId] : prev.filter((id) => id !== productId)
     );
   };
 
+  // Toplu sil
   const handleBatchDelete = async () => {
     if (selectedProductIds.length === 0) return;
     const confirmed = await confirm(
@@ -237,7 +233,7 @@ const ProductsPage: React.FC = () => {
         for (const id of selectedProductIds) {
           await productService.deleteProduct(id);
         }
-        await loadData();
+        await refreshProducts();
         setSelectedProductIds([]);
       } catch (error) {
         console.error("Toplu silme işlemi sırasında hata:", error);
@@ -245,6 +241,7 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  // Toplu fiyat güncelle
   const handleBatchPriceUpdate = async (updatedProducts: Product[]) => {
     try {
       for (const product of updatedProducts) {
@@ -253,7 +250,7 @@ const ProductsPage: React.FC = () => {
           priceWithVat: product.priceWithVat,
         });
       }
-      await loadData();
+      await refreshProducts();
       setSelectedProductIds([]);
       setShowBatchUpdate(false);
     } catch (error) {
@@ -261,6 +258,7 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  // Toplu import
   async function handleBulkImport(importedProducts: Product[]) {
     let addedCount = 0;
     let updatedCount = 0;
@@ -300,7 +298,7 @@ const ProductsPage: React.FC = () => {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
-      await loadData();
+      await refreshProducts();
       showSuccess(
         `İçe aktarma tamamlandı:\n${addedCount} yeni ürün eklendi\n${updatedCount} ürün güncellendi`
       );
@@ -317,74 +315,50 @@ const ProductsPage: React.FC = () => {
   // Stok işlemleri
   const handleStockUpdate = async (productId: number, newStock: number) => {
     try {
-      const product = products.find((p) => p.id === productId);
-      if (product) {
-        const updatedProduct = { ...product, stock: newStock };
+      const p = products.find((prod) => prod.id === productId);
+      if (p) {
+        const updatedProduct = { ...p, stock: newStock };
         await productService.updateProduct(updatedProduct);
-  
-        emitStockChange(updatedProduct);  // Manually emit the event
-  
-        await loadData();  // Refresh UI
+        emitStockChange(updatedProduct); // Event yay
+        await refreshProducts(); // UI güncelle
       }
     } catch (error) {
       console.error("Stok güncellenirken hata:", error);
     }
   };
 
-  // Kategori işlemleri
+  // Kategori yönetimi
   const handleCategoryUpdate = async (updatedCategories: Category[]) => {
     try {
-      const categoryNames = updatedCategories.map((c) => c.name);
-      const productsToUpdate = products.filter(
-        (p) => !categoryNames.includes(p.category)
-      );
-      for (const product of productsToUpdate) {
-        await productService.updateProduct({
-          ...product,
-          category: "Genel",
-        });
-      }
-      await loadData();
+      // Bu örnekte kategori ismi değişirse ve product.category bu yeni isimle eşleşmezse vs.
+      // Gerekirse ek mantık ekleyin
+      await refreshProducts();
     } catch (error) {
       console.error("Kategori güncelleme sırasında hata:", error);
     }
   };
 
-  // Filtreleme
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.barcode.includes(searchTerm);
-    const matchesCategory =
-      selectedCategory === "Tümü" || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  // Filtreleri resetlemek için
+  const resetFilters = () => {
+    setSearchTerm("");
+    setSelectedCategory("Tümü");
+    setShowFilters(false);
+  };
 
   // Sayfalama hesaplamaları
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentProducts = filteredProducts.slice(
-    indexOfFirstItem,
-    indexOfLastItem
-  );
+  const currentProducts = filteredProducts.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
 
-  // Tüm ürünleri seçme fonksiyonu güncellendi
+  // Tüm ürünleri (filtreli listeyi) seç veya temizle
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      // Filtrelenmiş TÜM ürünlerin ID'lerini seç
       const allFilteredIds = filteredProducts.map((p) => p.id);
       setSelectedProductIds(allFilteredIds);
     } else {
       setSelectedProductIds([]);
     }
-  };
-
-  // Reset filtre fonksiyonu
-  const resetFilters = () => {
-    setSearchTerm("");
-    setSelectedCategory("Tümü");
-    setShowFilters(false);
   };
 
   return (
@@ -438,7 +412,7 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Ana İşlem Butonları */}
+      {/* Ürün Ekle / Toplu İşlemler Paneli */}
       <div className="flex justify-between items-start mb-6">
         <Button
           onClick={() => {
@@ -451,7 +425,6 @@ const ProductsPage: React.FC = () => {
           Ürün Ekle
         </Button>
 
-        {/* Seçili Ürün İşlemleri */}
         {selectedProductIds.length > 0 && (
           <div className="flex gap-2">
             <button
@@ -472,7 +445,7 @@ const ProductsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Toplu Fiyat Güncelleme */}
+      {/* Toplu Fiyat Güncelleme Alanı */}
       {showBatchUpdate && (
         <div className="mb-6">
           <BatchPriceUpdate
@@ -482,17 +455,13 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Toplu İşlemler (Import/Export) */}
+      {/* Toplu Import/Export Paneli */}
       <div className="mb-6">
-        <BulkProductOperations
-          onImport={handleBulkImport}
-          products={products}
-        />
+        <BulkProductOperations onImport={handleBulkImport} products={products} />
       </div>
 
       {/* Ürün Tablosu */}
       <div className="bg-white rounded-lg shadow-sm">
-        {/* Tablo Başlık ve Seçim Bilgisi */}
         <div className="p-4 border-b">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -506,8 +475,7 @@ const ProductsPage: React.FC = () => {
                         </span>{" "}
                         ürün seçildi
                       </span>
-                      {selectedProductIds.length !==
-                        filteredProducts.length && (
+                      {selectedProductIds.length !== filteredProducts.length && (
                         <button
                           onClick={() => handleSelectAll(true)}
                           className="text-primary-600 hover:text-primary-700"
@@ -522,19 +490,21 @@ const ProductsPage: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {/* Filtreleme Bilgisi */}
             {(searchTerm || selectedCategory !== "Tümü") && (
               <div className="text-sm text-gray-500">
-                Filtreleniyor: {searchTerm && `"${searchTerm}"`}
-                {searchTerm && selectedCategory !== "Tümü" && " + "}
+                Filtreleniyor:{" "}
+                {searchTerm && (
+                  <>
+                    <span className="text-gray-700">"{searchTerm}"</span>
+                    {selectedCategory !== "Tümü" && " + "}
+                  </>
+                )}
                 {selectedCategory !== "Tümü" && selectedCategory}
               </div>
             )}
           </div>
         </div>
 
-        {/* Ürün Tablosu */}
         <Table<Product, number>
           data={currentProducts}
           columns={columns}
@@ -542,19 +512,12 @@ const ProductsPage: React.FC = () => {
           selected={selectedProductIds}
           onSelectAll={handleSelectAll}
           allSelected={selectedProductIds.length === filteredProducts.length}
-          onSelect={(id, checked) => {
-            if (checked) {
-              setSelectedProductIds((prev) => [...prev, id]);
-            } else {
-              setSelectedProductIds((prev) =>
-                prev.filter((prevId) => prevId !== id)
-              );
-            }
-          }}
+          onSelect={(id, checked) => handleSelectProduct(id, checked)}
           idField="id"
+          loading={loading}
+          emptyMessage="Ürün bulunamadı"
         />
 
-        {/* Sayfalama */}
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
@@ -564,6 +527,7 @@ const ProductsPage: React.FC = () => {
       </div>
 
       {/* Modallar */}
+      {/* Ürün Modalı (Ekle & Düzenle) */}
       <ProductModal
         isOpen={showProductModal}
         onClose={() => {
@@ -575,6 +539,7 @@ const ProductsPage: React.FC = () => {
         categories={categories}
       />
 
+      {/* Kategori Yönetimi Modalı */}
       {showCategoryManagement && (
         <CategoryManagement
           categories={categories}
@@ -583,6 +548,7 @@ const ProductsPage: React.FC = () => {
         />
       )}
 
+      {/* Stok Yönetimi Modalı */}
       {selectedStockProduct && (
         <StockManagement
           product={selectedStockProduct}
@@ -591,6 +557,7 @@ const ProductsPage: React.FC = () => {
         />
       )}
 
+      {/* Barkod Yazdırma Modalı */}
       {selectedBarcodeProduct && (
         <BarcodeGenerator
           product={selectedBarcodeProduct}

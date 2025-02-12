@@ -26,8 +26,7 @@ export interface Sale {
   cancelReason?: string;
   refundReason?: string;
   refundDate?: Date;
-
-  // Yeni alan: splitDetails - sadece paymentMethod = "mixed" durumlarında dolu olabilir
+  cancelDate?: Date | string; 
   splitDetails?: SplitDetails;
 }
 

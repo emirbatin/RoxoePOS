@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from "react";
+// pages/SettingsPage.tsx
+
+import React, { useEffect, useState } from "react";
 import { Printer, Save, Barcode } from "lucide-react";
 import { POSConfig, SerialOptions } from "../types/pos";
 import { BarcodeConfig } from "../types/barcode";
+import { ReceiptConfig } from "../types/receipt";
 import clsx from "clsx";
 import Button from "../components/ui/Button";
-import { ReceiptConfig } from "../types/receipt";
-// AlertProvider'dan gelen bildirim fonksiyonlarını import ediyoruz
 import { useAlert } from "../components/AlertProvider";
 
 const SettingsPage: React.FC = () => {
   const { showSuccess, showError } = useAlert();
 
+  // 1) POS Config
   const [posConfig, setPosConfig] = useState<POSConfig>({
     type: "Ingenico",
     baudRate: 9600,
@@ -20,9 +22,10 @@ const SettingsPage: React.FC = () => {
       cancel: "0x02cancel0x03",
       status: "0x02status0x03",
     },
-    manualMode: false, // Yeni eklenen manuel mod ayarı
+    manualMode: false, // Manuel mod
   });
 
+  // 2) Serial Options (Port ayarları)
   const [serialOptions, setSerialOptions] = useState<SerialOptions>({
     baudRate: 9600,
     dataBits: 8,
@@ -31,6 +34,7 @@ const SettingsPage: React.FC = () => {
     flowControl: "none",
   });
 
+  // 3) Barkod Okuyucu Ayarları
   const [barcodeConfig, setBarcodeConfig] = useState<BarcodeConfig>({
     type: "USB HID",
     baudRate: 9600,
@@ -39,11 +43,13 @@ const SettingsPage: React.FC = () => {
     suffix: "\n",
   });
 
+  // 4) Bağlantı Durumu
   const [connectionStatus, setConnectionStatus] = useState<
     "connected" | "disconnected" | "unknown"
   >("unknown");
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
+  // 5) Fiş Ayarları
   const [receiptConfig, setReceiptConfig] = useState<ReceiptConfig>({
     storeName: "",
     legalName: "",
@@ -54,29 +60,34 @@ const SettingsPage: React.FC = () => {
     mersisNo: "",
     footer: {
       message: "Bizi tercih ettiğiniz için teşekkür ederiz",
-      returnPolicy:
-        "Ürün iade ve değişimlerinde bu fiş ve ambalaj gereklidir",
+      returnPolicy: "Ürün iade ve değişimlerinde bu fiş ve ambalaj gereklidir",
     },
   });
 
+  // 6) Load Settings from localStorage
   useEffect(() => {
     const loadSettings = () => {
-      const savedPosConfig = localStorage.getItem("posConfig");
-      const savedSerialOptions = localStorage.getItem("serialOptions");
-      const savedBarcodeConfig = localStorage.getItem("barcodeConfig");
-      const savedReceiptConfig = localStorage.getItem("receiptConfig");
+      try {
+        const savedPosConfig = localStorage.getItem("posConfig");
+        const savedSerialOptions = localStorage.getItem("serialOptions");
+        const savedBarcodeConfig = localStorage.getItem("barcodeConfig");
+        const savedReceiptConfig = localStorage.getItem("receiptConfig");
 
-      if (savedReceiptConfig) setReceiptConfig(JSON.parse(savedReceiptConfig));
-      if (savedPosConfig) setPosConfig(JSON.parse(savedPosConfig));
-      if (savedSerialOptions) setSerialOptions(JSON.parse(savedSerialOptions));
-      if (savedBarcodeConfig) setBarcodeConfig(JSON.parse(savedBarcodeConfig));
+        if (savedPosConfig) setPosConfig(JSON.parse(savedPosConfig));
+        if (savedSerialOptions) setSerialOptions(JSON.parse(savedSerialOptions));
+        if (savedBarcodeConfig) setBarcodeConfig(JSON.parse(savedBarcodeConfig));
+        if (savedReceiptConfig) setReceiptConfig(JSON.parse(savedReceiptConfig));
+      } catch (err) {
+        console.error("Ayarlar yüklenirken hata:", err);
+      }
     };
-
     loadSettings();
   }, []);
 
+  // 7) POS Bağlantı Testi
   const testConnection = async () => {
     if (posConfig.manualMode) {
+      // Manuel mod aktifken gerçek bağlantı testi yapmıyoruz
       setConnectionStatus("connected");
       setLastChecked(new Date());
       showSuccess("Manuel mod aktif - Bağlantı testi atlandı!");
@@ -84,14 +95,17 @@ const SettingsPage: React.FC = () => {
     }
 
     try {
+      // Web Serial API
       const port = await navigator.serial.requestPort();
       await port.open(serialOptions);
 
+      // Status komutu gönder
       const writer = port.writable.getWriter();
       const encoder = new TextEncoder();
       await writer.write(encoder.encode(posConfig.commandSet.status));
       writer.releaseLock();
 
+      // Yanıt oku
       const reader = port.readable.getReader();
       const { value } = await reader.read();
       reader.releaseLock();
@@ -103,14 +117,14 @@ const SettingsPage: React.FC = () => {
       }
 
       await port.close();
-    } catch (err) {
-      const error = err as Error;
+    } catch (err: any) {
       setConnectionStatus("disconnected");
       setLastChecked(new Date());
-      showError("Bağlantı hatası: " + error.message);
+      showError("Bağlantı hatası: " + err.message);
     }
   };
 
+  // 8) Save Settings to localStorage
   const saveSettings = () => {
     try {
       localStorage.setItem("posConfig", JSON.stringify(posConfig));
@@ -118,9 +132,8 @@ const SettingsPage: React.FC = () => {
       localStorage.setItem("barcodeConfig", JSON.stringify(barcodeConfig));
       localStorage.setItem("receiptConfig", JSON.stringify(receiptConfig));
       showSuccess("Ayarlar başarıyla kaydedildi");
-    } catch (err) {
-      const error = err as Error;
-      showError("Ayarlar kaydedilirken hata oluştu: " + error.message);
+    } catch (err: any) {
+      showError("Ayarlar kaydedilirken hata oluştu: " + err.message);
     }
   };
 
@@ -129,7 +142,7 @@ const SettingsPage: React.FC = () => {
       <h1 className="text-2xl font-semibold text-gray-800 mb-6">Ayarlar</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* POS Ayarları */}
+        {/* 1) POS Ayarları */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
@@ -172,24 +185,23 @@ const SettingsPage: React.FC = () => {
                   type="checkbox"
                   checked={posConfig.manualMode}
                   onChange={(e) =>
-                    setPosConfig({
-                      ...posConfig,
-                      manualMode: e.target.checked,
-                    })
+                    setPosConfig({ ...posConfig, manualMode: e.target.checked })
                   }
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
               </label>
             </div>
           </div>
 
+          {/* Bağlantı ayar formu (manualMode aktifse devre dışı) */}
           <div
             className={clsx(
               "space-y-4",
               posConfig.manualMode && "opacity-50 pointer-events-none"
             )}
           >
+            {/* POS Markası */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 POS Markası
@@ -204,6 +216,7 @@ const SettingsPage: React.FC = () => {
               />
             </div>
 
+            {/* Baud Rate */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Baud Rate
@@ -225,6 +238,7 @@ const SettingsPage: React.FC = () => {
               </select>
             </div>
 
+            {/* Data Bits */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Data Bits
@@ -244,6 +258,7 @@ const SettingsPage: React.FC = () => {
               </select>
             </div>
 
+            {/* Stop Bits */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Stop Bits
@@ -263,6 +278,7 @@ const SettingsPage: React.FC = () => {
               </select>
             </div>
 
+            {/* Parity */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Parity
@@ -283,6 +299,7 @@ const SettingsPage: React.FC = () => {
               </select>
             </div>
 
+            {/* Flow Control */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Flow Control
@@ -302,17 +319,16 @@ const SettingsPage: React.FC = () => {
               </select>
             </div>
 
+            {/* Bağlantıyı Test Et Butonu */}
             <div className="flex gap-2 pt-4">
               <Button onClick={testConnection} variant="primary" icon={Printer}>
-                {posConfig.manualMode
-                  ? "Manuel Mod Aktif"
-                  : "Bağlantıyı Test Et"}
+                {posConfig.manualMode ? "Manuel Mod Aktif" : "Bağlantıyı Test Et"}
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Barkod Okuyucu Ayarları */}
+        {/* 2) Barkod Okuyucu Ayarları */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center gap-2 mb-6">
             <Barcode className="text-primary-600" size={24} />
@@ -320,6 +336,7 @@ const SettingsPage: React.FC = () => {
           </div>
 
           <div className="space-y-4">
+            {/* Okuyucu Tipi */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Okuyucu Tipi
@@ -337,6 +354,7 @@ const SettingsPage: React.FC = () => {
               </select>
             </div>
 
+            {/* Aktif Toggle */}
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700">Aktif</span>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -351,10 +369,11 @@ const SettingsPage: React.FC = () => {
                   }
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
               </label>
             </div>
 
+            {/* Prefix */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Önek (Prefix)
@@ -370,6 +389,7 @@ const SettingsPage: React.FC = () => {
               />
             </div>
 
+            {/* Suffix */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Sonek (Suffix)
@@ -386,7 +406,8 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
         </div>
-        {/* Fiş Ayarları */}
+
+        {/* 3) Fiş Ayarları */}
         <div className="bg-white rounded-lg shadow-sm p-6 md:col-span-2">
           <div className="flex items-center gap-2 mb-6">
             <Printer className="text-primary-600" size={24} />
@@ -596,6 +617,8 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Kaydet Butonu */}
       <div className="m-6">
         <Button onClick={saveSettings} variant="save" icon={Save}>
           Kaydet

@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+// pages/SaleDetailPage.tsx
+
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -8,33 +10,54 @@ import {
   XCircle,
   RotateCcw,
 } from "lucide-react";
-import { Sale } from "../types/sales";
-import { ReceiptInfo } from "../types/receipt";
-import { salesDB } from "../services/salesDB";
-import { formatCurrency, formatVatRate } from "../utils/vatUtils";
+import PageLayout from "../components/layout/PageLayout";
+import ReceiptModal from "../components/modals/ReceiptModal";
 import ReasonModal from "../components/modals/ReasonModal";
 import Button from "../components/ui/Button";
-import ReceiptModal from "../components/modals/ReceiptModal";
+import { Table } from "../components/ui/Table";
 import { Column } from "../types/table";
 import { CartItem } from "../types/pos";
-import { Table } from "../components/ui/Table";
-// AlertProvider fonksiyonlarını import ediyoruz
+import { formatCurrency, formatVatRate } from "../utils/vatUtils";
+import { salesDB } from "../services/salesDB"; 
+import { creditService } from "../services/creditServices";
 import { useAlert } from "../components/AlertProvider";
+import { Sale } from "../types/sales";
+import { ReceiptInfo } from "../types/receipt";
 
 const SaleDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>();   // route param
   const navigate = useNavigate();
+  const { showSuccess, showError, confirm } = useAlert();
+
   const [sale, setSale] = useState<Sale | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  // Modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
-  // ReceiptModal ile fiş görüntüleme için state'ler:
-  const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
+
+  // Receipt modal
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [currentReceipt, setCurrentReceipt] = useState<ReceiptInfo | null>(null);
 
-  // AlertProvider'dan gelen fonksiyonlar
-  const { showSuccess, showError } = useAlert();
+  // 1) Tekil satışı yükleme
+  useEffect(() => {
+    async function fetchSale() {
+      if (!id) return;
+      try {
+        setLoading(true);
+        const saleData = await salesDB.getSaleById(id); // ID'ye göre çekiyoruz
+        setSale(saleData || null);
+      } catch (error) {
+        console.error("Satış verisi yüklenirken hata:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchSale();
+  }, [id]);
 
+  // 2) Ürün tablosu kolonları
   const columns: Column<CartItem>[] = [
     {
       key: "name",
@@ -50,9 +73,7 @@ const SaleDetailPage: React.FC = () => {
       key: "salePrice",
       title: "Birim Fiyat",
       className: "text-right",
-      render: (item) => (
-        <div className="text-sm">{formatCurrency(item.salePrice)}</div>
-      ),
+      render: (item) => <div className="text-sm">{formatCurrency(item.salePrice)}</div>,
     },
     {
       key: "quantity",
@@ -64,9 +85,7 @@ const SaleDetailPage: React.FC = () => {
       key: "vatRate",
       title: "KDV",
       className: "text-right",
-      render: (item) => (
-        <div className="text-sm">{formatVatRate(item.vatRate)}</div>
-      ),
+      render: (item) => <div className="text-sm">{formatVatRate(item.vatRate)}</div>,
     },
     {
       key: "total",
@@ -78,24 +97,7 @@ const SaleDetailPage: React.FC = () => {
     },
   ];
 
-  useEffect(() => {
-    const fetchSale = async () => {
-      if (id) {
-        try {
-          const saleData = await salesDB.getSaleById(id);
-          setSale(saleData);
-        } catch (error) {
-          console.error("Satış verisi yüklenirken hata:", error);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchSale();
-  }, [id]);
-
-  // ReceiptModal'ı açan fonksiyon
+  // 3) Fişi görüntüleme fonksiyonu
   const handleOpenReceiptModal = () => {
     if (!sale) return;
     const receiptData: ReceiptInfo = {
@@ -110,9 +112,9 @@ const SaleDetailPage: React.FC = () => {
     setShowReceiptModal(true);
   };
 
+  // 4) Satış iptal (Cancel)
   const handleCancelConfirm = async (reason: string) => {
     if (!sale) return;
-
     try {
       const updatedSale = await salesDB.cancelSale(sale.id, reason);
       if (updatedSale) {
@@ -129,9 +131,9 @@ const SaleDetailPage: React.FC = () => {
     }
   };
 
+  // 5) Satış iade (Refund)
   const handleRefundConfirm = async (reason: string) => {
     if (!sale) return;
-
     try {
       const updatedSale = await salesDB.refundSale(sale.id, reason);
       if (updatedSale) {
@@ -148,26 +150,32 @@ const SaleDetailPage: React.FC = () => {
     }
   };
 
-  if (isLoading) {
-    return <div className="p-8 text-center">Yükleniyor...</div>;
-  }
-
-  if (!sale) {
+  // Yükleniyorsa
+  if (loading) {
     return (
-      <div className="p-8 text-center">
-        <div className="text-gray-500 mb-4">Satış bulunamadı</div>
-        <button
-          onClick={() => navigate("/history")}
-          className="text-primary-600 hover:text-primary-700"
-        >
-          Satış Listesine Dön
-        </button>
-      </div>
+      <PageLayout title="Satış Detayı">
+        <div className="p-8 text-center">Yükleniyor...</div>
+      </PageLayout>
     );
   }
 
+  // Satış yoksa
+  if (!sale) {
+    return (
+      <PageLayout title="Satış Detayı">
+        <div className="p-8 text-center">
+          <div className="text-gray-500 mb-4">Satış bulunamadı</div>
+          <Button variant="primary" onClick={() => navigate("/history")}>
+            Satış Listesine Dön
+          </Button>
+        </div>
+      </PageLayout>
+    );
+  }
+
+  // Sale verisi varsa göster
   return (
-    <div className="p-6">
+    <PageLayout title="Satış Detayı">
       <div className="flex justify-between items-center mb-6">
         <button
           onClick={() => navigate("/history")}
@@ -177,14 +185,15 @@ const SaleDetailPage: React.FC = () => {
           Satış Listesine Dön
         </button>
         <div className="flex gap-2">
-          {/* ReceiptModal'ı açan buton */}
           <Button onClick={handleOpenReceiptModal} icon={Printer}>
             Fişi Yazdır / Görüntüle
           </Button>
         </div>
       </div>
 
+      {/* Satış ve Ürün Bilgileri */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Sol kısım: Ürünler Tablosu */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-6 rounded-lg border">
             <h2 className="text-xl font-semibold mb-4">Satış Bilgileri</h2>
@@ -214,14 +223,11 @@ const SaleDetailPage: React.FC = () => {
                   {sale.paymentMethod === "nakitpos" && "💵 POS (Nakit)"}
                   {sale.paymentMethod === "mixed" && "Karışık (Split)"}
                 </div>
-
+                {/* Karışık ödeme detayları varsa göster */}
                 {sale.paymentMethod === "mixed" && sale.splitDetails && (
                   <div className="mt-4 p-4 border rounded bg-gray-50">
-                    <h3 className="font-semibold mb-2">
-                      Karışık Ödeme Detayları
-                    </h3>
-
-                    {/* Ürün Bazında Ödeme */}
+                    <h3 className="font-semibold mb-2">Karışık Ödeme Detayları</h3>
+                    {/* Ürün bazında ödeme */}
                     {sale.splitDetails.productPayments &&
                       sale.splitDetails.productPayments.length > 0 && (
                         <>
@@ -232,7 +238,7 @@ const SaleDetailPage: React.FC = () => {
                             {sale.splitDetails.productPayments.map((p, idx) => (
                               <li key={idx} className="flex justify-between">
                                 <span>
-                                  Ürün ID #{p.itemId} -{" "}
+                                  Ürün ID #{p.itemId} -
                                   {p.paymentMethod === "veresiye"
                                     ? "Veresiye"
                                     : p.paymentMethod === "kart"
@@ -240,8 +246,7 @@ const SaleDetailPage: React.FC = () => {
                                     : p.paymentMethod === "nakitpos"
                                     ? "POS (Nakit)"
                                     : "Nakit"}
-                                  {p.customer &&
-                                    ` (Müşteri: ${p.customer.name})`}
+                                  {p.customer && ` (${p.customer.name})`}
                                 </span>
                                 <span className="font-medium text-gray-700">
                                   {formatCurrency(p.received)}
@@ -251,8 +256,7 @@ const SaleDetailPage: React.FC = () => {
                           </ul>
                         </>
                       )}
-
-                    {/* Eşit Bölüşüm Ödeme */}
+                    {/* Eşit bölüşüm ödeme */}
                     {sale.splitDetails.equalPayments &&
                       sale.splitDetails.equalPayments.length > 0 && (
                         <>
@@ -263,7 +267,7 @@ const SaleDetailPage: React.FC = () => {
                             {sale.splitDetails.equalPayments.map((p, idx) => (
                               <li key={idx} className="flex justify-between">
                                 <span>
-                                  Kişi {idx + 1} -{" "}
+                                  Kişi {idx + 1} -
                                   {p.paymentMethod === "veresiye"
                                     ? "Veresiye"
                                     : p.paymentMethod === "kart"
@@ -271,8 +275,7 @@ const SaleDetailPage: React.FC = () => {
                                     : p.paymentMethod === "nakitpos"
                                     ? "POS (Nakit)"
                                     : "Nakit"}
-                                  {p.customer &&
-                                    ` (Müşteri: ${p.customer.name})`}
+                                  {p.customer && ` (${p.customer.name})`}
                                 </span>
                                 <span className="font-medium text-gray-700">
                                   {formatCurrency(p.received)}
@@ -285,6 +288,8 @@ const SaleDetailPage: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* Nakit ödeme ise (cashReceived, changeAmount) */}
               {sale.paymentMethod === "nakit" && sale.cashReceived && (
                 <>
                   <div>
@@ -304,12 +309,11 @@ const SaleDetailPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Ürünler Tablosu */}
           <div className="bg-white rounded-lg border">
             <div className="p-6 border-b">
               <h2 className="text-xl font-semibold">Ürünler</h2>
             </div>
-
-            {/* Tablo */}
             <Table<CartItem, number>
               data={sale.items}
               columns={columns}
@@ -317,8 +321,7 @@ const SaleDetailPage: React.FC = () => {
               className="w-full"
               emptyMessage="Bu satışta ürün bulunmuyor."
             />
-
-            {/* Toplam Bilgileri */}
+            {/* Toplam Bilgiler */}
             <div className="bg-gray-50 p-4 border-t">
               <div className="flex justify-end space-y-2 text-sm">
                 <div className="w-48 space-y-2">
@@ -340,7 +343,9 @@ const SaleDetailPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Sağ kısım: Durum Bilgisi, İşlem Geçmişi vb. */}
         <div className="space-y-6">
+          {/* Durum Bilgisi */}
           <div className="bg-white p-6 rounded-lg border">
             <h2 className="text-lg font-semibold mb-4">Durum Bilgisi</h2>
             <div className="space-y-4">
@@ -387,6 +392,7 @@ const SaleDetailPage: React.FC = () => {
             </div>
           </div>
 
+          {/* İşlem Geçmişi (örnek) */}
           <div className="bg-white p-6 rounded-lg border">
             <h2 className="text-lg font-semibold mb-4">İşlem Geçmişi</h2>
             <div className="space-y-4">
@@ -401,24 +407,36 @@ const SaleDetailPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
               {sale.status !== "completed" && (
                 <div className="flex gap-3">
                   <div className="text-red-600">
                     <XCircle size={20} />
                   </div>
                   <div>
-                    <div className="text-sm font-medium">
-                      {sale.status === "cancelled"
-                        ? "Satış İptal Edildi"
-                        : "Ürün İade Edildi"}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {sale.refundDate &&
-                        new Date(sale.refundDate).toLocaleString("tr-TR")}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {sale.cancelReason || sale.refundReason}
-                    </div>
+                    {sale.status === "cancelled" ? (
+                      <>
+                        <div className="text-sm font-medium">Satış İptal Edildi</div>
+                        <div className="text-xs text-gray-500">
+                          {sale.cancelDate &&
+                            new Date(sale.cancelDate).toLocaleString("tr-TR")}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {sale.cancelReason}
+                        </div>
+                      </>
+                    ) : sale.status === "refunded" ? (
+                      <>
+                        <div className="text-sm font-medium">Satış İade Edildi</div>
+                        <div className="text-xs text-gray-500">
+                          {sale.refundDate &&
+                            new Date(sale.refundDate).toLocaleString("tr-TR")}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {sale.refundReason}
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               )}
@@ -427,6 +445,7 @@ const SaleDetailPage: React.FC = () => {
         </div>
       </div>
 
+      {/* ReasonModal: İptal */}
       <ReasonModal
         isOpen={showCancelModal}
         onClose={() => setShowCancelModal(false)}
@@ -436,6 +455,7 @@ const SaleDetailPage: React.FC = () => {
         type="cancel"
       />
 
+      {/* ReasonModal: İade */}
       <ReasonModal
         isOpen={showRefundModal}
         onClose={() => setShowRefundModal(false)}
@@ -445,15 +465,18 @@ const SaleDetailPage: React.FC = () => {
         type="refund"
       />
 
-      {/* ReceiptModal Kullanımı */}
+      {/* ReceiptModal */}
       {currentReceipt && (
         <ReceiptModal
           isOpen={showReceiptModal}
-          onClose={() => setShowReceiptModal(false)}
+          onClose={() => {
+            setShowReceiptModal(false);
+            setCurrentReceipt(null);
+          }}
           receiptData={currentReceipt}
         />
       )}
-    </div>
+    </PageLayout>
   );
 };
 

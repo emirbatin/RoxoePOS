@@ -8,6 +8,7 @@ interface SearchFilterPanelProps {
   onReset: () => void;
   showFilter: boolean;
   toggleFilter: () => void;
+  inputRef?: React.RefObject<HTMLInputElement>; 
 }
 
 const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
