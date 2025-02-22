@@ -1,13 +1,12 @@
 // pages/SettingsPage.tsx
-
 import React, { useEffect, useState } from "react";
-import { Printer, Save, Barcode } from "lucide-react";
+import { Printer, Save, Barcode, Building } from "lucide-react";
 import { POSConfig, SerialOptions } from "../types/pos";
 import { BarcodeConfig } from "../types/barcode";
 import { ReceiptConfig } from "../types/receipt";
-import clsx from "clsx";
 import Button from "../components/ui/Button";
 import { useAlert } from "../components/AlertProvider";
+import HotkeySettings from "../components/HotkeySettings";
 
 const SettingsPage: React.FC = () => {
   const { showSuccess, showError } = useAlert();
@@ -74,9 +73,12 @@ const SettingsPage: React.FC = () => {
         const savedReceiptConfig = localStorage.getItem("receiptConfig");
 
         if (savedPosConfig) setPosConfig(JSON.parse(savedPosConfig));
-        if (savedSerialOptions) setSerialOptions(JSON.parse(savedSerialOptions));
-        if (savedBarcodeConfig) setBarcodeConfig(JSON.parse(savedBarcodeConfig));
-        if (savedReceiptConfig) setReceiptConfig(JSON.parse(savedReceiptConfig));
+        if (savedSerialOptions)
+          setSerialOptions(JSON.parse(savedSerialOptions));
+        if (savedBarcodeConfig)
+          setBarcodeConfig(JSON.parse(savedBarcodeConfig));
+        if (savedReceiptConfig)
+          setReceiptConfig(JSON.parse(savedReceiptConfig));
       } catch (err) {
         console.error("Ayarlar yüklenirken hata:", err);
       }
@@ -87,7 +89,6 @@ const SettingsPage: React.FC = () => {
   // 7) POS Bağlantı Testi
   const testConnection = async () => {
     if (posConfig.manualMode) {
-      // Manuel mod aktifken gerçek bağlantı testi yapmıyoruz
       setConnectionStatus("connected");
       setLastChecked(new Date());
       showSuccess("Manuel mod aktif - Bağlantı testi atlandı!");
@@ -147,17 +148,18 @@ const SettingsPage: React.FC = () => {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <Printer
-                className={clsx(
-                  "transition-colors",
+                className={`transition-colors ${
                   (connectionStatus === "connected" || posConfig.manualMode) &&
-                    "text-green-500",
+                  "text-green-500"
+                } ${
                   connectionStatus === "disconnected" &&
-                    !posConfig.manualMode &&
-                    "text-red-500",
+                  !posConfig.manualMode &&
+                  "text-red-500"
+                } ${
                   connectionStatus === "unknown" &&
-                    !posConfig.manualMode &&
-                    "text-gray-400"
-                )}
+                  !posConfig.manualMode &&
+                  "text-gray-400"
+                }`}
                 size={24}
               />
               <h2 className="text-lg font-semibold">POS Cihazı Ayarları</h2>
@@ -194,12 +196,10 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Bağlantı ayar formu (manualMode aktifse devre dışı) */}
           <div
-            className={clsx(
-              "space-y-4",
+            className={`space-y-4 ${
               posConfig.manualMode && "opacity-50 pointer-events-none"
-            )}
+            }`}
           >
             {/* POS Markası */}
             <div>
@@ -216,7 +216,7 @@ const SettingsPage: React.FC = () => {
               />
             </div>
 
-            {/* Baud Rate */}
+            {/* Serial Ayarları */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Baud Rate
@@ -238,7 +238,6 @@ const SettingsPage: React.FC = () => {
               </select>
             </div>
 
-            {/* Data Bits */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Data Bits
@@ -258,7 +257,6 @@ const SettingsPage: React.FC = () => {
               </select>
             </div>
 
-            {/* Stop Bits */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Stop Bits
@@ -278,7 +276,6 @@ const SettingsPage: React.FC = () => {
               </select>
             </div>
 
-            {/* Parity */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Parity
@@ -299,7 +296,6 @@ const SettingsPage: React.FC = () => {
               </select>
             </div>
 
-            {/* Flow Control */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Flow Control
@@ -322,7 +318,9 @@ const SettingsPage: React.FC = () => {
             {/* Bağlantıyı Test Et Butonu */}
             <div className="flex gap-2 pt-4">
               <Button onClick={testConnection} variant="primary" icon={Printer}>
-                {posConfig.manualMode ? "Manuel Mod Aktif" : "Bağlantıyı Test Et"}
+                {posConfig.manualMode
+                  ? "Manuel Mod Aktif"
+                  : "Bağlantıyı Test Et"}
               </Button>
             </div>
           </div>
@@ -410,8 +408,8 @@ const SettingsPage: React.FC = () => {
         {/* 3) Fiş Ayarları */}
         <div className="bg-white rounded-lg shadow-sm p-6 md:col-span-2">
           <div className="flex items-center gap-2 mb-6">
-            <Printer className="text-primary-600" size={24} />
-            <h2 className="text-lg font-semibold">Fiş Ayarları</h2>
+            <Building className="text-primary-600" size={24} />
+            <h2 className="text-lg font-semibold">İşletme ve Fiş Ayarları</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -616,12 +614,23 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* 4) Klavye Kısayolları */}
+        <div className="md:col-span-2">
+          <HotkeySettings
+            onSave={(newHotkeys) => {
+              window.dispatchEvent(
+                new CustomEvent("hotkeysUpdated", { detail: newHotkeys })
+              );
+            }}
+          />
+        </div>
       </div>
 
       {/* Kaydet Butonu */}
       <div className="m-6">
-        <Button onClick={saveSettings} variant="save" icon={Save}>
-          Kaydet
+        <Button onClick={saveSettings} variant="primary" icon={Save}>
+          Değişiklikleri Kaydet
         </Button>
       </div>
     </div>

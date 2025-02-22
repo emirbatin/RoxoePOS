@@ -1,7 +1,7 @@
 // pages/POSPage.tsx
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { ShoppingCart, Plus, Minus, X, CreditCard, Trash2 } from "lucide-react";
-import { useHotkeys, HotkeysHelper } from "../hooks/useHotkeys";
+import { useHotkeys } from "../hooks/useHotkeys";
 import { CartTab, PaymentMethod, PaymentResult } from "../types/pos";
 import { Product } from "../types/product";
 import { ReceiptInfo } from "../types/receipt";
@@ -12,7 +12,6 @@ import { salesDB } from "../services/salesDB";
 import { Sale } from "../types/sales";
 import {
   calculateCartTotals,
-  calculateCartItemTotals,
   formatCurrency,
   formatVatRate,
 } from "../utils/vatUtils";
@@ -26,19 +25,10 @@ import Card from "../components/ui/Card";
 import SelectProductsModal from "../components/modals/SelectProductModal";
 import ProductGroupTabs from "../components/ProductGroupTabs";
 
-// Yeni eklenen custom hook importları
 import { useProducts } from "../hooks/useProducts";
 import { useCart } from "../hooks/useCart";
 import { useProductGroups } from "../hooks/useProductGroups";
 
-/**
- * POSPage: Satış ekranı (son hâl)
- *  - useProducts ile ürün/kategori çekme + arama + kategori filtre
- *  - useCart ile çoklu sepet sekmesi, sepete ekleme, silme, vs.
- *  - Barkod okuyucu suffix ile otomatik ekleme
- *  - '*' + sayı(lar) + Enter ile son ürünün miktarını değiştirme (multi-digit starMode)
- *  - PaymentModal, ReceiptModal vb. önceki bileşenler aynı mantık
- */
 const POSPage: React.FC = () => {
   const { showError, showSuccess, confirm } = useAlert();
 
@@ -82,13 +72,12 @@ const POSPage: React.FC = () => {
     null
   );
 
-  // 5) UI state’leri (Payment, Receipt, Filtre, SelectProductsModal)
+  // 5) UI state'leri (Payment, Receipt, Filtre, SelectProductsModal)
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [currentReceipt, setCurrentReceipt] = useState<ReceiptInfo | null>(
     null
   );
-  const [showHotkeysHelper, setShowHotkeysHelper] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showSelectProductsModal, setShowSelectProductsModal] = useState(false);
 
@@ -117,203 +106,7 @@ const POSPage: React.FC = () => {
     setShowFilters(false);
   };
 
-  useEffect(() => {
-    if (!barcodeConfig.enabled || !barcodeConfig.suffix) return;
-    if (searchTerm.endsWith(barcodeConfig.suffix)) {
-      const scannedValue = searchTerm.slice(0, -barcodeConfig.suffix.length);
-      const product = products.find((p) => p.barcode === scannedValue);
-      if (product) {
-        addToCart(product); // Burada Enter tuşu ile ekleme yapılabilir
-      }
-      setSearchTerm("");
-    }
-  }, [searchTerm, barcodeConfig, products, addToCart, setSearchTerm]);
-
-  // 9) starMode (çok basamaklı rakam girip son ürün miktarı set etme)
-  const [starMode, setStarMode] = useState(false);
-  const [typedQty, setTypedQty] = useState("");
-
-  function setLastItemQuantity(q: number) {
-    if (!activeTab || activeTab.cart.length === 0) return;
-
-    const lastItem = activeTab.cart[activeTab.cart.length - 1];
-
-    if (lastItem.quantity === q) {
-      return;
-    }
-
-    const updateSuccess = updateQuantity(lastItem.id, q - lastItem.quantity);
-
-    if (!updateSuccess) {
-      showError(`Stokta sadece ${lastItem.stock} tane ürün var.`);
-    }
-
-    setStarMode(false);
-    setTypedQty("");
-  }
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && !starMode) {
-        e.preventDefault(); // Yıldız modu aktif değilse Enter tuşunu tamamen etkisiz hale getir
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [starMode]);
-
-  useEffect(() => {
-    if (starMode) return; // Yıldız modu aktifken barkod işlemini engelle
-
-    if (!barcodeConfig.enabled || !barcodeConfig.suffix) return;
-    if (searchTerm.endsWith(barcodeConfig.suffix)) {
-      const scannedValue = searchTerm.slice(0, -barcodeConfig.suffix.length);
-      const product = products.find((p) => p.barcode === scannedValue);
-      if (product) {
-        addToCart(product);
-      }
-      setSearchTerm("");
-    }
-  }, [searchTerm, barcodeConfig, products, addToCart, setSearchTerm, starMode]);
-
-  // 10) Hotkeys
-  useHotkeys({
-    hotkeys: [
-      {
-        key: "n",
-        ctrlKey: true,
-        callback: (e) => {
-          e?.preventDefault();
-          startNewSale();
-        },
-      },
-      {
-        key: "p",
-        ctrlKey: true,
-        callback: (e) => {
-          e?.preventDefault();
-          if (activeTab && activeTab.cart.length > 0) setShowPaymentModal(true);
-        },
-      },
-      {
-        key: "Escape",
-        callback: async () => {
-          // Make the callback async
-          if (showPaymentModal) {
-            setShowPaymentModal(false);
-          } else if (searchTerm) {
-            setSearchTerm("");
-          } else {
-            const confirmed = await confirm(
-              "Sepeti tamamen temizlemek istediğinize emin misiniz?"
-            ); // Await the Promise
-            if (confirmed) {
-              clearCart();
-            }
-          }
-        },
-      },
-      {
-        key: "Enter",
-        callback: (e) => {
-          if (starMode && typedQty) {
-            e?.preventDefault();
-            const q = parseInt(typedQty, 10);
-            if (!isNaN(q) && q > 0) {
-              if (activeTab && activeTab.cart.length > 0) {
-                const lastItem = activeTab.cart[activeTab.cart.length - 1];
-                if (q > lastItem.stock) {
-                  showError(`Only ${lastItem.stock} items are in stock.`);
-                  setStarMode(false);
-                  setTypedQty("");
-                  return;
-                }
-              }
-              setLastItemQuantity(q);
-            }
-            setStarMode(false);
-            setTypedQty("");
-          } else if (starMode && !typedQty) {
-            e?.preventDefault();
-          }
-        },
-      },
-      {
-        key: "k",
-        ctrlKey: true,
-        callback: (e) => {
-          e?.preventDefault();
-          searchInputRef.current?.focus();
-        },
-      },
-      {
-        key: "/",
-        ctrlKey: true,
-        callback: (e) => {
-          e?.preventDefault();
-          setShowHotkeysHelper((prev) => !prev);
-        },
-      },
-      {
-        key: "t",
-        ctrlKey: true,
-        callback: (e) => {
-          e?.preventDefault();
-          addNewTab();
-        },
-      },
-      {
-        key: "w",
-        ctrlKey: true,
-        callback: (e) => {
-          e?.preventDefault();
-          if (cartTabs.length > 1) removeTab(activeTabId);
-        },
-      },
-      {
-        key: "Tab",
-        ctrlKey: true,
-        callback: (e) => {
-          e?.preventDefault();
-          const currentIndex = cartTabs.findIndex(
-            (tab) => tab.id === activeTabId
-          );
-          const nextIndex = (currentIndex + 1) % cartTabs.length;
-          setActiveTabId(cartTabs[nextIndex].id);
-        },
-      },
-      // starMode logic
-      {
-        key: "*",
-        callback: (e) => {
-          e?.preventDefault();
-          setStarMode(true);
-          setTypedQty("");
-        },
-      },
-      ...Array.from({ length: 10 }, (_, i) => ({
-        // 0-9 tuşları
-        key: i.toString(),
-        callback: (e?: KeyboardEvent) => {
-          if (starMode) {
-            e?.preventDefault();
-            setTypedQty((prev) => prev + i.toString());
-          }
-        },
-      })),
-    ],
-    onQuantityUpdate: (newQuantity) => {
-      if (!activeTab?.cart.length) return;
-      const lastItem = activeTab.cart[activeTab.cart.length - 1];
-      updateQuantity(lastItem.id, newQuantity - lastItem.quantity);
-    },
-  });
-
-  // 11) Final: Start new sale
+  // Start new sale
   async function startNewSale(): Promise<void> {
     if (!activeTab?.cart.length) {
       searchInputRef.current?.focus();
@@ -329,7 +122,75 @@ const POSPage: React.FC = () => {
     }
   }
 
-  // 12) product group ekleme (SelectProductsModal)
+  // Hotkeys setup
+  const { quantityMode, tempQuantity } = useHotkeys({
+    hotkeys: [
+      {
+        key: "n",
+        ctrlKey: true,
+        callback: startNewSale,
+      },
+      {
+        key: "p",
+        ctrlKey: true,
+        callback: () => activeTab?.cart.length && setShowPaymentModal(true),
+      },
+      {
+        key: "Escape",
+        callback: async () => {
+          if (showPaymentModal) {
+            setShowPaymentModal(false);
+          } else if (searchTerm) {
+            setSearchTerm("");
+          } else {
+            const confirmed = await confirm(
+              "Sepeti tamamen temizlemek istediğinize emin misiniz?"
+            );
+            if (confirmed) clearCart();
+          }
+        },
+      },
+      {
+        key: "k",
+        ctrlKey: true,
+        callback: () => searchInputRef.current?.focus(),
+      },
+      {
+        key: "t",
+        ctrlKey: true,
+        callback: addNewTab,
+      },
+      {
+        key: "w",
+        ctrlKey: true,
+        callback: () => cartTabs.length > 1 && removeTab(activeTabId),
+      },
+      {
+        key: "Tab",
+        ctrlKey: true,
+        callback: () => {
+          const currentIndex = cartTabs.findIndex(
+            (tab) => tab.id === activeTabId
+          );
+          const nextIndex = (currentIndex + 1) % cartTabs.length;
+          setActiveTabId(cartTabs[nextIndex].id);
+        },
+      },
+    ],
+    onQuantityUpdate: (newQuantity) => {
+      if (!activeTab?.cart.length) return;
+      const lastItem = activeTab.cart[activeTab.cart.length - 1];
+
+      if (newQuantity > lastItem.stock) {
+        showError(`Stokta sadece ${lastItem.stock} tane ürün var.`);
+        return;
+      }
+
+      updateQuantity(lastItem.id, newQuantity - lastItem.quantity);
+    },
+  });
+
+  // Çoklu ürün ekleme (SelectProductsModal)
   const handleAddMultipleProducts = async (productIds: number[]) => {
     if (activeGroupId === 1) return;
     try {
@@ -345,15 +206,12 @@ const POSPage: React.FC = () => {
     }
   };
 
-  // Son filtre: group'a göre
+  // Group'a göre filtre
   const finalFilteredProducts = useMemo(() => {
     if (activeGroupId === 1) {
-      // Varsayılan grup (hepsi)
       return filteredProducts;
     }
     const group = productGroups.find((g) => g.id === activeGroupId);
-
-    // `group?.productIds ?? []` => Eğer group yoksa veya productIds tanımsızsa boş dizi dön
     return filteredProducts.filter((p) =>
       (group?.productIds ?? []).includes(p.id)
     );
@@ -412,7 +270,8 @@ const POSPage: React.FC = () => {
 
     try {
       const newSale = await salesDB.addSale(saleData);
-      // Veresiye
+
+      // Veresiye işlemleri
       if (paymentResult.mode === "normal") {
         if (paymentResult.paymentMethod === "veresiye" && selectedCustomer) {
           await creditService.addTransaction({
@@ -424,7 +283,6 @@ const POSPage: React.FC = () => {
           });
         }
       } else {
-        // split detail
         if (paymentResult.productPayments) {
           for (const pp of paymentResult.productPayments) {
             if (pp.paymentMethod === "veresiye" && pp.customer) {
@@ -547,8 +405,8 @@ const POSPage: React.FC = () => {
 
           {/* Ürün Grid */}
           <div className="flex-1 p-4 overflow-y-auto">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {/* Grup'a çoklu ekleme butonu (aktif grup != 1) */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-lg:grid-cols-4 gap-4">
+              {/* Grup'a çoklu ekleme butonu */}
               {activeGroupId !== 1 && (
                 <Card
                   variant="addProduct"
@@ -758,7 +616,14 @@ const POSPage: React.FC = () => {
           )}
         </div>
 
-        <HotkeysHelper />
+        {/* Star Mode Göstergesi */}
+        {quantityMode && (
+          <div className="fixed bottom-4 right-4 bg-gray-200 text-gray-800 p-2 rounded shadow-md">
+            <div>Yıldız Modu Aktif</div>
+            <div>Miktar: {tempQuantity || "?"}</div>
+            <div className="text-xs text-gray-500">(Enter ile onayla)</div>
+          </div>
+        )}
       </div>
 
       {/* Ödeme Modal */}
@@ -795,7 +660,7 @@ const POSPage: React.FC = () => {
         />
       )}
 
-      {/* Çoklu ürün ekleme Modal (aktif gruba) */}
+      {/* Çoklu ürün ekleme Modal */}
       <SelectProductsModal
         isOpen={showSelectProductsModal}
         onClose={() => setShowSelectProductsModal(false)}
@@ -805,15 +670,6 @@ const POSPage: React.FC = () => {
           productGroups.find((g) => g.id === activeGroupId)?.productIds || []
         }
       />
-
-      {/* Yıldız Modu (opsiyonel debug) */}
-      {starMode && (
-        <div className="fixed bottom-4 right-4 bg-gray-200 text-gray-800 p-2 rounded shadow-md">
-          <div>Yıldız Modu Aktif</div>
-          <div>Miktar: {typedQty || "?"}</div>
-          <div className="text-xs text-gray-500">(Enter ile onayla)</div>
-        </div>
-      )}
     </PageLayout>
   );
 };

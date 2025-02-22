@@ -8,7 +8,7 @@ interface SearchFilterPanelProps {
   onReset: () => void;
   showFilter: boolean;
   toggleFilter: () => void;
-  inputRef?: React.RefObject<HTMLInputElement>; 
+  inputRef?: React.RefObject<HTMLInputElement>;
 }
 
 const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
@@ -17,11 +17,13 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
   onReset,
   showFilter,
   toggleFilter,
+  inputRef,
 }) => {
   return (
     <div className="flex gap-2 mb-4">
       <div className="flex-1 relative">
         <input
+          ref={inputRef} // inputRef'i input'a bağladık
           type="text"
           placeholder="Ara..."
           value={searchTerm}

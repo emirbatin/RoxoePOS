@@ -12,6 +12,17 @@ export interface UseHotkeysProps {
   onQuantityUpdate?: (quantity: number) => void;
 }
 
-export interface HotkeysHelperProps {
-    className?: string;
-  }
+export interface SpecialHotkeySettings {
+  id: string;
+  description: string;
+  type: 'quantity' | 'numpad';
+  defaultTrigger: string;
+  currentTrigger: string;
+  defaultTerminator?: string;
+  currentTerminator?: string;
+}
+
+export interface UseHotkeysReturn {
+  quantityMode: boolean;
+  tempQuantity: string;
+}
