@@ -1,5 +1,4 @@
-// components/SearchFilterPanel.tsx
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Search, Filter, RefreshCw } from "lucide-react";
 
 interface SearchFilterPanelProps {
@@ -19,11 +18,52 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
   toggleFilter,
   inputRef,
 }) => {
+  const [barcodeBuffer, setBarcodeBuffer] = useState("");
+  let timeoutRef: NodeJS.Timeout;
+  let lastKeyPressTime = Date.now();
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const currentTime = Date.now();
+      const timeSinceLastKeyPress = currentTime - lastKeyPressTime;
+      lastKeyPressTime = currentTime;
+
+      // Barkodlar genellikle çok hızlı gelir (< 100ms)
+      if (timeSinceLastKeyPress > 100) {
+        setBarcodeBuffer(""); // Eğer önceki tuş ile bu tuş arasındaki süre uzun ise, yeni giriş başlat
+      }
+
+      if (event.key === "Enter" && barcodeBuffer.length > 5) {
+        onSearchTermChange(barcodeBuffer);
+        setBarcodeBuffer(""); // Barkodu sıfırla
+        return;
+      }
+
+      if (/^[a-zA-Z0-9]$/.test(event.key)) {
+        // Sadece harf ve rakamları al (özel karakterleri engelle)
+        setBarcodeBuffer((prev) => prev + event.key);
+      }
+
+      clearTimeout(timeoutRef);
+      timeoutRef = setTimeout(() => {
+        if (barcodeBuffer.length > 5) {
+          onSearchTermChange(barcodeBuffer); // Barkodu input'a yaz
+        }
+        setBarcodeBuffer(""); // Barkodu sıfırla
+      }, 300); // 300ms içinde yeni giriş olmazsa barkod tamamlandı say
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [barcodeBuffer]);
+
   return (
     <div className="flex gap-2 mb-4">
       <div className="flex-1 relative">
         <input
-          ref={inputRef} // inputRef'i input'a bağladık
+          ref={inputRef}
           type="text"
           placeholder="Ara..."
           value={searchTerm}

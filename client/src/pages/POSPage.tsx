@@ -3,7 +3,6 @@ import React, { useState, useRef, useMemo, useEffect } from "react";
 import { ShoppingCart, Plus, Minus, X, CreditCard, Trash2 } from "lucide-react";
 import { useHotkeys } from "../hooks/useHotkeys";
 import { CartTab, PaymentMethod, PaymentResult } from "../types/pos";
-import { Product } from "../types/product";
 import { ReceiptInfo } from "../types/receipt";
 import { Customer } from "../types/credit";
 import { productService } from "../services/productDB";
