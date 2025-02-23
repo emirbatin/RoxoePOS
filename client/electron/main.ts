@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import LicenseManager from './license';
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -15,6 +16,8 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 
 let win: BrowserWindow | null;
+
+new LicenseManager()
 
 function createWindow() {
   win = new BrowserWindow({

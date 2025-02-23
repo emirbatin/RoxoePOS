@@ -1,12 +1,22 @@
 // pages/SettingsPage.tsx
 import React, { useEffect, useState } from "react";
-import { Printer, Save, Barcode, Building } from "lucide-react";
+import { Printer, Save, Barcode, Building, Key } from "lucide-react";
 import { POSConfig, SerialOptions } from "../types/pos";
 import { BarcodeConfig } from "../types/barcode";
 import { ReceiptConfig } from "../types/receipt";
 import Button from "../components/ui/Button";
 import { useAlert } from "../components/AlertProvider";
 import HotkeySettings from "../components/HotkeySettings";
+import LicenseCard from "../components/LicenseCard";
+
+interface LicenseInfo {
+  maskedLicense: string;
+  expiresAt: string | null;
+  isActive: boolean;
+  daysRemaining: number | null;
+  isExpired: boolean;
+  isExpiring: boolean;
+}
 
 const SettingsPage: React.FC = () => {
   const { showSuccess, showError } = useAlert();
@@ -63,6 +73,15 @@ const SettingsPage: React.FC = () => {
     },
   });
 
+  // Lisans Ayarları
+  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
+  const [newLicenseKey, setNewLicenseKey] = useState("");
+  const [licenseStatus, setLicenseStatus] = useState<{
+    loading: boolean;
+    error: string | null;
+  }>({ loading: false, error: null });
+
+  // 6) Load Settings from localStorage
   // 6) Load Settings from localStorage
   useEffect(() => {
     const loadSettings = () => {
@@ -84,7 +103,66 @@ const SettingsPage: React.FC = () => {
       }
     };
     loadSettings();
+
+    // Burada lisansı da kontrol et
+    checkLicense();
   }, []);
+
+  // Lisans kontrolü için eklenen fonksiyon:
+  const checkLicense = async () => {
+    try {
+      const result = await window.ipcRenderer.invoke("get-license-info");
+      if (result.exists) {
+        setLicenseInfo({
+          maskedLicense: result.maskedLicense,
+          expiresAt: result.expiresAt, // API'den dönen geçerlilik tarihi veya null
+          isActive: !result.isExpired,
+          daysRemaining: result.expiresAt ? result.daysLeft : null,
+          isExpired: result.isExpired,
+          isExpiring: result.isExpiring,
+        });
+      } else {
+        setLicenseInfo(null);
+      }
+    } catch (error) {
+      console.error("Lisans bilgisi alınamadı:", error);
+      setLicenseInfo(null);
+    }
+  };
+
+  // Lisans yenileme/aktivasyon fonksiyonu:
+  const renewLicense = async () => {
+    if (!newLicenseKey) {
+      showError("Lütfen lisans anahtarı girin");
+      return;
+    }
+    setLicenseStatus({ loading: true, error: null });
+    try {
+      const result = await window.ipcRenderer.invoke(
+        "activate-license",
+        newLicenseKey
+      );
+      if (result.success) {
+        showSuccess("Lisans başarıyla yenilendi");
+        checkLicense();
+        setNewLicenseKey("");
+        setLicenseStatus({ loading: false, error: null });
+      } else {
+        setLicenseStatus({
+          loading: false,
+          error: result.error || "Lisans yenileme başarısız oldu",
+        });
+      }
+    } catch (error) {
+      setLicenseStatus({
+        loading: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Lisans yenileme sırasında hata oluştu",
+      });
+    }
+  };
 
   // 7) POS Bağlantı Testi
   const testConnection = async () => {
@@ -616,7 +694,7 @@ const SettingsPage: React.FC = () => {
         </div>
 
         {/* 4) Klavye Kısayolları */}
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 space-y-4">
           <HotkeySettings
             onSave={(newHotkeys) => {
               window.dispatchEvent(
@@ -624,6 +702,53 @@ const SettingsPage: React.FC = () => {
               );
             }}
           />
+
+          {/* Lisans Yönetimi Bölümü */}
+          {licenseInfo ? (
+            <LicenseCard
+              licenseInfo={{
+                maskedLicense: licenseInfo.maskedLicense,
+                expiresAt: licenseInfo.expiresAt,
+                daysLeft: licenseInfo.daysRemaining,
+                isExpired: licenseInfo.isExpired,
+                isExpiring: licenseInfo.isExpiring,
+                isActive: licenseInfo.isActive,
+              }}
+              onRenew={renewLicense}
+              renewalLoading={licenseStatus.loading}
+              renewalError={licenseStatus.error}
+            />
+          ) : (
+            <div className="bg-white p-6 rounded-lg shadow-lg">
+              <p className="text-sm text-red-600 mb-4">
+                Lisans bilgisi bulunamadı. Lisansınızı aktifleştirmek için
+                aşağıdaki alana lisans anahtarınızı girin.
+              </p>
+              <input
+                type="text"
+                value={newLicenseKey}
+                onChange={(e) => setNewLicenseKey(e.target.value.toUpperCase())}
+                placeholder="Lisans anahtarınızı girin"
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500 mb-4"
+                disabled={licenseStatus.loading}
+              />
+              {licenseStatus.error && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded mb-4">
+                  <p className="text-sm text-red-700">{licenseStatus.error}</p>
+                </div>
+              )}
+              <Button
+                onClick={renewLicense}
+                variant="primary"
+                icon={Key}
+                disabled={licenseStatus.loading}
+              >
+                {licenseStatus.loading
+                  ? "Aktifleştiriliyor..."
+                  : "Lisansı Aktifleştir"}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

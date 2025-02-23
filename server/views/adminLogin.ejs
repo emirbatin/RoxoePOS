@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Key Girişi</title>
+  <style>
+    body { font-family: sans-serif; text-align:center; margin:50px; }
+    input { padding:10px; width:250px; margin-top:10px; }
+    button { padding:10px 20px; margin-top:10px; }
+    .error { color:red; margin:10px; }
+  </style>
+</head>
+<body>
+  <h2>Admin Paneli - Key Girişi</h2>
+
+  <% if (error) { %>
+    <p class="error"><%= error %></p>
+  <% } %>
+
+  <form action="http://localhost:3001/admin/login" method="POST">
+    <input type="password" name="adminKey" placeholder="Admin Key" required />
+    <br>
+    <button type="submit">Giriş</button>
+  </form>
+</body>
+</html>

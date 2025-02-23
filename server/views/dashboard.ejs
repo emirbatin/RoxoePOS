@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Panel - Lisans Yönetimi</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top:20px; }
+    th, td { border:1px solid #ccc; padding:8px; }
+  </style>
+</head>
+<body>
+  <h1>Admin Panel - Lisanslar</h1>
+
+  <p><a href="/admin/logout">[Çıkış Yap]</a></p>
+
+  <!-- Lisans Oluşturma Formu -->
+  <form action="/admin/create" method="POST" style="margin-bottom:20px;">
+    <h3>Yeni Lisans Oluştur</h3>
+    <label>Firma Adı: </label>
+    <input type="text" name="companyName" />
+    <label>Max Activations: </label>
+    <input type="number" name="maxActivations" />
+    <label>Expires (YYYY-MM-DD): </label>
+    <input type="text" name="expires" />
+    <button type="submit">Oluştur</button>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Key</th>
+        <th>Firma</th>
+        <th>MaxAct</th>
+        <th>ActCount</th>
+        <th>Expires</th>
+        <th>Sil</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% licenses.forEach(license => { %>
+        <tr>
+          <td><%= license.key %></td>
+          <td><%= license.usedBy || "N/A" %></td>
+          <td><%= license.maxActivations %></td>
+          <td><%= license.activationsCount %></td>
+          <td>
+            <% if (license.expires) { %>
+              <%= license.expires.toISOString().slice(0,10) %>
+            <% } else { %>
+              Süresiz
+            <% } %>
+          </td>
+          <td>
+            <form action="/admin/delete/<%= license.key %>" method="POST" style="display:inline;">
+              <button type="submit">Sil</button>
+            </form>
+          </td>
+        </tr>
+      <% }); %>
+    </tbody>
+  </table>
+</body>
+</html>
