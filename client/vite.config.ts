@@ -2,9 +2,21 @@ import { defineConfig } from 'vite'
 import path from 'node:path'
 import electron from 'vite-plugin-electron/simple'
 import react from '@vitejs/plugin-react'
+import dotenv from 'dotenv'
+
+// .env dosyasını manuel yükle
+dotenv.config()
+
+console.log('LICENSE_API_URL:', process.env.LICENSE_API_URL);
+console.log('SECRET_KEY:', process.env.SECRET_KEY);
+
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  define: {
+    'process.env.LICENSE_API_URL': JSON.stringify(process.env.LICENSE_API_URL || 'http://localhost:3001/api/licenses'),
+    'process.env.SECRET_KEY': JSON.stringify(process.env.SECRET_KEY || 'default-secret-key')
+  },
   plugins: [
     react(),
     electron({

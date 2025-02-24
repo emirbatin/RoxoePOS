@@ -64,11 +64,20 @@ export function useProducts(options?: UseProductsOptions) {
   async function refreshProducts() {
     try {
       setLoading(true);
+  
+      // Ürünleri tekrar çek
       const dbProducts = await productService.getAllProducts();
       setProducts(dbProducts);
+  
+      // Kategorileri tekrar çek (eğer enableCategories aktifse)
+      if (options?.enableCategories) {
+        const dbCategories = await productService.getCategories();
+        setCategories(dbCategories);
+      }
+  
       setLoading(false);
     } catch (error) {
-      console.error("Ürünler yenilenirken hata:", error);
+      console.error("Ürünler ve kategoriler yenilenirken hata:", error);
       setLoading(false);
     }
   }
