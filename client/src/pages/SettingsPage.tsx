@@ -175,7 +175,7 @@ const SettingsPage: React.FC = () => {
 
     try {
       // Web Serial API
-      const port = await navigator.serial.requestPort();
+      const port = await window.serialAPI.requestPort();
       await port.open(serialOptions);
 
       // Status komutu gönder

@@ -55,7 +55,7 @@ export class POSService {
       const config = this.DEFAULT_CONFIGS[posType];
       if (!config) throw new Error(`POS tipi desteklenmiyor: ${posType}`);
 
-      const port = await navigator.serial.requestPort();
+      const port = await window.serialAPI.requestPort();
       await port.open({ baudRate: config.baudRate });
       this.port = port;
       this.currentConfig = config;

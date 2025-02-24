@@ -28,7 +28,7 @@ class LicenseManager {
       name: 'license',
       encryptionKey: 'your-secret-key'
     });
-    this.API_URL = 'http://localhost:3001/api/licenses';
+    this.API_URL = 'https://roxoepos-server.onrender.com/api/licenses';
     this.setupListeners();
   }
 

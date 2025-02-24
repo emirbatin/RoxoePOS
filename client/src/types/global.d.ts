@@ -28,5 +28,9 @@ export interface IElectronAPI {
 declare global {
   interface Window {
     electron: IElectronAPI;
+    serialAPI: {
+      requestPort: () => Promise<any>;
+      getPorts: () => Promise<any[]>;
+    };
   }
 }
