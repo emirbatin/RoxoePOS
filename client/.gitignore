@@ -30,4 +30,4 @@ certificate.pfx
 *.sln
 *.sw?
 
-
+.env
