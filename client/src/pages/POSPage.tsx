@@ -89,7 +89,20 @@ const POSPage: React.FC = () => {
     removeProductFromGroup,
     refreshGroups,
   } = useProductGroups();
-  const [activeGroupId, setActiveGroupId] = useState<number>(1);
+
+  // activeGroupId'yi başlangıçta 0 olarak ayarla
+  const [activeGroupId, setActiveGroupId] = useState<number>(0);
+
+  // Grupları yükledikten sonra varsayılan grubu (Tümü) bul ve aktif yap
+  useEffect(() => {
+    if (productGroups.length > 0) {
+      const defaultGroup = productGroups.find((g) => g.isDefault);
+      if (defaultGroup) {
+        console.log("Setting default group as active:", defaultGroup);
+        setActiveGroupId(defaultGroup.id);
+      }
+    }
+  }, [productGroups]);
 
   // 7) Barkod config + input ref
   const [barcodeConfig] = useState(() => {
@@ -120,6 +133,25 @@ const POSPage: React.FC = () => {
       searchInputRef.current?.focus();
     }
   }
+
+  // Yeni grup ekleme işlemi - geliştirilmiş hata yakalama ile
+  const handleAddGroup = async () => {
+    console.log("Add group handler triggered");
+    try {
+      // Sabit isim kullan
+      const groupName = "Yeni Grup";
+      console.log(`Adding new group: ${groupName}`);
+
+      const g = await addGroup(groupName);
+      console.log("Group added successfully:", g);
+
+      setActiveGroupId(g.id);
+      showSuccess(`'${groupName}' grubu başarıyla eklendi`);
+    } catch (error) {
+      console.error("Grup eklenirken hata oluştu:", error);
+      showError("Grup eklenirken bir hata oluştu. Lütfen tekrar deneyin.");
+    }
+  };
 
   // Hotkeys setup
   const { quantityMode, tempQuantity } = useHotkeys({
@@ -189,9 +221,14 @@ const POSPage: React.FC = () => {
     },
   });
 
+  // Grup için geliştirilen özelliklerin durumu hakkında ek log
+  useEffect(() => {
+    console.log("Product groups loaded:", productGroups);
+  }, [productGroups]);
+
   // Çoklu ürün ekleme (SelectProductsModal)
   const handleAddMultipleProducts = async (productIds: number[]) => {
-    if (activeGroupId === 1) return;
+    if (activeGroupId === 0) return;
     try {
       await Promise.all(
         productIds.map((pid) =>
@@ -202,14 +239,20 @@ const POSPage: React.FC = () => {
       showSuccess("Ürünler gruba eklendi");
     } catch (error) {
       showError("Ürün eklenirken hata oluştu");
+      console.error("Multiple products add error:", error);
     }
   };
 
-  // Group'a göre filtre
+  // Group'a göre filtre - Tümü grubu için tüm ürünleri göster
   const finalFilteredProducts = useMemo(() => {
-    if (activeGroupId === 1) {
+    const defaultGroup = productGroups.find((g) => g.isDefault);
+
+    // Eğer aktif grup varsayılan grup ise tüm filtrelenmiş ürünleri göster
+    if (defaultGroup && activeGroupId === defaultGroup.id) {
       return filteredProducts;
     }
+
+    // Diğer gruplar için sadece o gruba ait ürünleri göster
     const group = productGroups.find((g) => g.id === activeGroupId);
     return filteredProducts.filter((p) =>
       (group?.productIds ?? []).includes(p.id)
@@ -379,39 +422,45 @@ const POSPage: React.FC = () => {
             groups={productGroups}
             activeGroupId={activeGroupId}
             onGroupChange={setActiveGroupId}
-            onAddGroup={async () => {
-              try {
-                const g = await addGroup("Yeni Grup");
-                setActiveGroupId(g.id);
-              } catch (error) {
-                console.error("Grup eklenirken hata:", error);
-              }
-            }}
+            onAddGroup={handleAddGroup} // Geliştirilmiş fonksiyon kullanıyoruz
             onRenameGroup={renameGroup}
             onDeleteGroup={async (gid) => {
               const c = await confirm(
                 "Bu grubu silmek istediğinize emin misiniz?"
               );
               if (!c) return;
-              await productService.deleteProductGroup(gid);
-              await refreshGroups();
-              if (activeGroupId === gid) {
-                setActiveGroupId(1);
+              try {
+                await productService.deleteProductGroup(gid);
+                await refreshGroups();
+
+                // Eğer silinen grup aktif grupsa, varsayılan gruba dön
+                if (activeGroupId === gid) {
+                  const defaultGroup = productGroups.find((g) => g.isDefault);
+                  if (defaultGroup) {
+                    setActiveGroupId(defaultGroup.id);
+                  }
+                }
+
+                showSuccess("Grup başarıyla silindi");
+              } catch (error) {
+                console.error("Delete group error:", error);
+                showError("Grup silinirken bir hata oluştu");
               }
-              showSuccess("Grup başarıyla silindi");
             }}
           />
 
           {/* Ürün Grid */}
           <div className="flex-1 p-4 overflow-y-auto">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-lg:grid-cols-4 gap-4">
-              {/* Grup'a çoklu ekleme butonu */}
-              {activeGroupId !== 1 && (
-                <Card
-                  variant="addProduct"
-                  onClick={() => setShowSelectProductsModal(true)}
-                />
-              )}
+              {/* Grup'a çoklu ekleme butonu - varsayılan grup değilse göster */}
+              {activeGroupId !== 0 &&
+                !productGroups.find((g) => g.id === activeGroupId)
+                  ?.isDefault && (
+                  <Card
+                    variant="addProduct"
+                    onClick={() => setShowSelectProductsModal(true)}
+                  />
+                )}
               {finalFilteredProducts.map((product) => (
                 <Card
                   key={product.id}
@@ -425,7 +474,8 @@ const POSPage: React.FC = () => {
                   onClick={() => addToCart(product)}
                   disabled={product.stock === 0}
                   onAddToGroup={
-                    activeGroupId !== 1 &&
+                    !productGroups.find((g) => g.id === activeGroupId)
+                      ?.isDefault &&
                     !productGroups
                       .find((g) => g.id === activeGroupId)
                       ?.productIds?.includes(product.id)
@@ -433,7 +483,8 @@ const POSPage: React.FC = () => {
                       : undefined
                   }
                   onRemoveFromGroup={
-                    activeGroupId !== 1 &&
+                    !productGroups.find((g) => g.id === activeGroupId)
+                      ?.isDefault &&
                     productGroups
                       .find((g) => g.id === activeGroupId)
                       ?.productIds?.includes(product.id)

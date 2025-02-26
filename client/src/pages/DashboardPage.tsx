@@ -30,7 +30,7 @@ import { Sale } from "../types/sales";
 import { ProductStats } from "../types/product";
 import { Table } from "../components/ui/Table";
 import { Pagination } from "../components/ui/Pagination";
-import { useSales } from "../hooks/useSales";   // <-- Satış verileri için custom hook
+import { useSales } from '../hooks/useSales';   // <-- Satış verileri için custom hook
 import { calculateStatsForDashboard } from "../utils/dashboardStats"; 
 // Yukarıdaki fonksiyon hayali bir utils. Siz projenize göre yazabilirsiniz.
 

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useNotifications } from "../contexts/NotificationContext";
 import NotificationPopup from "../components/NotificationPopup";
+import ResetDatabaseButton from "../components/ResetDatabaseButton";
 
 const TopNav = () => {
   const navigate = useNavigate();
@@ -23,6 +24,12 @@ const TopNav = () => {
       <h1 className="text-xl font-semibold text-gray-800">Roxoe POS</h1>
       <div className="flex-1 flex justify-center">
         <nav className="flex items-center gap-4">
+          {/*
+<div className="fixed bottom-2 right-2">
+            <ResetDatabaseButton />
+          </div>
+          */}
+
           <button
             onClick={() => navigate("/pos")}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-50"

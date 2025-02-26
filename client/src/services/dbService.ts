@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 import { encryptionService } from './encryptionService';
 
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const createEncryptedDB = (dbName: string) => {
   return {

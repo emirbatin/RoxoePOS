@@ -2,7 +2,7 @@ import { Sale } from "../types/sales";
 
 const DB_NAME = "salesDB";
 const STORE_NAME = "sales";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 // IndexedDB veritabanını başlatma
 async function initSalesDB(): Promise<IDBDatabase> {

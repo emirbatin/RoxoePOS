@@ -35,8 +35,8 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
     }
   }, [editingGroupId]);
 
-  const handleMouseDown = (groupId: number) => {
-    if (groupId === 1) return; // Varsayılan grup için çalışmasın
+  const handleMouseDown = (groupId: number, isDefault: boolean) => {
+    if (isDefault) return; // Varsayılan grup için çalışmasın
     
     pressTimer.current = setTimeout(() => {
       setShakingGroupId(groupId);
@@ -51,9 +51,9 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent, groupId: number) => {
+  const handleContextMenu = (e: React.MouseEvent, groupId: number, isDefault: boolean) => {
     e.preventDefault();
-    if (groupId === 1) return; // Varsayılan grup için çalışmasın
+    if (isDefault) return; // Varsayılan grup için çalışmasın
     
     setShakingGroupId(groupId);
     setShowDeleteButton(groupId);
@@ -73,16 +73,36 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
     setEditingGroupId(null);
   };
 
+  // Click olayı sonrası reset ediyoruz
+  const handleClick = (groupId: number) => {
+    if (!isLongPress) {
+      onGroupChange(groupId);
+    }
+    setIsLongPress(false);
+  };
+
+  // "Yeni Grup" butonuna tıklama işleyicisi
+  const handleAddGroupClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      console.log("Add group button clicked");
+      onAddGroup();
+    } catch (error) {
+      console.error("Add group button click error:", error);
+    }
+  };
+
   return (
     <div className="flex items-center gap-2 p-2 mb-4 bg-white rounded-lg shadow-sm overflow-x-auto">
       {groups.map((group) => (
         <div
           key={group.id}
-          onMouseDown={() => handleMouseDown(group.id)}
+          onMouseDown={() => handleMouseDown(group.id, !!group.isDefault)}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          onContextMenu={(e) => handleContextMenu(e, group.id)}
-          onDoubleClick={() => handleDoubleClick(group)}
+          onContextMenu={(e) => handleContextMenu(e, group.id, !!group.isDefault)}
+          onDoubleClick={() => !group.isDefault && handleDoubleClick(group)}
           className={`relative group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all
             ${activeGroupId === group.id
               ? 'bg-primary-50 text-primary-600'
@@ -90,7 +110,7 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
             }
             ${shakingGroupId === group.id ? 'animate-shake' : ''}
           `}
-          onClick={() => !isLongPress && onGroupChange(group.id)}
+          onClick={() => handleClick(group.id)}
         >
           {editingGroupId === group.id ? (
             <input
@@ -130,9 +150,10 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
         </div>
       ))}
       <button
-        onClick={onAddGroup}
+        onClick={handleAddGroupClick}
         className="p-2 rounded-lg hover:bg-gray-50 text-primary-600"
         title="Yeni Grup"
+        id="addGroupButton" // ID ekleyerek DOM'da kolay erişim sağlıyoruz
       >
         <Plus size={20} />
       </button>

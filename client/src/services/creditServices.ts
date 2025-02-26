@@ -2,7 +2,7 @@ import { openDB } from "idb";
 import { Customer, CreditTransaction, CustomerSummary } from "../types/credit";
 
 const DB_NAME = "creditDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 class CreditService {
   private dbPromise = openDB(DB_NAME, DB_VERSION, {

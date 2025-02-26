@@ -1,7 +1,7 @@
 // pages/CreditPage.tsx
 
 import React, { useState, useEffect } from "react";
-import { DollarSign, Users, AlertTriangle, CreditCard } from "lucide-react";
+import { DollarSign, Users, AlertTriangle, CreditCard, UserPlus } from "lucide-react";
 import { Customer } from "../types/credit";
 import CustomerList from "../components/ui/CustomerList";
 import CustomerModal from "../components/modals/CustomerModal";
@@ -64,7 +64,7 @@ const CreditPage: React.FC = () => {
     customersWithOverdue: 0,
   });
 
-  // Veri yükleme: Müşteri summary’leri
+  // Veri yükleme: Müşteri summary'leri
   useEffect(() => {
     const loadSummaries = async () => {
       try {
@@ -158,6 +158,12 @@ const CreditPage: React.FC = () => {
     }
     setShowCustomerModal(false);
     setSelectedCustomer(undefined);
+  };
+
+  const handleAddCustomer = () => {
+    // Yeni müşteri eklemek için modalı aç
+    setSelectedCustomer(undefined);
+    setShowCustomerModal(true);
   };
 
   const handleDeleteCustomer = async (customerId: number) => {
@@ -278,14 +284,28 @@ const CreditPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Arama Barı */}
-      <SearchFilterPanel
-        searchTerm={searchQuery}
-        onSearchTermChange={setSearchQuery}
-        onReset={resetFilters}
-        showFilter={showFilters}
-        toggleFilter={() => setShowFilters((prev) => !prev)}
-      />
+      {/* Arama Barı ve Müşteri Ekleme */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="flex-1">
+          <SearchFilterPanel
+            searchTerm={searchQuery}
+            onSearchTermChange={setSearchQuery}
+            onReset={resetFilters}
+            showFilter={showFilters}
+            toggleFilter={() => setShowFilters((prev) => !prev)}
+          />
+        </div>
+        <div className="flex justify-end">
+          <Button
+            onClick={handleAddCustomer}
+            variant="primary"
+            icon={UserPlus}
+            className="w-auto whitespace-nowrap py-2 px-3 text-sm h-10"
+          >
+            Yeni Müşteri
+          </Button>
+        </div>
+      </div>
 
       {/* Ek Filtre Alanı */}
       {showFilters && (
@@ -398,7 +418,7 @@ const CreditPage: React.FC = () => {
             setSelectedDetailCustomer(null);
           }}
           customer={selectedDetailCustomer}
-          transactions={[]} // lazımsa ekleyin
+          transactions={[]} 
           onAddDebt={handleAddDebt}
           onAddPayment={handleAddPayment}
         />
