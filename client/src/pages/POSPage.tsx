@@ -96,14 +96,14 @@ const POSPage: React.FC = () => {
 
   // Grupları yükledikten sonra varsayılan grubu (Tümü) bul ve aktif yap
   useEffect(() => {
-    if (productGroups.length > 0) {
+    if (productGroups.length > 0 && activeGroupId === 0) { // Yalnızca activeGroupId sıfır ise
       const defaultGroup = productGroups.find((g) => g.isDefault);
       if (defaultGroup) {
         console.log("Setting default group as active:", defaultGroup);
         setActiveGroupId(defaultGroup.id);
       }
     }
-  }, [productGroups]);
+  }, [productGroups, activeGroupId]); // activeGroupId bağımlılık olarak eklendi
 
   // 7) Barkod config + input ref
   const [barcodeConfig] = useState(() => {
