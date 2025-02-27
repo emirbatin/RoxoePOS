@@ -91,7 +91,9 @@ export function Table<
             <tr
               key={index}
               onClick={() => onRowClick?.(item)}
-              className={onRowClick ? "cursor-pointer hover:bg-gray-50" : ""}
+              className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${
+                onRowClick ? 'cursor-pointer hover:bg-gray-100' : ''
+              }`}
             >
               {selectable && (
                 <td className="px-6 py-4">

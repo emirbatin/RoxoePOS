@@ -91,6 +91,22 @@ const defaultHotkeys: CustomHotkeySettings[] = [
     currentKey: "/",
     currentModifier: true,
   },
+  {
+    id: "quick_cash_payment",
+    description: "Hızlı Nakit Ödeme",
+    defaultKey: "F7",
+    defaultModifier: false,
+    currentKey: "F7",
+    currentModifier: false,
+  },
+  {
+    id: "quick_card_payment",
+    description: "Hızlı Kredi Kartı Ödeme",
+    defaultKey: "F8",
+    defaultModifier: false,
+    currentKey: "F8",
+    currentModifier: false,
+  },
 ];
 
 const defaultSpecialHotkeys: SpecialHotkeySettings[] = [

@@ -1,6 +1,6 @@
 import React from "react";
 import clsx from "clsx";
-import { AlertTriangle, Tag, Plus, Minus } from "lucide-react";
+import { AlertTriangle, Tag, Plus, Minus, Image, ShoppingCart, Percent } from "lucide-react";
 
 // components/ui/Card.tsx içinde
 export type CardVariant = "default" | "stat" | "shadow" | "bordered" | "product" | "addProduct";
@@ -51,21 +51,29 @@ const Card: React.FC<CardProps> = ({
       <button
         onClick={onClick}
         className={clsx(
-          "flex flex-col items-center justify-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 hover:border-primary-500 hover:bg-primary-50 transition-colors group",
+          "flex flex-col items-center justify-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 hover:border-primary-500 hover:bg-primary-50 transition-colors group h-full",
           className
         )}
       >
-        {icon || <Plus size={24} className="text-gray-400 group-hover:text-primary-500 mb-2" />}
-        <span className="text-sm text-gray-600 group-hover:text-primary-600">{title || "Ürün Ekle"}</span>
+        {icon || <Plus size={28} className="text-gray-400 group-hover:text-primary-500 mb-2" />}
+        <span className="text-sm font-medium text-gray-600 group-hover:text-primary-600">{title || "Ürün Ekle"}</span>
       </button>
     );
   }
 
   if (variant === "product") {
+    // Stok durumuna göre renk belirleme - stock undefined ise varsayılan olarak gri kullan
+    const stockStatusColor = 
+      stock === undefined ? "bg-gray-400" :
+      stock === 0 ? "bg-red-500" : 
+      stock < 5 ? "bg-orange-500" : 
+      "bg-green-500";
+
     return (
       <div className={clsx(
-        "relative group border rounded-lg hover:shadow-md transition-shadow",
-        disabled && "opacity-50 cursor-not-allowed",
+        "relative group overflow-hidden rounded-xl transition-all duration-300 h-full flex flex-col",
+        "border border-gray-100 hover:border-primary-200 bg-white hover:shadow-md",
+        disabled && "opacity-50 cursor-not-allowed grayscale",
         className
       )}>
         {/* Grup İşlem Butonları */}
@@ -77,7 +85,7 @@ const Card: React.FC<CardProps> = ({
                   e.stopPropagation();
                   onAddToGroup();
                 }}
-                className="p-1.5 bg-primary-500 text-white rounded-full hover:bg-primary-600"
+                className="p-1.5 bg-primary-500 text-white rounded-full hover:bg-primary-600 shadow-sm"
                 title="Gruba Ekle"
               >
                 <Plus size={14} />
@@ -89,7 +97,7 @@ const Card: React.FC<CardProps> = ({
                   e.stopPropagation();
                   onRemoveFromGroup();
                 }}
-                className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600"
+                className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-sm"
                 title="Gruptan Çıkar"
               >
                 <Minus size={14} />
@@ -98,50 +106,74 @@ const Card: React.FC<CardProps> = ({
           </div>
         )}
 
+        {/* Stok Durumu İşareti */}
+        <div className={clsx(
+          "absolute top-0 right-0 w-2 h-2 m-2 rounded-full",
+          stockStatusColor
+        )} title={`Stok: ${stock ?? 'Belirtilmemiş'}`} />
+
         {/* Ürün İçeriği */}
         <button
           onClick={onClick}
           disabled={disabled}
-          className="p-4 w-full text-left"
+          className="w-full h-full text-left outline-none focus:outline-none flex flex-col"
         >
-          {/* Ürün Görseli */}
-          {imageUrl && (
-            <img
-              src={imageUrl}
-              alt={title}
-              className="w-full h-32 object-cover rounded mb-2"
-            />
-          )}
-          
-          {/* Ürün Bilgileri */}
-          <div className="font-medium text-gray-900 truncate">{title}</div>
-          {category && (
-            <div className="text-sm text-gray-500 flex items-center gap-1">
-              <Tag size={14} />
-              {category}
-            </div>
-          )}
-          
-          {/* Fiyat ve KDV */}
-          <div className="mt-2">
-            {price && <div className="font-semibold text-primary-600">{price}</div>}
+          {/* Resim Alanı */}
+          <div className="w-full aspect-square overflow-hidden bg-gray-50 relative">
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={title || "Ürün"}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full">
+                <Image size={36} className="text-gray-300" strokeWidth={1} />
+              </div>
+            )}
+            
+            {/* KDV Bilgisi Etiketi */}
             {vatRate && (
-              <div className="text-xs text-gray-500">+{vatRate} KDV</div>
+              <div className="absolute bottom-2 left-2 bg-gray-800 bg-opacity-70 text-white px-2 py-0.5 rounded-md text-xs flex items-center gap-1">
+                {vatRate} KDV
+              </div>
+            )}
+            
+            {/* Kategori Etiketi */}
+            {category && (
+              <div className="absolute top-2 left-2 bg-primary-100 text-primary-700 px-2 py-0.5 rounded-md text-xs">
+                {category}
+              </div>
             )}
           </div>
-          
-          {/* Stok Durumu */}
-          {stock !== undefined && (
-            <div
-              className={clsx(
-                "text-sm mt-1",
-                stock < 5 ? "text-red-500" : "text-gray-500"
-              )}
-            >
-              Stok: {stock}
-              {stock < 5 && <AlertTriangle size={14} className="inline ml-1" />}
+
+          {/* Ürün Bilgileri */}
+          <div className="p-3 flex-1 flex flex-col">
+            {/* Ürün Adı */}
+            <h3 className="font-medium text-gray-800 line-clamp-2">
+              {title || "İsimsiz Ürün"}
+            </h3>
+            
+            {/* Stok Bilgisi - stock undefined değilse göster */}
+            {stock !== undefined && (
+              <div className="mt-1 text-xs text-gray-500 flex items-center gap-1">
+                Stok: <span className={clsx(
+                  stock === 0 ? "text-red-500 font-medium" : 
+                  stock < 5 ? "text-orange-500 font-medium" : 
+                  "text-gray-600"
+                )}>{stock}</span>
+                {stock < 5 && stock > 0 && <AlertTriangle size={12} className="text-orange-500" />}
+                {stock === 0 && <span className="text-red-500 font-medium">Tükendi</span>}
+              </div>
+            )}
+            
+            {/* Fiyat Alanı */}
+            <div className="mt-2 flex justify-between items-center">
+              <div className="font-bold text-lg text-primary-700">
+                {price || "Fiyat belirtilmemiş"}
+              </div>
             </div>
-          )}
+          </div>
         </button>
       </div>
     );
@@ -150,7 +182,7 @@ const Card: React.FC<CardProps> = ({
   if (variant === "stat") {
     return (
       <div className={clsx(
-        "bg-white rounded-lg p-6 border hover:border-gray-200 transition-colors h-full",
+        "bg-white rounded-xl p-6 border hover:border-gray-200 transition-colors h-full shadow-sm",
         className
       )}>
         {/* Üst Kısım - İkon ve Başlık */}
@@ -200,7 +232,7 @@ const Card: React.FC<CardProps> = ({
 
   // Diğer varyantlar için temel stil
   const baseStyle = clsx(
-    "bg-white rounded-lg p-4 transition-all duration-200",
+    "bg-white rounded-xl p-4 transition-all duration-200 h-full",
     {
       "shadow-lg hover:shadow-xl": variant === "shadow",
       "border border-gray-200": variant === "bordered",

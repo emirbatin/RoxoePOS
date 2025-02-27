@@ -27,6 +27,7 @@ import ProductGroupTabs from "../components/ProductGroupTabs";
 import { useProducts } from "../hooks/useProducts";
 import { useCart } from "../hooks/useCart";
 import { useProductGroups } from "../hooks/useProductGroups";
+import { posService } from "../services/posServices";
 
 const POSPage: React.FC = () => {
   const { showError, showSuccess, confirm } = useAlert();
@@ -118,6 +119,88 @@ const POSPage: React.FC = () => {
     setShowFilters(false);
   };
 
+  // POSPage.tsx içinde, useHotkeys hook'unu çağırmadan önce aşağıdaki fonksiyonları ekleyin:
+
+  // Hızlı Nakit Ödeme Fonksiyonu (F7)
+  const handleQuickCashPayment = async () => {
+    if (!activeTab?.cart.length) {
+      showError("Sepet boş! Ödeme yapılamaz");
+      return;
+    }
+
+    try {
+      // Nakit ödeme için PaymentResult oluştur
+      const paymentResult: PaymentResult = {
+        mode: "normal",
+        paymentMethod: "nakit",
+        received: cartTotals.total, // Tam tutarı nakit olarak al
+      };
+
+      // Bilgi mesajı göster
+      showSuccess("Nakit ödeme işlemi başlatıldı...");
+
+      // Ödeme işlemini tamamla
+      await handlePaymentComplete(paymentResult);
+      
+      // Başarılı ödeme bildirimi
+      showSuccess("Nakit ödeme başarıyla tamamlandı");
+    } catch (error) {
+      console.error("Hızlı nakit ödeme hatası:", error);
+      showError("Ödeme işlemi sırasında bir hata oluştu");
+    }
+  };
+
+  // Hızlı Kredi Kartı Ödeme Fonksiyonu (F8)
+  const handleQuickCardPayment = async () => {
+    if (!activeTab?.cart.length) {
+      showError("Sepet boş! Ödeme yapılamaz");
+      return;
+    }
+
+    try {
+      // POS işleminin manuel modda olup olmadığını kontrol et
+      const isManualMode = await posService.isManualMode();
+      
+      if (!isManualMode) {
+        // Manuel mod değilse, POS cihazına bağlan
+        showSuccess("Kredi kartı işlemi başlatılıyor...");
+        const connected = await posService.connect("Ingenico");
+        
+        if (!connected) {
+          showError("POS cihazına bağlanılamadı!");
+          return;
+        }
+        
+        // POS işlemini başlat
+        const result = await posService.processPayment(cartTotals.total);
+        
+        // Bağlantıyı kapat
+        await posService.disconnect();
+        
+        if (!result.success) {
+          showError(result.message);
+          return;
+        }
+      }
+      
+      // Kredi kartı ödeme için PaymentResult oluştur
+      const paymentResult: PaymentResult = {
+        mode: "normal",
+        paymentMethod: "kart", // Düzeltildi: "kredikarti" -> "kart"
+        received: cartTotals.total, // Tam tutarı kredi kartı ile öde
+      };
+
+      // Ödeme işlemini tamamla
+      await handlePaymentComplete(paymentResult);
+      
+      // Başarılı ödeme bildirimi
+      showSuccess("Kredi kartı ile ödeme başarıyla tamamlandı");
+    } catch (error) {
+      console.error("Hızlı kredi kartı ödeme hatası:", error);
+      showError("Ödeme işlemi sırasında bir hata oluştu");
+    }
+  };
+
   // Start new sale
   async function startNewSale(): Promise<void> {
     if (!activeTab?.cart.length) {
@@ -151,6 +234,97 @@ const POSPage: React.FC = () => {
       console.error("Grup eklenirken hata oluştu:", error);
       showError("Grup eklenirken bir hata oluştu. Lütfen tekrar deneyin.");
     }
+  };
+
+  // POSPage bileşeninde handleBarcodeDetected fonksiyonunu bu şekilde güncelleyin
+  const handleBarcodeDetected = (barcode: string) => {
+    console.log("Barkod algılandı:", barcode);
+    console.log("Toplam ürün sayısı:", products.length);
+    console.log("Filtrelenmiş ürün sayısı:", filteredProducts.length);
+
+    // 1. Adım: Önce barkod alanına göre eşleşme ara
+    let matchingProduct = products.find((p) => p.barcode === barcode);
+
+    if (matchingProduct) {
+      console.log("Barkod ile tam eşleşme bulundu:", matchingProduct);
+    } else {
+      // 2. Adım: Barkod sayısal ise, ID ile eşleşme ara
+      const numericBarcode = parseInt(barcode);
+      if (!isNaN(numericBarcode)) {
+        matchingProduct = products.find((p) => p.id === numericBarcode);
+        if (matchingProduct) {
+          console.log("ID ile tam eşleşme bulundu:", matchingProduct);
+        }
+      }
+
+      // 3. Adım: Hala bulunamadıysa, isim ile tam eşleşme ara
+      if (!matchingProduct) {
+        matchingProduct = products.find(
+          (p) => p.name.toLowerCase() === barcode.toLowerCase()
+        );
+
+        if (matchingProduct) {
+          console.log("İsim ile tam eşleşme bulundu:", matchingProduct);
+        }
+      }
+    }
+
+    // 4. Adım: Eşleşme varsa ve stok yeterliyse sepete ekle
+    if (matchingProduct) {
+      if (matchingProduct.stock > 0) {
+        console.log(
+          "Ürün bulundu ve stokta var, sepete ekleniyor:",
+          matchingProduct
+        );
+        addToCart(matchingProduct);
+        showSuccess(`${matchingProduct.name} sepete eklendi`);
+      } else {
+        console.log("Ürün bulundu fakat stokta yok:", matchingProduct);
+        showError(`${matchingProduct.name} stokta yok`);
+      }
+      return;
+    }
+
+    // 5. Adım: Hiçbir eşleşme bulunamadıysa, kısmi eşleşmeleri kontrol et
+    console.log("Tam eşleşme bulunamadı, kısmi eşleşmeler aranıyor...");
+
+    // Barkodu içeren ürünleri bul
+    const partialMatches = products.filter(
+      (p) =>
+        p.barcode.includes(barcode) || // Barkod içinde geçiyorsa
+        p.name.toLowerCase().includes(barcode.toLowerCase()) // İsim içinde geçiyorsa
+    );
+
+    console.log(`${partialMatches.length} kısmi eşleşme bulundu`);
+
+    if (partialMatches.length === 1) {
+      // Tek kısmi eşleşme varsa
+      const match = partialMatches[0];
+      if (match.stock > 0) {
+        console.log("Tek kısmi eşleşme ekleniyor:", match);
+        addToCart(match);
+        showSuccess(`${match.name} sepete eklendi`);
+        return;
+      } else {
+        console.log("Kısmi eşleşen ürün stokta yok:", match);
+        showError(`${match.name} stokta yok`);
+        return;
+      }
+    } else if (partialMatches.length > 1) {
+      // Birden çok kısmi eşleşme varsa, arama terimini güncelle ve sonuçları göster
+      console.log(
+        "Birden çok kısmi eşleşme bulundu, arama terimi güncelleniyor"
+      );
+      setSearchTerm(barcode);
+      return;
+    }
+
+    // 6. Adım: Hiçbir eşleşme bulunamadıysa
+    console.log(
+      "Hiçbir eşleşme bulunamadı, arama terimi güncelleniyor:",
+      barcode
+    );
+    setSearchTerm(barcode);
   };
 
   // Hotkeys setup
@@ -206,6 +380,14 @@ const POSPage: React.FC = () => {
           const nextIndex = (currentIndex + 1) % cartTabs.length;
           setActiveTabId(cartTabs[nextIndex].id);
         },
+      },
+      {
+        key: "F7",
+        callback: handleQuickCashPayment,
+      },
+      {
+        key: "F8",
+        callback: handleQuickCardPayment,
       },
     ],
     onQuantityUpdate: (newQuantity) => {
@@ -384,6 +566,8 @@ const POSPage: React.FC = () => {
               showFilter={showFilters}
               toggleFilter={() => setShowFilters((prev) => !prev)}
               inputRef={searchInputRef}
+              onBarcodeDetected={handleBarcodeDetected}
+              inputActive={document.activeElement === searchInputRef.current}
             />
             {showFilters && (
               <div className="mt-4">
@@ -665,6 +849,122 @@ const POSPage: React.FC = () => {
             </>
           )}
         </div>
+
+        {process.env.NODE_ENV === "development" && (
+          <div className="fixed bottom-4 left-4 z-50">
+            <div className="bg-white p-4 rounded-lg shadow-lg border space-y-3">
+              <h3 className="font-bold">Barkod Test Araçları</h3>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="testBarcode"
+                  defaultValue=""
+                  className="border rounded px-2 py-1"
+                  placeholder="Barkod/ID giriniz"
+                />
+                <button
+                  onClick={() => {
+                    const barcodeInput = document.getElementById(
+                      "testBarcode"
+                    ) as HTMLInputElement;
+                    const barcode = barcodeInput?.value || "";
+                    if (!barcode) {
+                      showError("Lütfen test için bir barkod veya ID girin");
+                      return;
+                    }
+                    console.log("Test Et butonuna tıklandı, barkod:", barcode);
+                    handleBarcodeDetected(barcode);
+                  }}
+                  className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+                >
+                  Test Et
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    console.log("****** ÜRÜN LISTESI DEBUG ******");
+                    console.log("Toplam ürün sayısı:", products.length);
+
+                    // Tüm ürünleri listele
+                    products.forEach((product) => {
+                      console.log(
+                        `Ürün: ${product.name}, ID: ${product.id}, Barkod: ${product.barcode}, Stok: ${product.stock}`
+                      );
+                    });
+
+                    console.log("********************************");
+                  }}
+                  className="bg-purple-500 text-white px-3 py-1 rounded hover:bg-purple-600 w-full"
+                >
+                  Ürünleri Listele
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    // İlk ürünü test et
+                    if (products.length > 0) {
+                      const firstProduct = products[0];
+                      console.log("İlk ürün test ediliyor:", firstProduct);
+
+                      // Barkod ile test et
+                      if (firstProduct.barcode) {
+                        console.log(
+                          `Barkod kullanılıyor: ${firstProduct.barcode}`
+                        );
+                        handleBarcodeDetected(firstProduct.barcode);
+                      } else {
+                        // ID ile test et
+                        console.log(`ID kullanılıyor: ${firstProduct.id}`);
+                        handleBarcodeDetected(firstProduct.id.toString());
+                      }
+                    } else {
+                      showError("Ürün listesi boş");
+                    }
+                  }}
+                  className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 w-full"
+                >
+                  İlk Ürünü Test Et
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    // Manuel ürün ekleme testi
+                    if (products.length > 0) {
+                      const firstProduct = products[0];
+                      console.log(
+                        "İlk ürün doğrudan sepete ekleniyor:",
+                        firstProduct
+                      );
+
+                      if (firstProduct.stock > 0) {
+                        addToCart(firstProduct);
+                        showSuccess(`${firstProduct.name} sepete eklendi`);
+                      } else {
+                        showError(`${firstProduct.name} stokta yok!`);
+                      }
+                    } else {
+                      showError("Ürün listesi boş");
+                    }
+                  }}
+                  className="bg-orange-500 text-white px-3 py-1 rounded hover:bg-orange-600 w-full"
+                >
+                  İlk Ürünü Sepete Ekle
+                </button>
+              </div>
+
+              <div className="text-xs text-gray-500">
+                Bu panel sadece geliştirme ortamında görünür
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Star Mode Göstergesi */}
         {quantityMode && (
