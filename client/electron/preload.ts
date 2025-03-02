@@ -42,7 +42,7 @@ contextBridge.exposeInMainWorld('serialAPI', {
 
 // --------- Güncelleme API'sini Renderer Sürecine Expose Edelim ---------
 contextBridge.exposeInMainWorld('updaterAPI', {
-  // Güncelleme kontrolü başlat
+  // Mevcut metodlar...
   checkForUpdates: () => {
     ipcRenderer.send('check-for-updates');
   },
@@ -62,5 +62,27 @@ contextBridge.exposeInMainWorld('updaterAPI', {
   
   onUpdateMessage: (callback: (message: string) => void) => {
     ipcRenderer.on('update-message', (_event, message) => callback(message));
+  },
+  
+  // Yeni eklenen metodlar
+  onUpdateProgress: (callback: (progressObj: any) => void) => {
+    ipcRenderer.on('update-progress', (_event, progressObj) => callback(progressObj));
+  },
+  
+  onUpdateStatus: (callback: (statusObj: any) => void) => {
+    ipcRenderer.on('update-status', (_event, statusObj) => callback(statusObj));
+  },
+  
+  // Test metodları (geliştirme modunda)
+  testUpdateAvailable: () => {
+    ipcRenderer.send('test-update-available');
+  },
+  
+  testUpdateDownloaded: () => {
+    ipcRenderer.send('test-update-downloaded');
+  },
+  
+  testUpdateError: () => {
+    ipcRenderer.send('test-update-error');
   }
 });

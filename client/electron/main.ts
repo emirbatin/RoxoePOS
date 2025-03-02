@@ -104,11 +104,26 @@ function createWindow() {
   }
 }
 
-// Güncelleme event'leri
+let lastProgressTime = Date.now();
+let lastProgressBytes = 0;
+let downloadSpeed = 0;
+
+
+autoUpdater.on('checking-for-update', () => {
+  log.info('Güncellemeler kontrol ediliyor...');
+  if (win) {
+    win.webContents.send('update-status', { status: 'checking' });
+  }
+});
+
 autoUpdater.on('update-available', (info) => {
   log.info('Güncelleme mevcut:', info);
   if (win) {
     win.webContents.send('update-available', info);
+    win.webContents.send('update-status', { 
+      status: 'available', 
+      version: info.version 
+    });
     
     dialog.showMessageBox({
       type: 'info',
@@ -117,12 +132,55 @@ autoUpdater.on('update-available', (info) => {
       buttons: ['Tamam']
     });
   }
+  
+  // İlerleme takibi için değişkenleri sıfırlayalım
+  lastProgressTime = Date.now();
+  lastProgressBytes = 0;
+  downloadSpeed = 0;
 });
+
+autoUpdater.on('download-progress', (progressObj) => {
+  const currentTime = Date.now();
+  const elapsedTime = (currentTime - lastProgressTime) / 1000; // saniye cinsinden
+  
+  // Eğer yeterli zaman geçtiyse indirme hızını hesapla (titreşimi önlemek için)
+  if (elapsedTime > 0.5) {
+    const bytesPerSecond = (progressObj.transferred - lastProgressBytes) / elapsedTime;
+    downloadSpeed = bytesPerSecond / (1024 * 1024); // MB/s cinsinden
+    
+    lastProgressTime = currentTime;
+    lastProgressBytes = progressObj.transferred;
+  }
+  
+  // İlerleme detaylarını gönder
+  const progressDetails = {
+    percent: progressObj.percent || 0,
+    transferred: progressObj.transferred || 0,
+    total: progressObj.total || 0,
+    speed: downloadSpeed.toFixed(2), // MB/s
+    remaining: (progressObj.total - progressObj.transferred) || 0
+  };
+  
+  log.info(`İndirme ilerlemesi: ${progressDetails.percent.toFixed(1)}%, ${progressDetails.speed} MB/s`);
+  
+  if (win) {
+    win.webContents.send('update-progress', progressDetails);
+    win.webContents.send('update-status', { 
+      status: 'downloading', 
+      progress: progressDetails 
+    });
+  }
+});
+
 
 autoUpdater.on('update-downloaded', (info) => {
   log.info('Güncelleme indirildi:', info);
   if (win) {
     win.webContents.send('update-downloaded', info);
+    win.webContents.send('update-status', { 
+      status: 'downloaded', 
+      version: info.version 
+    });
     
     dialog.showMessageBox({
       type: 'info',
@@ -142,6 +200,10 @@ autoUpdater.on('error', (err) => {
   log.error('Güncelleme hatası:', err);
   if (win) {
     win.webContents.send('update-error', err);
+    win.webContents.send('update-status', { 
+      status: 'error', 
+      error: err.message 
+    });
   }
 });
 
