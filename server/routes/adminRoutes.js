@@ -1,15 +1,21 @@
 const express = require("express");
 const session = require("express-session");
+const MongoStore = require("connect-mongo");
 const router = express.Router();
 
 const { getAllLicenses, createLicense, deleteLicense } = require("../controllers/adminController");
 const adminSession = require("../middlewares/adminSession");
 
-// Session Middleware - basit ve çalışır hale dönüş
+// Session Middleware - MongoDB store kullanarak
 router.use(session({
   secret: process.env.SESSION_SECRET || "super-secret-key",
   resave: false,
   saveUninitialized: true,
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    ttl: 60 * 60 * 24, // 1 gün (saniye cinsinden)
+    autoRemove: 'native' // Süresi dolan oturumları otomatik temizle
+  }),
   cookie: { 
     secure: false, // HTTP ve HTTPS her ikisinde de çalışması için false
     maxAge: 24 * 60 * 60 * 1000 // 1 gün
