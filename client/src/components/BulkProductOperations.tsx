@@ -4,17 +4,18 @@ import { Product } from "../types/product";
 import { importExportService } from "../services/importExportServices";
 import { productService } from "../services/productDB";
 import ColumnMappingModal from "./modals/ColumnMappingModal";
-// AlertProvider'dan gelen fonksiyonları import ediyoruz:
 import { useAlert } from "../components/AlertProvider";
 
 interface BulkProductOperationsProps {
   onImport: (products: Product[]) => void;
   products: Product[];
+  filteredProducts?: Product[];
 }
 
 const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
   onImport,
   products,
+  filteredProducts, 
 }) => {
   const { confirm, showError } = useAlert();
 
@@ -27,6 +28,11 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
   } | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showMappingModal, setShowMappingModal] = useState(false);
+
+  // Dışa aktarılacak ürünleri belirle: filtrelenmiş varsa onları, yoksa tüm ürünleri kullan
+  const productsToExport = filteredProducts && filteredProducts.length > 0 
+    ? filteredProducts 
+    : products;
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -119,11 +125,17 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
 
   const handleExport = async (type: "excel" | "csv") => {
     try {
-      const fileName = `urunler_${new Date().toISOString().split("T")[0]}`;
+      // Filtrelemiş ürün sayısını ve toplam ürün sayısını gösteren bir bilgilendirme metni
+      const filteredInfo = filteredProducts && filteredProducts.length !== products.length
+        ? `_filtrelenmis_${filteredProducts.length}_urun`
+        : "";
+
+      const fileName = `urunler${filteredInfo}_${new Date().toISOString().split("T")[0]}`;
+      
       if (type === "excel") {
-        await importExportService.exportToExcel(products, `${fileName}.xlsx`);
+        await importExportService.exportToExcel(productsToExport, `${fileName}.xlsx`);
       } else {
-        importExportService.exportToCSV(products, `${fileName}.csv`);
+        importExportService.exportToCSV(productsToExport, `${fileName}.csv`);
       }
     } catch (error) {
       setError(
@@ -200,22 +212,32 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => handleExport("excel")}
-            disabled={products.length === 0 || isProcessing}
+            disabled={productsToExport.length === 0 || isProcessing}
             className="flex flex-col items-center justify-center h-24 border-2 rounded-lg hover:bg-gray-50 
               disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="h-8 w-8 text-gray-400" />
-            <span className="mt-2 text-sm text-gray-600">Excel'e Aktar</span>
+            <span className="mt-2 text-sm text-gray-600">
+              Excel'e Aktar {filteredProducts && filteredProducts.length !== products.length ? 
+                `(${filteredProducts.length} ürün)` : 
+                ""
+              }
+            </span>
           </button>
 
           <button
             onClick={() => handleExport("csv")}
-            disabled={products.length === 0 || isProcessing}
+            disabled={productsToExport.length === 0 || isProcessing}
             className="flex flex-col items-center justify-center h-24 border-2 rounded-lg hover:bg-gray-50 
               disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="h-8 w-8 text-gray-400" />
-            <span className="mt-2 text-sm text-gray-600">CSV'ye Aktar</span>
+            <span className="mt-2 text-sm text-gray-600">
+              CSV'ye Aktar {filteredProducts && filteredProducts.length !== products.length ? 
+                `(${filteredProducts.length} ürün)` : 
+                ""
+              }
+            </span>
           </button>
         </div>
       </div>

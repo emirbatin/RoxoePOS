@@ -1,16 +1,27 @@
 const express = require("express");
 const session = require("express-session");
+const MongoStore = require("connect-mongo");
 const router = express.Router();
 
 const { getAllLicenses, createLicense, deleteLicense } = require("../controllers/adminController");
 const adminSession = require("../middlewares/adminSession");
 
-// Session Middleware
+// Güvenli session konfigürasyonu
 router.use(session({
-  secret: "super-secret-key", // Bunu .env'den de alabilirsin
+  secret: process.env.SESSION_SECRET,
   resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false } // HTTPS kullanıyorsan true yap
+  saveUninitialized: false, // true yerine false kullanılmalı (güvenlik açısından)
+  store: MongoStore.create({
+    mongoUrl: process.env.MONGODB_URI,
+    ttl: 60 * 60 * 24, // 1 gün (saniye cinsinden)
+    autoRemove: 'native', // Süresi dolan oturumları otomatik temizle
+    collectionName: 'sessions', // MongoDB koleksiyon adı
+  }),
+  cookie: { 
+    secure: process.env.NODE_ENV === 'production', // Production'da HTTPS gerektirir
+    httpOnly: true, // JavaScript erişimini engeller
+    maxAge: 1000 * 60 * 60 * 24 // 1 gün (milisaniye cinsinden)
+  }
 }));
 
 // 1) Admin Key Girişi Ekranı

@@ -11,7 +11,11 @@ import {
   Package,
   Barcode,
 } from "lucide-react";
-import { calculatePriceWithVat, formatCurrency, formatVatRate } from "../utils/vatUtils";
+import {
+  calculatePriceWithVat,
+  formatCurrency,
+  formatVatRate,
+} from "../utils/vatUtils";
 import {
   emitStockChange,
   initProductDB,
@@ -54,8 +58,10 @@ const ProductsPage: React.FC = () => {
   const [showProductModal, setShowProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>();
   const [showCategoryManagement, setShowCategoryManagement] = useState(false);
-  const [selectedStockProduct, setSelectedStockProduct] = useState<Product | null>(null);
-  const [selectedBarcodeProduct, setSelectedBarcodeProduct] = useState<Product | null>(null);
+  const [selectedStockProduct, setSelectedStockProduct] =
+    useState<Product | null>(null);
+  const [selectedBarcodeProduct, setSelectedBarcodeProduct] =
+    useState<Product | null>(null);
 
   // Toplu işlem seçimleri
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
@@ -204,7 +210,9 @@ const ProductsPage: React.FC = () => {
 
   // Ürün silme
   const handleDeleteProduct = async (productId: number) => {
-    const confirmed = await confirm("Bu ürünü silmek istediğinize emin misiniz?");
+    const confirmed = await confirm(
+      "Bu ürünü silmek istediğinize emin misiniz?"
+    );
     if (confirmed) {
       try {
         await productService.deleteProduct(productId);
@@ -348,7 +356,10 @@ const ProductsPage: React.FC = () => {
   // Sayfalama hesaplamaları
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentProducts = filteredProducts.slice(indexOfFirstItem, indexOfLastItem);
+  const currentProducts = filteredProducts.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
 
   // Tüm ürünleri (filtreli listeyi) seç veya temizle
@@ -457,9 +468,12 @@ const ProductsPage: React.FC = () => {
 
       {/* Toplu Import/Export Paneli */}
       <div className="mb-6">
-        <BulkProductOperations onImport={handleBulkImport} products={products} />
+        <BulkProductOperations
+          onImport={handleBulkImport}
+          products={products}
+          filteredProducts={filteredProducts}
+        />
       </div>
-
       {/* Ürün Tablosu */}
       <div className="bg-white rounded-lg shadow-sm">
         <div className="p-4 border-b">
@@ -475,7 +489,8 @@ const ProductsPage: React.FC = () => {
                         </span>{" "}
                         ürün seçildi
                       </span>
-                      {selectedProductIds.length !== filteredProducts.length && (
+                      {selectedProductIds.length !==
+                        filteredProducts.length && (
                         <button
                           onClick={() => handleSelectAll(true)}
                           className="text-primary-600 hover:text-primary-700"
