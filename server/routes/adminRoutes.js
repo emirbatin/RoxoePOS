@@ -1,26 +1,18 @@
 const express = require("express");
 const session = require("express-session");
-const MongoStore = require("connect-mongo");
 const router = express.Router();
 
 const { getAllLicenses, createLicense, deleteLicense } = require("../controllers/adminController");
 const adminSession = require("../middlewares/adminSession");
 
-// Güvenli session konfigürasyonu
+// Session Middleware - basit ve çalışır hale dönüş
 router.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || "super-secret-key",
   resave: false,
-  saveUninitialized: false, // true yerine false kullanılmalı (güvenlik açısından)
-  store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI,
-    ttl: 60 * 60 * 24, // 1 gün (saniye cinsinden)
-    autoRemove: 'native', // Süresi dolan oturumları otomatik temizle
-    collectionName: 'sessions', // MongoDB koleksiyon adı
-  }),
+  saveUninitialized: true,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production', // Production'da HTTPS gerektirir
-    httpOnly: true, // JavaScript erişimini engeller
-    maxAge: 1000 * 60 * 60 * 24 // 1 gün (milisaniye cinsinden)
+    secure: false, // HTTP ve HTTPS her ikisinde de çalışması için false
+    maxAge: 24 * 60 * 60 * 1000 // 1 gün
   }
 }));
 
