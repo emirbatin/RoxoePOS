@@ -1,7 +1,7 @@
 {
   "name": "roxoepos",
   "private": true,
-  "version": "0.0.3",
+  "version": "0.0.5",
   "type": "module",
   "description": "",
   "author": {
@@ -11,9 +11,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
-    "build:win": "tsc && vite build && electron-builder --win",
-    "build:mac": "tsc && vite build && electron-builder --mac",
-    "build:all": "tsc && vite build && electron-builder -mw",
+    "build:win": "tsc && vite build && electron-builder --win --x64",
+    "build:mac": "tsc && vite build && electron-builder --mac --x64",
+    "build:all": "tsc && vite build && electron-builder -mw --x64",
+    "publish": "tsc && vite build && electron-builder --publish always --x64",
+    "publish:win": "tsc && vite build && electron-builder --win --publish always --x64",
+    "publish:mac": "tsc && vite build && electron-builder --mac --publish always --x64",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
@@ -28,7 +31,9 @@
     "clsx": "^2.1.1",
     "crypto-js": "^4.2.0",
     "dotenv": "^16.4.7",
+    "electron-log": "^5.3.1",
     "electron-store": "^10.0.1",
+    "electron-updater": "^6.3.9",
     "exceljs": "^4.4.0",
     "idb": "^8.0.1",
     "jspdf": "^3.0.0",
@@ -74,27 +79,59 @@
   "build": {
     "appId": "com.roxoepos.app",
     "productName": "RoxoePOS",
+    "copyright": "Copyright © 2025 Roxoe",
     "directories": {
       "output": "release/${version}"
     },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "emirbatin",
+        "repo": "RoxoePOS",
+        "releaseType": "release"
+      }
+    ],
+    "electronDownload": {
+      "arch": "x64"
+    },
     "mac": {
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
       ],
       "icon": "public/icon.icns",
-      "category": "public.app-category.business"
+      "category": "public.app-category.business",
+      "artifactName": "RoxoePOS-Mac-${version}.${ext}"
     },
     "win": {
       "target": [
-        "nsis",
-        "portable"
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
       ],
       "icon": "public/icon.ico"
     },
     "linux": {
       "target": [
-        "AppImage"
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        }
       ],
       "category": "Office"
     },
@@ -102,7 +139,14 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "RoxoePOS-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "RoxoePOS-Portable-${version}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "RoxoePOS-Installer-${version}.${ext}"
     }
   }
 }

@@ -1,6 +1,14 @@
 // pages/SettingsPage.tsx
 import React, { useEffect, useState } from "react";
-import { Printer, Save, Barcode, Building, Key, Check, RefreshCw } from "lucide-react";
+import {
+  Printer,
+  Save,
+  Barcode,
+  Building,
+  Key,
+  Check,
+  RefreshCw,
+} from "lucide-react";
 import { POSConfig, SerialOptions } from "../types/pos";
 import { BarcodeConfig } from "../types/barcode";
 import { ReceiptConfig } from "../types/receipt";
@@ -128,29 +136,91 @@ const SettingsPage: React.FC = () => {
   }, []);
 
   // Auto-save settings when changed
-  const saveSettings = (callback?: () => void) => {
+  const saveSettings = (
+    updatedConfig?: {
+      posConfig?: Partial<POSConfig>;
+      serialOptions?: Partial<SerialOptions>;
+      barcodeConfig?: Partial<BarcodeConfig>;
+      receiptConfig?: Partial<ReceiptConfig>;
+    },
+    callback?: () => void
+  ) => {
     setSaveStatus({ status: "saving", message: "Kaydediliyor..." });
 
     setTimeout(() => {
       try {
-        localStorage.setItem("posConfig", JSON.stringify(posConfig));
-        localStorage.setItem("serialOptions", JSON.stringify(serialOptions));
-        localStorage.setItem("barcodeConfig", JSON.stringify(barcodeConfig));
-        localStorage.setItem("receiptConfig", JSON.stringify(receiptConfig));
-        
+        // Eğer güncellenmiş bir config değeri varsa onu kullan
+        if (updatedConfig?.posConfig) {
+          // Mevcut state ile birleştir
+          const mergedPosConfig = { ...posConfig, ...updatedConfig.posConfig };
+          // Güncelle
+          localStorage.setItem("posConfig", JSON.stringify(mergedPosConfig));
+          // State'i güncelle
+          setPosConfig(mergedPosConfig);
+        } else {
+          // Değişiklik yoksa mevcut state'i kaydet
+          localStorage.setItem("posConfig", JSON.stringify(posConfig));
+        }
+
+        // Diğer ayarlar için de aynı mantık
+        if (updatedConfig?.serialOptions) {
+          const mergedSerialOptions = {
+            ...serialOptions,
+            ...updatedConfig.serialOptions,
+          };
+          localStorage.setItem(
+            "serialOptions",
+            JSON.stringify(mergedSerialOptions)
+          );
+          setSerialOptions(mergedSerialOptions);
+        } else {
+          localStorage.setItem("serialOptions", JSON.stringify(serialOptions));
+        }
+
+        if (updatedConfig?.barcodeConfig) {
+          const mergedBarcodeConfig = {
+            ...barcodeConfig,
+            ...updatedConfig.barcodeConfig,
+          };
+          localStorage.setItem(
+            "barcodeConfig",
+            JSON.stringify(mergedBarcodeConfig)
+          );
+          setBarcodeConfig(mergedBarcodeConfig);
+        } else {
+          localStorage.setItem("barcodeConfig", JSON.stringify(barcodeConfig));
+        }
+
+        if (updatedConfig?.receiptConfig) {
+          const mergedReceiptConfig = {
+            ...receiptConfig,
+            ...updatedConfig.receiptConfig,
+          };
+          localStorage.setItem(
+            "receiptConfig",
+            JSON.stringify(mergedReceiptConfig)
+          );
+          setReceiptConfig(mergedReceiptConfig);
+        } else {
+          localStorage.setItem("receiptConfig", JSON.stringify(receiptConfig));
+        }
+
         setSaveStatus({ status: "saved", message: "Değişiklikler kaydedildi" });
-        
+
         if (callback) callback();
-        
+
         // 3 saniye sonra mesajı kaldır
         setTimeout(() => {
           setSaveStatus({ status: "idle", message: "" });
         }, 3000);
       } catch (err: any) {
-        setSaveStatus({ status: "error", message: "Kaydetme hatası: " + err.message });
+        setSaveStatus({
+          status: "error",
+          message: "Kaydetme hatası: " + err.message,
+        });
         showError("Ayarlar kaydedilirken hata oluştu: " + err.message);
       }
-    }, 100); // Daha hızlı kaydetme için süreyi azalttık
+    }, 100);
   };
 
   // Lisans kontrolü için eklenen fonksiyon:
@@ -259,12 +329,14 @@ const SettingsPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 {connectionStatus === "connected" && (
                   <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full flex items-center gap-1">
-                    <span className="w-2 h-2 bg-green-500 rounded-full"></span> Bağlı
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>{" "}
+                    Bağlı
                   </span>
                 )}
                 {connectionStatus === "disconnected" && (
                   <span className="text-sm bg-red-100 text-red-800 px-2 py-1 rounded-full flex items-center gap-1">
-                    <span className="w-2 h-2 bg-red-500 rounded-full"></span> Bağlantı Yok
+                    <span className="w-2 h-2 bg-red-500 rounded-full"></span>{" "}
+                    Bağlantı Yok
                   </span>
                 )}
               </div>
@@ -284,8 +356,12 @@ const SettingsPage: React.FC = () => {
                     type="checkbox"
                     checked={posConfig.manualMode}
                     onChange={(e) => {
-                      setPosConfig({ ...posConfig, manualMode: e.target.checked });
-                      saveSettings();
+                      const newManualMode = e.target.checked;
+                      // Güncellenmiş değeri direkt olarak saveSettings'e gönder
+                      saveSettings({
+                        posConfig: { manualMode: newManualMode },
+                      });
+                      // State güncellemesi saveSettings içinde yapılıyor
                     }}
                     className="sr-only peer"
                   />
@@ -301,7 +377,9 @@ const SettingsPage: React.FC = () => {
             >
               {/* POS Marka ve Bağlantı Ayarları */}
               <div className="bg-white rounded-xl shadow-sm p-6">
-                <h3 className="font-medium text-gray-900 mb-4">Cihaz Bilgileri</h3>
+                <h3 className="font-medium text-gray-900 mb-4">
+                  Cihaz Bilgileri
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -418,9 +496,9 @@ const SettingsPage: React.FC = () => {
                     </select>
                   </div>
                 </div>
-                
+
                 <div className="mt-6">
-                  <button 
+                  <button
                     onClick={testConnection}
                     className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
                   >
@@ -433,8 +511,9 @@ const SettingsPage: React.FC = () => {
 
             <div className="text-sm text-gray-500 bg-blue-50 p-4 rounded-xl">
               <p>
-                ℹ️ Cihaz ayarları için genellikle POS cihazınızın dokümantasyonuna bakmanız gerekir. 
-                Eğer bir POS cihazınız yoksa, Manuel Modu etkinleştirerek test işlemleri yapabilirsiniz.
+                ℹ️ Cihaz ayarları için genellikle POS cihazınızın
+                dokümantasyonuna bakmanız gerekir. Eğer bir POS cihazınız yoksa,
+                Manuel Modu etkinleştirerek test işlemleri yapabilirsiniz.
               </p>
             </div>
           </div>
@@ -443,11 +522,13 @@ const SettingsPage: React.FC = () => {
         return (
           <div className="space-y-6">
             <h2 className="text-xl font-semibold">Barkod Okuyucu Ayarları</h2>
-            
+
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="font-medium text-gray-900">Barkod Okuyucu Durumu</h3>
+                  <h3 className="font-medium text-gray-900">
+                    Barkod Okuyucu Durumu
+                  </h3>
                   <p className="text-sm text-gray-500 mt-1">
                     Barkod okuyucuyu etkinleştir veya devre dışı bırak
                   </p>
@@ -468,8 +549,12 @@ const SettingsPage: React.FC = () => {
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                 </label>
               </div>
-              
-              <div className={barcodeConfig.enabled ? "" : "opacity-50 pointer-events-none"}>
+
+              <div
+                className={
+                  barcodeConfig.enabled ? "" : "opacity-50 pointer-events-none"
+                }
+              >
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="md:col-span-3">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -478,7 +563,10 @@ const SettingsPage: React.FC = () => {
                     <select
                       value={barcodeConfig.type}
                       onChange={(e) => {
-                        setBarcodeConfig({ ...barcodeConfig, type: e.target.value });
+                        setBarcodeConfig({
+                          ...barcodeConfig,
+                          type: e.target.value,
+                        });
                         saveSettings();
                       }}
                       className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
@@ -488,7 +576,7 @@ const SettingsPage: React.FC = () => {
                       <option value="PS/2">PS/2</option>
                     </select>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Önek (Prefix)
@@ -497,14 +585,17 @@ const SettingsPage: React.FC = () => {
                       type="text"
                       value={barcodeConfig.prefix}
                       onChange={(e) => {
-                        setBarcodeConfig({ ...barcodeConfig, prefix: e.target.value });
+                        setBarcodeConfig({
+                          ...barcodeConfig,
+                          prefix: e.target.value,
+                        });
                         saveSettings();
                       }}
                       className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
                       placeholder="Opsiyonel"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Sonek (Suffix)
@@ -513,7 +604,10 @@ const SettingsPage: React.FC = () => {
                       type="text"
                       value={barcodeConfig.suffix}
                       onChange={(e) => {
-                        setBarcodeConfig({ ...barcodeConfig, suffix: e.target.value });
+                        setBarcodeConfig({
+                          ...barcodeConfig,
+                          suffix: e.target.value,
+                        });
                         saveSettings();
                       }}
                       className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
@@ -523,12 +617,13 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="text-sm text-gray-500 bg-blue-50 p-4 rounded-xl">
               <p>
-                ℹ️ Çoğu barkod okuyucu için herhangi bir ayarlama yapmanız gerekmez. 
-                Genellikle barkod okuyucular bağlandıktan sonra otomatik olarak çalışırlar.
-                Eğer özel bir okuyucu kullanıyorsanız, önek (prefix) ve sonek (suffix) değerlerini
+                ℹ️ Çoğu barkod okuyucu için herhangi bir ayarlama yapmanız
+                gerekmez. Genellikle barkod okuyucular bağlandıktan sonra
+                otomatik olarak çalışırlar. Eğer özel bir okuyucu
+                kullanıyorsanız, önek (prefix) ve sonek (suffix) değerlerini
                 ayarlayabilirsiniz.
               </p>
             </div>
@@ -538,10 +633,12 @@ const SettingsPage: React.FC = () => {
         return (
           <div className="space-y-6">
             <h2 className="text-xl font-semibold">İşletme ve Fiş Ayarları</h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-xl shadow-sm p-6">
-                <h3 className="font-medium text-gray-900 mb-4">İşletme Bilgileri</h3>
+                <h3 className="font-medium text-gray-900 mb-4">
+                  İşletme Bilgileri
+                </h3>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -561,7 +658,7 @@ const SettingsPage: React.FC = () => {
                       placeholder="Örn: MARKET XYZ"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Ticari Unvan
@@ -580,7 +677,7 @@ const SettingsPage: React.FC = () => {
                       placeholder="Örn: XYZ GIDA SAN. VE TİC. LTD. ŞTİ."
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Adres Satır 1
@@ -599,7 +696,7 @@ const SettingsPage: React.FC = () => {
                       placeholder="Örn: Fatih Mah. Kurtuluş Cad."
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Adres Satır 2
@@ -618,7 +715,7 @@ const SettingsPage: React.FC = () => {
                       placeholder="Örn: No:123 Merkez/İstanbul"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Telefon
@@ -639,9 +736,11 @@ const SettingsPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-white rounded-xl shadow-sm p-6">
-                <h3 className="font-medium text-gray-900 mb-4">Vergi ve Yasal Bilgiler</h3>
+                <h3 className="font-medium text-gray-900 mb-4">
+                  Vergi ve Yasal Bilgiler
+                </h3>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -661,7 +760,7 @@ const SettingsPage: React.FC = () => {
                       placeholder="Örn: Fatih VD."
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Vergi No
@@ -680,7 +779,7 @@ const SettingsPage: React.FC = () => {
                       placeholder="Örn: 1234567890"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Mersis No
@@ -699,7 +798,7 @@ const SettingsPage: React.FC = () => {
                       placeholder="Örn: 0123456789"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Teşekkür Mesajı
@@ -721,7 +820,7 @@ const SettingsPage: React.FC = () => {
                       placeholder="Örn: Bizi tercih ettiğiniz için teşekkür ederiz"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       İade Politikası
@@ -746,11 +845,12 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="text-sm text-gray-500 bg-blue-50 p-4 rounded-xl">
               <p>
-                ℹ️ Bu bilgiler, yazdırılan fişlerde görünecektir. Bu alanları doğru bir şekilde 
-                doldurmanız önemlidir. İşletme bilgileriniz değişirse buradan güncelleyebilirsiniz.
+                ℹ️ Bu bilgiler, yazdırılan fişlerde görünecektir. Bu alanları
+                doğru bir şekilde doldurmanız önemlidir. İşletme bilgileriniz
+                değişirse buradan güncelleyebilirsiniz.
               </p>
             </div>
           </div>
@@ -764,11 +864,11 @@ const SettingsPage: React.FC = () => {
                 onSave={(newHotkeys, newSpecialHotkeys) => {
                   // Kısayollar zaten HotkeySettings içinde kaydediliyor
                   window.dispatchEvent(
-                    new CustomEvent("hotkeysUpdated", { 
-                      detail: { 
+                    new CustomEvent("hotkeysUpdated", {
+                      detail: {
                         hotkeys: newHotkeys,
-                        specialHotkeys: newSpecialHotkeys
-                      } 
+                        specialHotkeys: newSpecialHotkeys,
+                      },
                     })
                   );
                   showSuccess("Kısayollar başarıyla kaydedildi");
@@ -804,12 +904,14 @@ const SettingsPage: React.FC = () => {
                       aşağıdaki alana lisans anahtarınızı girin.
                     </p>
                   </div>
-                  
+
                   <div className="space-y-4">
                     <input
                       type="text"
                       value={newLicenseKey}
-                      onChange={(e) => setNewLicenseKey(e.target.value.toUpperCase())}
+                      onChange={(e) =>
+                        setNewLicenseKey(e.target.value.toUpperCase())
+                      }
                       placeholder="Lisans anahtarınızı girin"
                       className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary-500"
                       disabled={licenseStatus.loading}
@@ -839,12 +941,13 @@ const SettingsPage: React.FC = () => {
                   </div>
                 </div>
               )}
-              
+
               <div className="mt-6 text-sm text-gray-500 bg-blue-50 p-4 rounded-lg">
                 <p>
-                  ℹ️ Lisansınız, uygulamamızı yasal olarak kullanmanız için gereklidir.
-                  Lisansınızın süresi dolduğunda veya lisans bilgilerinizde bir değişiklik olduğunda
-                  buradan güncelleyebilirsiniz.
+                  ℹ️ Lisansınız, uygulamamızı yasal olarak kullanmanız için
+                  gereklidir. Lisansınızın süresi dolduğunda veya lisans
+                  bilgilerinizde bir değişiklik olduğunda buradan
+                  güncelleyebilirsiniz.
                 </p>
               </div>
             </div>
@@ -859,21 +962,25 @@ const SettingsPage: React.FC = () => {
     <div className="p-6 max-w-[1200px] mx-auto">
       <header className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold text-gray-800">Ayarlar</h1>
-        
+
         {/* Auto-save indicator */}
         {saveStatus.status !== "idle" && (
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
-            saveStatus.status === "saving" 
-              ? "bg-blue-50 text-blue-600" 
-              : saveStatus.status === "saved"
-              ? "bg-green-50 text-green-600"
-              : "bg-red-50 text-red-600"
-          }`}>
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
+              saveStatus.status === "saving"
+                ? "bg-blue-50 text-blue-600"
+                : saveStatus.status === "saved"
+                ? "bg-green-50 text-green-600"
+                : "bg-red-50 text-red-600"
+            }`}
+          >
             {saveStatus.status === "saving" && (
               <div className="w-4 h-4 rounded-full border-2 border-blue-600 border-t-transparent"></div>
             )}
             {saveStatus.status === "saved" && <Check size={16} />}
-            {saveStatus.status === "error" && <span className="text-red-600">⚠️</span>}
+            {saveStatus.status === "error" && (
+              <span className="text-red-600">⚠️</span>
+            )}
             {saveStatus.message}
           </div>
         )}
@@ -904,9 +1011,7 @@ const SettingsPage: React.FC = () => {
         </aside>
 
         {/* Content */}
-        <div className="md:col-span-3">
-          {renderTabContent()}
-        </div>
+        <div className="md:col-span-3">{renderTabContent()}</div>
       </main>
     </div>
   );

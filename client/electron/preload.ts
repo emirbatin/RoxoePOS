@@ -39,3 +39,28 @@ contextBridge.exposeInMainWorld('serialAPI', {
     }
   }
 });
+
+// --------- Güncelleme API'sini Renderer Sürecine Expose Edelim ---------
+contextBridge.exposeInMainWorld('updaterAPI', {
+  // Güncelleme kontrolü başlat
+  checkForUpdates: () => {
+    ipcRenderer.send('check-for-updates');
+  },
+  
+  // Güncelleme durumu event'leri
+  onUpdateAvailable: (callback: (info: any) => void) => {
+    ipcRenderer.on('update-available', (_event, info) => callback(info));
+  },
+  
+  onUpdateDownloaded: (callback: (info: any) => void) => {
+    ipcRenderer.on('update-downloaded', (_event, info) => callback(info));
+  },
+  
+  onUpdateError: (callback: (err: any) => void) => {
+    ipcRenderer.on('update-error', (_event, err) => callback(err));
+  },
+  
+  onUpdateMessage: (callback: (message: string) => void) => {
+    ipcRenderer.on('update-message', (_event, message) => callback(message));
+  }
+});

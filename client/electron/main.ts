@@ -1,8 +1,33 @@
-import { app, BrowserWindow, Menu } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import LicenseManager from './license';
+import { autoUpdater } from 'electron-updater';
+import log from 'electron-log';
+
+// Log ayarları
+log.transports.file.level = 'info';
+autoUpdater.logger = log;
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+// GitHub token ayarları - private repo veya API rate limit aşımı durumlarında gerekli
+// Bu token'ı bir ortam değişkeni olarak (process.env.GH_TOKEN) ayarlamanız güvenlik için önemlidir
+const githubToken = process.env.GH_TOKEN;
+
+if (githubToken) {
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'emirbatin',
+    repo: 'RoxoePOS',
+    token: githubToken
+  });
+  log.info('GitHub token ile güncelleme ayarları yapılandırıldı');
+} else {
+  log.info('GitHub token bulunamadı, varsayılan güncelleme ayarları kullanılıyor');
+}
+
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname, '..');
@@ -29,6 +54,12 @@ function createWindow() {
 
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', new Date().toLocaleString());
+    
+    // Uygulamanın yüklenmesi tamamlandığında güncelleme kontrolü yap
+    if (app.isPackaged) {
+      autoUpdater.checkForUpdatesAndNotify();
+      log.info('Güncelleme kontrolü başlatıldı...');
+    }
   });
 
   if (VITE_DEV_SERVER_URL) {
@@ -57,6 +88,12 @@ function createWindow() {
               win?.webContents.toggleDevTools();
             },
           },
+          {
+            label: 'Check for Updates',
+            click: () => {
+              autoUpdater.checkForUpdatesAndNotify();
+            }
+          }
         ],
       },
     ]);
@@ -66,6 +103,65 @@ function createWindow() {
     Menu.setApplicationMenu(null);
   }
 }
+
+// Güncelleme event'leri
+autoUpdater.on('update-available', (info) => {
+  log.info('Güncelleme mevcut:', info);
+  if (win) {
+    win.webContents.send('update-available', info);
+    
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Güncelleme Mevcut',
+      message: `Yeni sürüm (${info.version}) mevcut. İndiriliyor...`,
+      buttons: ['Tamam']
+    });
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('Güncelleme indirildi:', info);
+  if (win) {
+    win.webContents.send('update-downloaded', info);
+    
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Güncelleme Hazır',
+      message: `Yeni sürüm (${info.version}) indirildi. Uygulamayı yeniden başlatarak güncellemeleri yükleyebilirsiniz.`,
+      buttons: ['Şimdi Yeniden Başlat', 'Daha Sonra'],
+      defaultId: 0
+    }).then((returnValue) => {
+      if (returnValue.response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    });
+  }
+});
+
+autoUpdater.on('error', (err) => {
+  log.error('Güncelleme hatası:', err);
+  if (win) {
+    win.webContents.send('update-error', err);
+  }
+});
+
+// Manuel güncelleme kontrolü için IPC
+ipcMain.on('check-for-updates', () => {
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify();
+  } else {
+    log.info('Geliştirme modunda güncelleme kontrolü atlandı.');
+    win?.webContents.send('update-message', 'Geliştirme modunda güncelleme kontrolü atlandı.');
+  }
+});
+
+// Periyodik güncelleme kontrolü (her 4 saatte bir)
+setInterval(() => {
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify();
+    log.info('Periyodik güncelleme kontrolü yapılıyor...');
+  }
+}, 4 * 60 * 60 * 1000);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
