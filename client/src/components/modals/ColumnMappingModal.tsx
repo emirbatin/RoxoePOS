@@ -3,6 +3,7 @@ import { Save, X, AlertTriangle } from "lucide-react";
 import ExcelJS from "exceljs";
 import Papa from "papaparse";
 import { Product, VatRate } from "../../types/product";
+import { calculatePriceWithoutVat } from "../../utils/vatUtils";
 
 interface ColumnMappingModalProps {
   isOpen: boolean;
@@ -49,7 +50,8 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   );
   const [processingErrors, setProcessingErrors] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+  // KDV dahil switch'i için state ekleyelim
+  const [salePriceIncludesVat, setSalePriceIncludesVat] = useState(true);
 
   useEffect(() => {
     if (file) {
@@ -192,7 +194,7 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
   ): Product | null => {
     try {
       const product: Partial<Product> = {};
-
+  
       // Tüm zorunlu alanları kontrol et
       for (const field of REQUIRED_FIELDS) {
         const fileField = mapping[field];
@@ -200,11 +202,11 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
           throw new Error(`${SYSTEM_COLUMNS[field]} alanı boş olamaz`);
         }
       }
-
+  
       // Değerleri dönüştür ve doğrula
       for (const [systemField, fileField] of Object.entries(mapping)) {
         const rawValue = row[fileField];
-
+  
         try {
           switch (systemField) {
             case "vatRate": {
@@ -220,8 +222,7 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
               product.vatRate = vatRate as VatRate;
               break;
             }
-            case "purchasePrice":
-            case "salePrice": {
+            case "purchasePrice": {
               const price = parseNumber(rawValue, SYSTEM_COLUMNS[systemField]);
               if (price < 0) {
                 throw new Error(
@@ -229,6 +230,42 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
                 );
               }
               product[systemField] = price;
+              break;
+            }
+            case "salePrice": {
+              const price = parseNumber(rawValue, SYSTEM_COLUMNS[systemField]);
+              if (price < 0) {
+                throw new Error(
+                  `${SYSTEM_COLUMNS[systemField]} negatif olamaz`
+                );
+              }
+              
+              // KDV dahil/hariç seçimine göre işlem yapalım
+              if (salePriceIncludesVat) {
+                // Eğer KDV dahilse, girilen değeri priceWithVat olarak ata
+                product.priceWithVat = price;
+                
+                // KDV'siz fiyatı hesapla (Utils'den gelen fonksiyonu kullan)
+                if (product.vatRate !== undefined) {
+                  product.salePrice = calculatePriceWithoutVat(price, product.vatRate);
+                } else {
+                  // VatRate henüz işlenmemişse, geçici değer koy
+                  product.salePrice = price;
+                }
+              } else {
+                // KDV hariçse, girilen değeri salePrice olarak ata
+                product.salePrice = price;
+                
+                // KDV'li fiyatı hesapla
+                if (product.vatRate !== undefined) {
+                  product.priceWithVat = Number(
+                    (price * (1 + product.vatRate / 100)).toFixed(2)
+                  );
+                } else {
+                  // VatRate henüz işlenmemişse, geçici değer koy
+                  product.priceWithVat = price;
+                }
+              }
               break;
             }
             case "stock": {
@@ -265,7 +302,27 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
           );
         }
       }
-
+  
+      // VatRate ve SalePrice işlemleri tamamlandıktan sonra, son bir kez daha hesapları yapalım
+      // Bu, order of operations sorunlarına karşı koruma sağlar
+      if (product.vatRate !== undefined) {
+        if (salePriceIncludesVat && product.priceWithVat !== undefined) {
+          // KDV dahil fiyat verilmişse, KDV'siz fiyatı kesinlikle hesaplayalım
+          product.salePrice = calculatePriceWithoutVat(product.priceWithVat, product.vatRate);
+        } 
+        else if (!salePriceIncludesVat && product.salePrice !== undefined) {
+          // KDV hariç fiyat verilmişse, KDV'li fiyatı kesinlikle hesaplayalım
+          product.priceWithVat = Number(
+            (product.salePrice * (1 + product.vatRate / 100)).toFixed(2)
+          );
+        }
+      }
+  
+      // NaN kontrolü
+      if (isNaN(product.salePrice as number) || isNaN(product.priceWithVat as number)) {
+        throw new Error(`Satır ${rowIndex + 2}: Fiyat hesaplamasında hata oluştu. Lütfen fiyat ve KDV değerlerini kontrol edin.`);
+      }
+  
       const completeProduct: Product = {
         id: 0,
         name: product.name!,
@@ -273,13 +330,19 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
         purchasePrice: product.purchasePrice!,
         salePrice: product.salePrice!,
         vatRate: product.vatRate!,
-        priceWithVat: Number(
-          (product.salePrice! * (1 + product.vatRate! / 100)).toFixed(2)
-        ),
+        priceWithVat: product.priceWithVat!,
         category: product.category!,
         stock: product.stock!,
       };
-
+  
+      // Ek kontrol: Değerleri loglayalım
+      console.log(`Processed row ${rowIndex}:`, {
+        isKDVIncluded: salePriceIncludesVat,
+        vatRate: completeProduct.vatRate,
+        salePrice: completeProduct.salePrice, 
+        priceWithVat: completeProduct.priceWithVat
+      });
+  
       return completeProduct;
     } catch (error) {
       setProcessingErrors((prev) => [
@@ -412,6 +475,31 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
               </ul>
             </div>
           )}
+
+          {/* KDV Dahil Switch'i */}
+          <div className="mb-6 bg-blue-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-blue-700">Satış Fiyatı Formatı</h3>
+                <p className="text-sm text-blue-600 mt-1">
+                  Excel/CSV dosyanızdaki satış fiyatı KDV dahil mi?
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={salePriceIncludesVat}
+                  onChange={() => setSalePriceIncludesVat(!salePriceIncludesVat)}
+                  className="sr-only peer"
+                  disabled={isProcessing}
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <span className="ml-3 text-sm font-medium text-gray-700">
+                  {salePriceIncludesVat ? "KDV Dahil" : "KDV Hariç"}
+                </span>
+              </label>
+            </div>
+          </div>
 
           <div className="space-y-4">
             {REQUIRED_FIELDS.map((field) => (

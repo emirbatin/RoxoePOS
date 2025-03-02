@@ -279,15 +279,18 @@ const ProductsPage: React.FC = () => {
           const index = store.index("barcode");
           const existing = await index.get(product.barcode);
           const { id, ...productData } = product;
+
+          // KDV hesaplamalarını yapmadan doğrudan gelen değerleri kullan
+          // Hesaplamalar ColumnMappingModal'da zaten yapıldı
           const processedProduct = {
             ...productData,
             purchasePrice: Number(productData.purchasePrice),
             salePrice: Number(productData.salePrice),
-            priceWithVat: calculatePriceWithVat(
-              Number(productData.salePrice),
-              productData.vatRate
-            ),
+            priceWithVat: Number(productData.priceWithVat),
+            // calculatePriceWithVat fonksiyonunu kaldırdık, kullanıcının seçimine göre
+            // ColumnMappingModal'da hesaplanan değeri kullanıyoruz
           };
+
           if (existing) {
             await store.put({
               ...processedProduct,
@@ -481,7 +484,7 @@ const ProductsPage: React.FC = () => {
           </div>
         )}
       </div>
-      
+
       {/* Ürün Tablosu */}
       <div className="bg-white rounded-lg shadow-sm">
         <div className="p-4 border-b">
