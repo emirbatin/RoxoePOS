@@ -423,39 +423,6 @@ const ProductsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Ürün Ekle / Toplu İşlemler Paneli */}
-      <div className="flex justify-between items-start mb-6">
-        <Button
-          onClick={() => {
-            setSelectedProduct(undefined);
-            setShowProductModal(true);
-          }}
-          variant="primary"
-          icon={Plus}
-        >
-          Ürün Ekle
-        </Button>
-
-        {selectedProductIds.length > 0 && (
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowBatchUpdate(!showBatchUpdate)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              <Calculator size={20} />
-              Toplu Fiyat Güncelle ({selectedProductIds.length})
-            </button>
-            <button
-              onClick={handleBatchDelete}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-            >
-              <Trash2 size={20} />
-              Toplu Sil ({selectedProductIds.length})
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* Toplu Fiyat Güncelleme Alanı */}
       {showBatchUpdate && (
         <div className="mb-6">
@@ -474,6 +441,47 @@ const ProductsPage: React.FC = () => {
           filteredProducts={filteredProducts}
         />
       </div>
+
+      {/* Ürün Ekle / Toplu İşlemler Paneli */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
+        <Button
+          onClick={() => {
+            setSelectedProduct(undefined);
+            setShowProductModal(true);
+          }}
+          variant="primary"
+          icon={Plus}
+          className="w-full md:w-auto"
+        >
+          Ürün Ekle
+        </Button>
+
+        {selectedProductIds.length > 0 && (
+          <div className="flex flex-col md:flex-row gap-2 md:gap-4">
+            <button
+              onClick={() => setShowBatchUpdate(!showBatchUpdate)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+            >
+              <Calculator size={20} />
+              Toplu Fiyat Güncelle{" "}
+              <span className="font-semibold">
+                ({selectedProductIds.length})
+              </span>
+            </button>
+            <button
+              onClick={handleBatchDelete}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-md"
+            >
+              <Trash2 size={20} />
+              Toplu Sil{" "}
+              <span className="font-semibold">
+                ({selectedProductIds.length})
+              </span>
+            </button>
+          </div>
+        )}
+      </div>
+      
       {/* Ürün Tablosu */}
       <div className="bg-white rounded-lg shadow-sm">
         <div className="p-4 border-b">
