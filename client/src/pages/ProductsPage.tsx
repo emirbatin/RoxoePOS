@@ -376,7 +376,7 @@ const ProductsPage: React.FC = () => {
   };
 
   return (
-    <PageLayout title="Ürünler">
+    <PageLayout>
       {/* Arama & Filtre Paneli */}
       <SearchFilterPanel
         searchTerm={searchTerm}

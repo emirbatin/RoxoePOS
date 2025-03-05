@@ -1,4 +1,3 @@
-// PaymentModal.tsx
 import React, { useState, useRef, useEffect } from "react";
 import { formatCurrency } from "../../utils/vatUtils";
 import { posService } from "../../services/posServices";
@@ -6,7 +5,49 @@ import { PaymentModalProps, PaymentMethod } from "../../types/pos";
 import { Customer } from "../../types/credit";
 import { useAlert } from "../AlertProvider";
 
-const PaymentModal: React.FC<PaymentModalProps> = ({
+// Tipler: items -> quantity ve amount alanları olmalı
+type PosItem = {
+  id: number;
+  name: string;
+  amount: number;   // satırın toplam tutarı
+  quantity: number; // satırın kalan adet
+};
+
+// Ürün bazında ödemeleri kaydetmek için
+type ProductPaymentData = {
+  itemId: number;
+  paymentMethod: PaymentMethod;
+  paidQuantity: number;
+  paidAmount: number; // paidQuantity * birim fiyat
+  received: number;   // kasaya giren para
+  customer?: Customer | null;
+};
+
+// Ürün bazında UI state'i
+type ProductPaymentInput = {
+  paymentMethod: PaymentMethod;
+  received: string;       // kullanıcı giriyor
+  customerId: string;     // veresiye
+  selectedQuantity: number;
+};
+
+function getDefaultProductInput(): ProductPaymentInput {
+  return {
+    paymentMethod: "nakit",
+    received: "",
+    customerId: "",
+    selectedQuantity: 0,
+  };
+}
+
+function getOrInit(
+  prev: Record<number, ProductPaymentInput>,
+  itemId: number
+): ProductPaymentInput {
+  return prev[itemId] || getDefaultProductInput();
+}
+
+const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
   isOpen,
   onClose,
   total,
@@ -18,51 +59,38 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
   setSelectedCustomer,
   items = [],
 }) => {
-  // AlertProvider’dan gelen fonksiyonlar
-  const { showSuccess, showError, confirm } = useAlert();
+  const { showError, confirm } = useAlert();
 
-  // Ödeme modları: "normal" (tek sefer), "split" (bölünmüş)
+  // Normal vs. Split
   const [mode, setMode] = useState<"normal" | "split">("normal");
-  // Eğer split seçildiyse: "product" (ürün bazında) veya "equal" (eşit bölüşüm)
+  // Split tip: product (ürün bazında) veya equal (eşit)
   const [splitType, setSplitType] = useState<"product" | "equal">("product");
 
-  // NORMAL ödeme state'leri
+  // Normal ödeme
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("nakit");
   const [receivedAmount, setReceivedAmount] = useState("");
-  const [processingPOS, setProcessingPOS] = useState(false);
   const receivedInputRef = useRef<HTMLInputElement>(null);
+  const [processingPOS, setProcessingPOS] = useState(false);
 
-  // ÜRÜN BAZINDA SPLIT
-  const [remainingItems, setRemainingItems] = useState(items);
-  const [productPayments, setProductPayments] = useState<
-    {
-      itemId: number;
-      paymentMethod: PaymentMethod;
-      received: number;
-      customer?: Customer | null;
-    }[]
-  >([]);
-  const [productPaymentInputs, setProductPaymentInputs] = useState<
-    Record<
-      number,
-      { paymentMethod: PaymentMethod; received: string; customerId: string }
-    >
-  >({});
+  // Ürün Bazında state
+  const [remainingItems, setRemainingItems] = useState<PosItem[]>(items);
+  const [productPaymentInputs, setProductPaymentInputs] =
+    useState<Record<number, ProductPaymentInput>>({});
+  const [productPayments, setProductPayments] = useState<ProductPaymentData[]>([]);
 
-  // EŞİT BÖLÜŞÜM SPLIT
+  // Eşit Bölüşüm state
   const [friendCount, setFriendCount] = useState(2);
   const [equalPayments, setEqualPayments] = useState<
     { paymentMethod: PaymentMethod; received: string; customerId: string }[]
   >([]);
 
-  // Modal açılınca miktar inputuna odaklanmak
   useEffect(() => {
     if (isOpen && receivedInputRef.current) {
       receivedInputRef.current.focus();
     }
   }, [isOpen]);
 
-  // Modal kapandığında tüm stateleri sıfırlama
+  // Modal kapandığında her şeyi resetle
   useEffect(() => {
     if (!isOpen) {
       setMode("normal");
@@ -71,216 +99,242 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       setReceivedAmount("");
       setSelectedCustomer(null);
       setProcessingPOS(false);
+
+      // Ürün Bazında
       setRemainingItems(items);
-      setProductPayments([]);
       setProductPaymentInputs({});
+      setProductPayments([]);
+
+      // Eşit
       setFriendCount(2);
       setEqualPayments([]);
     }
   }, [isOpen, items, setSelectedCustomer]);
 
-  // Veresiye limiti kontrol yardımı
-  const checkVeresiyeLimit = (cust: Customer, amount: number) => {
-    return cust.currentDebt + amount <= cust.creditLimit;
-  };
+  // Veresiye limiti kontrol
+  const checkVeresiyeLimit = (cust: Customer, amount: number) =>
+    cust.currentDebt + amount <= cust.creditLimit;
 
-  /** =======================
-   *       NORMAL ÖDEME
-   *  ======================= */
+  /** ===================
+   *    NORMAL ÖDEME
+   *  =================== */
   const parsedReceived = parseFloat(receivedAmount) || 0;
-  const change = parsedReceived - total;
 
   const handleNormalPayment = async () => {
-    // Eksik ödeme kontrolü
     if (
       (paymentMethod === "nakit" || paymentMethod === "nakitpos") &&
       parsedReceived < total
     ) {
-      showError("Lütfen en az toplam tutar kadar nakit veya nakit pos ödemesi girin.");
+      showError("Nakit/NakitPOS için eksik tutar girdiniz!");
       return;
     }
 
-    // Veresiye müşteri + limit kontrolü
     if (paymentMethod === "veresiye") {
       if (!selectedCustomer) {
-        showError("Veresiye için müşteri seçmeniz gerekiyor.");
+        showError("Veresiye için müşteri seçmelisiniz!");
         return;
       }
       if (!checkVeresiyeLimit(selectedCustomer, total)) {
-        showError("Seçilen müşterinin limiti yetersiz!");
+        showError("Müşteri limiti yetersiz!");
         return;
       }
     }
 
-    // Kart veya NakitPOS -> POS işlemi
+    // POS işlemi
     if (paymentMethod === "kart" || paymentMethod === "nakitpos") {
       setProcessingPOS(true);
       try {
-        const isManualMode = await posService.isManualMode();
-
-        // Manuel modda direkt başarılı sayıyoruz
-        if (isManualMode) {
-          onComplete({
-            mode: "normal",
-            paymentMethod,
-            received: parsedReceived,
-          });
-          setProcessingPOS(false);
-          return;
+        const isManual = await posService.isManualMode();
+        if (!isManual) {
+          const connected = await posService.connect("Ingenico");
+          if (!connected) {
+            showError("POS cihazına bağlanılamadı!");
+            setProcessingPOS(false);
+            return;
+          }
+          const result = await posService.processPayment(total);
+          if (!result.success) {
+            showError(result.message);
+            setProcessingPOS(false);
+            await posService.disconnect();
+            return;
+          }
+          await posService.disconnect();
         }
-
-        // Normal modda POS bağlantısı ve işlem
-        const connected = await posService.connect("Ingenico");
-        if (!connected) {
-          showError("POS cihazına bağlanılamadı!");
-          return;
-        }
-        const result = await posService.processPayment(total);
-        if (!result.success) {
-          showError(result.message);
-        } else {
-          onComplete({
-            mode: "normal",
-            paymentMethod,
-            received: parsedReceived,
-          });
-        }
+        // Başarılı
+        onComplete({
+          mode: "normal",
+          paymentMethod,
+          received: parsedReceived,
+        });
       } catch (error) {
-        showError("POS işlemi sırasında bir hata oluştu!");
+        showError("POS işleminde hata!");
         console.error(error);
       } finally {
         setProcessingPOS(false);
-        await posService.disconnect();
       }
       return;
     }
 
-    // Diğer durumlar: nakit veya veresiye
-    onComplete({ mode: "normal", paymentMethod, received: parsedReceived });
+    // Nakit / Veresiye
+    onComplete({
+      mode: "normal",
+      paymentMethod,
+      received: parsedReceived,
+    });
   };
 
-  /** =======================
-   *   ÜRÜN BAZINDA SPLIT
-   *  ======================= */
-  const handleProductPay = async (itemId: number) => {
-    const input = productPaymentInputs[itemId];
-    if (!input) {
-      showError("Bu ürün için ödeme yöntemi ve tutar girilmedi!");
-      return;
-    }
+  /** ===================
+   *  ÜRÜN BAZINDA SPLIT
+   *  =================== */
+  const handleQuantityChange = (itemId: number, newQty: number) => {
+    const item = remainingItems.find((i) => i.id === itemId);
+    if (!item) return;
 
-    const { paymentMethod: pm, received, customerId } = input;
-    const receivedNum = parseFloat(received);
+    newQty = Math.max(0, Math.min(newQty, item.quantity));
+
+    setProductPaymentInputs((prev) => {
+      const oldVal = getOrInit(prev, itemId);
+      return {
+        ...prev,
+        [itemId]: {
+          ...oldVal,
+          selectedQuantity: newQty,
+        },
+      };
+    });
+  };
+
+  const handleProductPay = async (itemId: number) => {
     const item = remainingItems.find((i) => i.id === itemId);
     if (!item) {
       showError("Ürün bulunamadı!");
       return;
     }
+    const input = productPaymentInputs[itemId];
+    if (!input) {
+      showError("Ödeme bilgisi yok!");
+      return;
+    }
 
-    // Nakit veya NakitPOS için para üstü kontrolü
-    if ((pm === "nakit" || pm === "nakitpos") && receivedNum > item.amount) {
-      const change = receivedNum - item.amount;
-      const shouldContinue = await confirm(
-        `Para üstü: ${formatCurrency(change)}. Ödemeyi tamamlamak istiyor musunuz?`
+    const { paymentMethod: pm, received, customerId, selectedQuantity } = input;
+    if (selectedQuantity <= 0) {
+      showError("En az 1 adet seçmelisiniz!");
+      return;
+    }
+
+    const unitPrice = item.quantity > 0 ? item.amount / item.quantity : 0;
+    const partialCost = unitPrice * selectedQuantity;
+    const receivedNum = parseFloat(received) || 0;
+
+    // Eksik ödeme
+    if (receivedNum < partialCost) {
+      showError(`Eksik ödeme! En az ${formatCurrency(partialCost)} girilmeli.`);
+      return;
+    }
+
+    // Fazla ödeme -> confirm (bakkalda anında para üstü vermek istenebilir)
+    if ((pm === "nakit" || pm === "nakitpos") && receivedNum > partialCost) {
+      const change = receivedNum - partialCost;
+      const ok = await confirm(
+        `Para üstü: ${formatCurrency(change)} verilecek. Devam edilsin mi?`
       );
-      if (!shouldContinue) {
-        return;
+      if (!ok) {
+        return; // Kullanıcı vazgeçti
       }
     }
 
-    if (isNaN(receivedNum) || receivedNum <= 0) {
-      showError("Geçerli bir ödeme tutarı girin!");
-      return;
-    }
-    if (receivedNum < item.amount) {
-      showError(`Eksik ödeme! Bu ürün için en az ${formatCurrency(item.amount)} girmelisiniz.`);
-      return;
-    }
-
+    // Veresiye limiti
     let cust: Customer | null = null;
     if (pm === "veresiye") {
       if (!customerId) {
-        showError("Veresiye seçtiniz, lütfen müşteri belirleyin.");
+        showError("Veresiye için müşteri seçiniz!");
         return;
       }
-      const foundCust = customers.find((c) => c.id.toString() === customerId);
-      if (!foundCust) {
-        showError("Geçersiz müşteri!");
+      const found = customers.find((c) => c.id.toString() === customerId);
+      if (!found) {
+        showError("Seçili müşteri yok!");
         return;
       }
-      if (!checkVeresiyeLimit(foundCust, item.amount)) {
+      if (!checkVeresiyeLimit(found, partialCost)) {
         showError("Müşteri limiti yetersiz!");
         return;
       }
-      cust = foundCust;
+      cust = found;
     }
 
+    // Kart ya da NakitPOS -> POS
     if (pm === "kart" || pm === "nakitpos") {
       setProcessingPOS(true);
       try {
-        const isManualMode = await posService.isManualMode();
-
-        // Manuel modda direkt başarılı sayıyoruz
-        if (isManualMode) {
-          // Başarılı ödeme
-          setProductPayments((prev) => [
-            ...prev,
-            {
-              itemId,
-              paymentMethod: pm,
-              received: receivedNum,
-              customer: cust,
-            },
-          ]);
-          setRemainingItems((prev) => prev.filter((x) => x.id !== itemId));
-          setProductPaymentInputs((prev) => {
-            const updated = { ...prev };
-            delete updated[itemId];
-            return updated;
-          });
-          setProcessingPOS(false);
-          return;
+        const isManual = await posService.isManualMode();
+        if (!isManual) {
+          const connected = await posService.connect("Ingenico");
+          if (!connected) {
+            showError("POS cihazına bağlanılamadı!");
+            setProcessingPOS(false);
+            return;
+          }
+          const result = await posService.processPayment(partialCost);
+          if (!result.success) {
+            showError(result.message);
+            setProcessingPOS(false);
+            await posService.disconnect();
+            return;
+          }
+          await posService.disconnect();
         }
-
-        // Normal modda POS bağlantısı ve işlem
-        const connected = await posService.connect("Ingenico");
-        if (!connected) {
-          showError("POS cihazına bağlanılamadı!");
-          setProcessingPOS(false);
-          return;
-        }
-        const result = await posService.processPayment(item.amount);
+      } catch (err) {
+        showError("POS işleminde hata!");
+        console.error(err);
         setProcessingPOS(false);
-        await posService.disconnect();
-
-        if (!result.success) {
-          showError(result.message);
-          return;
-        }
-      } catch (error) {
-        setProcessingPOS(false);
-        showError("POS işlemi sırasında bir hata oldu!");
-        console.error(error);
         return;
+      } finally {
+        setProcessingPOS(false);
       }
     }
 
-    // Başarılı ödeme - tüm ödeme tipleri için son işlemler
+    // Başarılı ödeme
     setProductPayments((prev) => [
       ...prev,
-      { itemId, paymentMethod: pm, received: receivedNum, customer: cust },
+      {
+        itemId,
+        paymentMethod: pm,
+        paidQuantity: selectedQuantity,
+        paidAmount: partialCost,
+        received: receivedNum,
+        customer: cust,
+      },
     ]);
-    setRemainingItems((prev) => prev.filter((x) => x.id !== itemId));
+
+    // Kalan adet / tutar
+    const leftoverQty = item.quantity - selectedQuantity;
+    if (leftoverQty <= 0) {
+      setRemainingItems((prev) => prev.filter((x) => x.id !== itemId));
+    } else {
+      const leftoverAmount = unitPrice * leftoverQty;
+      setRemainingItems((prev) =>
+        prev.map((x) =>
+          x.id === itemId
+            ? { ...x, quantity: leftoverQty, amount: leftoverAmount }
+            : x
+        )
+      );
+    }
+
+    // Inputu temizle
     setProductPaymentInputs((prev) => {
-      const updated = { ...prev };
-      delete updated[itemId];
-      return updated;
+      const copy = { ...prev };
+      delete copy[itemId];
+      return copy;
     });
   };
 
-  /** =======================
+  /** ===================
    *   EŞİT BÖLÜŞÜM SPLIT
-   *  ======================= */
+   *  =================== */
+  // Burada kişi bazında “fazla ödeme” => anında "para üstü" göstermiyoruz
+  // Sadece finalde total > fatura ise para üstü
   const handleEqualChange = (
     index: number,
     updates: {
@@ -289,89 +343,63 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
       customerId: string;
     }
   ) => {
-    const newPays = [...equalPayments];
-    newPays[index] = updates;
-    setEqualPayments(newPays);
+    const arr = [...equalPayments];
+    arr[index] = updates;
+    setEqualPayments(arr);
   };
 
   const handleFinalizeSplit = async () => {
     if (splitType === "equal") {
-      let sum = 0;
-      const perPersonAmount = total / friendCount;
-      const isManualMode = await posService.isManualMode();
+      let totalPaid = 0;
+      const isManual = await posService.isManualMode();
 
-      // Her bir kişinin ödemesini kontrol et
+      // Sadece POS / veresiye limit gibi kontroller
       for (let i = 0; i < friendCount; i++) {
         const p = equalPayments[i];
-        if (!p) {
-          showError(`${i + 1}. kişi için ödeme bilgisi eksik!`);
-          return;
-        }
-
         const val = parseFloat(p.received) || 0;
-        sum += val;
+        totalPaid += val;
 
-        // Nakit veya NakitPOS için para üstü kontrolü
-        if (
-          (p.paymentMethod === "nakit" || p.paymentMethod === "nakitpos") &&
-          val > perPersonAmount
-        ) {
-          const change = val - perPersonAmount;
-          const shouldContinue = await confirm(
-            `${i + 1}. kişi için para üstü: ${formatCurrency(change)}. Devam etmek istiyor musunuz?`
-          );
-          if (!shouldContinue) {
-            return;
-          }
-        }
-
-        // Veresiye kontrolleri
+        // Veresiye limit
         if (p.paymentMethod === "veresiye" && val > 0) {
           if (!p.customerId) {
-            showError(`${i + 1}. kişi veresiye seçti ama müşteri belirlenmedi!`);
+            showError(`${i + 1}. kişi veresiye seçti ama müşteri yok!`);
             return;
           }
-          const c = customers.find((cust) => cust.id.toString() === p.customerId);
-          if (!c) {
-            showError(`${i + 1}. kişi için seçilen müşteri hatalı!`);
+          const cust = customers.find((c) => c.id.toString() === p.customerId);
+          if (!cust) {
+            showError(`Geçersiz müşteri!`);
             return;
           }
-          if (!checkVeresiyeLimit(c, val)) {
+          if (!checkVeresiyeLimit(cust, val)) {
             showError(`${i + 1}. kişinin veresiye limiti yetersiz!`);
             return;
           }
         }
 
-        // Kart veya POS ödemeleri için kontrol
-        if (
-          (p.paymentMethod === "kart" || p.paymentMethod === "nakitpos") &&
-          val > 0
-        ) {
+        // Kart / nakitpos => POS (fark etmiyor kişi payını aşıyor mu, bakmayacağız)
+        if ((p.paymentMethod === "kart" || p.paymentMethod === "nakitpos") && val > 0) {
           setProcessingPOS(true);
-
           try {
-            if (!isManualMode) {
+            if (!isManual) {
               const connected = await posService.connect("Ingenico");
               if (!connected) {
-                showError(`${i + 1}. kişi için POS cihazına bağlanılamadı!`);
+                showError("POS cihazına bağlanılamadı!");
                 setProcessingPOS(false);
                 return;
               }
-
               const result = await posService.processPayment(val);
               if (!result.success) {
-                showError(`${i + 1}. kişi için POS işlemi başarısız: ${result.message}`);
+                showError(`POS hatası: ${result.message}`);
                 setProcessingPOS(false);
                 await posService.disconnect();
                 return;
               }
-
               await posService.disconnect();
             }
-          } catch (error) {
+          } catch (err) {
+            showError("POS işleminde hata oluştu!");
+            console.error(err);
             setProcessingPOS(false);
-            showError(`${i + 1}. kişi için POS işlemi sırasında hata oluştu!`);
-            console.error(error);
             return;
           }
         }
@@ -379,30 +407,31 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
       setProcessingPOS(false);
 
-      // Toplam tutar kontrolü
-      if (sum < total) {
+      // Son kontrol: totalPaid < total => eksik
+      if (totalPaid < total) {
         showError(
-          `Toplam tutar: ${formatCurrency(total)}. Şu an girilen toplam: ${formatCurrency(
-            sum
-          )}. Eksik ödeme!`
+          `Eksik ödeme! Toplam ödendi: ${formatCurrency(totalPaid)}, Fatura: ${formatCurrency(
+            total
+          )}`
         );
         return;
-      } else if (sum > total) {
-        const totalChange = sum - total;
-        const shouldContinue = await confirm(
-          `Toplam para üstü: ${formatCurrency(totalChange)}. Ödemeyi tamamlamak istiyor musunuz?`
+      } else if (totalPaid > total) {
+        // "toplam para üstü" diyerek confirm
+        const change = totalPaid - total;
+        const ok = await confirm(
+          `Toplam para üstü: ${formatCurrency(change)} verilecek. Devam edilsin mi?`
         );
-        if (!shouldContinue) {
-          return;
-        }
+        if (!ok) return;
       }
     }
 
-    // Ödemeyi tamamla
+    // Ödeme Tamamla
     onComplete({
       mode: "split",
       splitOption: splitType,
+      // Ürün bazında
       productPayments: splitType === "product" ? productPayments : undefined,
+      // Eşit bölüşüm
       equalPayments:
         splitType === "equal"
           ? equalPayments.map((p) => ({
@@ -417,23 +446,21 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
     });
   };
 
-  /** =======================
-   *         RENDER
-   *  ======================= */
-
+  /* ================
+   *     RENDER
+   * ================ */
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Üst Kısım */}
+        {/* ÜST KISIM */}
         <div className="px-8 py-6 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-semibold text-gray-900">Ödeme Yap</h2>
               <p className="text-gray-500 mt-1">Ödemeyi Tamamlayın</p>
             </div>
-
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <p className="text-sm text-gray-500">Toplam Tutar</p>
@@ -470,14 +497,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           )}
         </div>
 
-        {/* Ana İçerik Alanı */}
+        {/* İÇERİK */}
         <div className="flex-1 overflow-auto">
           <div className="p-8 space-y-8">
-            {/* Ödeme Özeti Kartı */}
+            {/* ÖDEME ÖZETİ */}
             <div className="bg-gray-50 rounded-xl p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Ödeme Özeti
-              </h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Ödeme Özeti</h3>
               <div className="space-y-3">
                 <div className="flex justify-between text-gray-600">
                   <span>Ara Tutar</span>
@@ -495,7 +520,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               </div>
             </div>
 
-            {/* Ödeme Türü Seçimi */}
+            {/* ÖDEME TÜRÜ SEÇİMİ */}
             <div className="space-y-4">
               <h3 className="text-lg font-medium text-gray-900">Ödeme Türü</h3>
               <div className="grid grid-cols-2 gap-4">
@@ -507,7 +532,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                       : "bg-white border-2 border-gray-200 text-gray-700 hover:border-primary-600 hover:text-primary-600"
                   }`}
                 >
-                  <span className="text-lg font-medium">Normal Ödeme</span>
+                  Normal Ödeme
                 </button>
                 <button
                   onClick={() => setMode("split")}
@@ -517,51 +542,46 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                       : "bg-white border-2 border-gray-200 text-gray-700 hover:border-primary-600 hover:text-primary-600"
                   }`}
                 >
-                  <span className="text-lg font-medium">Bölünmüş Ödeme</span>
+                  Bölünmüş Ödeme
                 </button>
               </div>
             </div>
 
-            {/* Normal Ödeme Bölümü */}
+            {/* NORMAL ÖDEME */}
             {mode === "normal" && (
               <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Ödeme Yöntemi
-                </h3>
-
+                <h3 className="text-lg font-medium text-gray-900">Ödeme Yöntemi</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  {(
-                    ["nakit", "kart", "veresiye", "nakitpos"] as PaymentMethod[]
-                  ).map((method) => (
+                  {(["nakit", "kart", "veresiye", "nakitpos"] as PaymentMethod[]).map((m) => (
                     <button
-                      key={method}
-                      onClick={() => setPaymentMethod(method)}
+                      key={m}
+                      onClick={() => setPaymentMethod(m)}
                       className={`group p-4 rounded-xl transition-all duration-200 ${
-                        paymentMethod === method
+                        paymentMethod === m
                           ? "bg-primary-600 text-white shadow-lg shadow-primary-100"
                           : "bg-white border-2 border-gray-200 text-gray-700 hover:border-primary-600"
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">
-                          {method === "nakit" && "💵"}
-                          {method === "kart" && "💳"}
-                          {method === "veresiye" && "🧾"}
-                          {method === "nakitpos" && "💵"}
+                          {m === "nakit" && "💵"}
+                          {m === "kart" && "💳"}
+                          {m === "veresiye" && "🧾"}
+                          {m === "nakitpos" && "💵"}
                         </span>
                         <span className="text-lg font-medium">
-                          {method === "nakit" && "Nakit"}
-                          {method === "kart" && "Kredi Kartı"}
-                          {method === "veresiye" && "Veresiye"}
-                          {method === "nakitpos" && "Nakit POS"}
+                          {m === "nakit" && "Nakit"}
+                          {m === "kart" && "Kredi Kartı"}
+                          {m === "veresiye" && "Veresiye"}
+                          {m === "nakitpos" && "Nakit POS"}
                         </span>
                       </div>
                     </button>
                   ))}
                 </div>
 
-                {(paymentMethod === "nakit" ||
-                  paymentMethod === "nakitpos") && (
+                {/* Nakit / NakitPOS */}
+                {(paymentMethod === "nakit" || paymentMethod === "nakitpos") && (
                   <div className="bg-white rounded-xl border-2 border-gray-200 p-6 space-y-3">
                     <label className="block text-sm font-medium text-gray-700">
                       Alınan Tutar
@@ -584,6 +604,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   </div>
                 )}
 
+                {/* Veresiye */}
                 {paymentMethod === "veresiye" && (
                   <div className="bg-white rounded-xl border-2 border-gray-200 p-6 space-y-3">
                     <label className="block text-sm font-medium text-gray-700">
@@ -593,9 +614,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                       value={selectedCustomer?.id || ""}
                       onChange={(e) =>
                         setSelectedCustomer(
-                          customers.find(
-                            (c) => c.id === parseInt(e.target.value)
-                          ) || null
+                          customers.find((c) => c.id === Number(e.target.value)) || null
                         )
                       }
                       className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-700"
@@ -603,8 +622,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                       <option value="">Bir Müşteri Seçin</option>
                       {customers.map((customer) => (
                         <option key={customer.id} value={customer.id}>
-                          {customer.name} (Borç:{" "}
-                          {formatCurrency(customer.currentDebt)} / Limit:{" "}
+                          {customer.name} (Borç: {formatCurrency(customer.currentDebt)} / Limit:{" "}
                           {formatCurrency(customer.creditLimit)})
                         </option>
                       ))}
@@ -614,10 +632,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               </div>
             )}
 
-            {/* Bölünmüş Ödeme Bölümü */}
+            {/* BÖLÜNMÜŞ ÖDEME */}
             {mode === "split" && (
               <div className="space-y-6">
-                {/* Bölünme Tipi Sekmeleri */}
+                {/* Tabler */}
                 <div className="bg-white rounded-xl border-2 border-gray-200">
                   <nav className="flex p-1 gap-2">
                     <button
@@ -643,134 +661,179 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   </nav>
                 </div>
 
-                {/* Ürün Bazında Bölünme */}
+                {/* Ürün Bazında */}
                 {splitType === "product" && (
                   <div className="space-y-6">
                     <div className="grid gap-4">
-                      {remainingItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="bg-white rounded-xl border-2 border-gray-200 p-6 hover:border-primary-200 transition-colors"
-                        >
-                          <div className="flex justify-between items-center mb-4">
-                            <span className="text-lg font-medium text-gray-900">
-                              {item.name}
-                            </span>
-                            <span className="text-xl font-semibold text-primary-600">
-                              {formatCurrency(item.amount)}
-                            </span>
-                          </div>
+                      {remainingItems.map((item) => {
+                        const input = productPaymentInputs[item.id] || getDefaultProductInput();
+                        const unitPrice =
+                          item.quantity > 0 ? item.amount / item.quantity : 0;
+                        const partialCost = unitPrice * input.selectedQuantity;
+                        const receivedNum = parseFloat(input.received) || 0;
 
-                          <div className="space-y-4">
-                            {/* Ödeme Yöntemleri */}
-                            <div className="grid grid-cols-2 gap-2">
-                              {(
-                                [
-                                  "nakit",
-                                  "kart",
-                                  "veresiye",
-                                  "nakitpos",
-                                ] as PaymentMethod[]
-                              ).map((method) => (
+                        // Nakit/nakitpos -> anlık para üstü, çünkü tek bir ürün satırı
+                        const showChange =
+                          (input.paymentMethod === "nakit" || input.paymentMethod === "nakitpos") &&
+                          receivedNum > partialCost &&
+                          partialCost > 0;
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="bg-white rounded-xl border-2 border-gray-200 p-6 hover:border-primary-200 transition-colors"
+                          >
+                            <div className="flex justify-between items-center mb-4">
+                              <span className="text-lg font-medium text-gray-900">
+                                {item.name}
+                              </span>
+                              <span className="text-sm text-gray-600">
+                                Kalan: {item.quantity} adet - {formatCurrency(item.amount)}
+                              </span>
+                            </div>
+
+                            {/* Adet Seç */}
+                            <div className="flex items-center gap-4 mb-4">
+                              <label className="font-medium text-gray-600">Adet Seç:</label>
+                              <div className="flex items-center gap-2">
                                 <button
-                                  key={method}
                                   onClick={() =>
-                                    setProductPaymentInputs((prev) => ({
-                                      ...prev,
-                                      [item.id]: {
-                                        ...prev[item.id],
-                                        paymentMethod: method,
-                                      },
-                                    }))
+                                    handleQuantityChange(item.id, input.selectedQuantity - 1)
                                   }
-                                  className={`py-2 px-3 rounded-lg text-sm transition-colors ${
-                                    productPaymentInputs[item.id]
-                                      ?.paymentMethod === method
-                                      ? "bg-primary-600 text-white"
-                                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                  }`}
+                                  disabled={input.selectedQuantity <= 0}
+                                  className="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
                                 >
-                                  <span className="flex items-center justify-center gap-2">
+                                  -
+                                </button>
+                                <span className="font-semibold w-8 text-center">
+                                  {input.selectedQuantity}
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    handleQuantityChange(item.id, input.selectedQuantity + 1)
+                                  }
+                                  disabled={input.selectedQuantity >= item.quantity}
+                                  className="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Ödeme Yöntemi */}
+                            <div className="grid grid-cols-2 gap-2 mb-4">
+                              {(["nakit", "kart", "veresiye", "nakitpos"] as PaymentMethod[]).map(
+                                (method) => (
+                                  <button
+                                    key={method}
+                                    onClick={() =>
+                                      setProductPaymentInputs((prev) => {
+                                        const oldVal = getOrInit(prev, item.id);
+                                        return {
+                                          ...prev,
+                                          [item.id]: {
+                                            ...oldVal,
+                                            paymentMethod: method,
+                                          },
+                                        };
+                                      })
+                                    }
+                                    className={`py-2 px-3 rounded-lg text-sm transition-colors ${
+                                      input.paymentMethod === method
+                                        ? "bg-primary-600 text-white"
+                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                    }`}
+                                  >
                                     {method === "nakit" && "💵 Nakit"}
                                     {method === "kart" && "💳 Kart"}
                                     {method === "veresiye" && "🧾 Veresiye"}
                                     {method === "nakitpos" && "💵 Nakit POS"}
-                                  </span>
-                                </button>
-                              ))}
+                                  </button>
+                                )
+                              )}
                             </div>
 
-                            {/* Tutar Girişi */}
-                            <input
-                              type="number"
-                              placeholder={`Ödeme Tutarı (Min: ${formatCurrency(
-                                item.amount
-                              )})`}
-                              value={
-                                productPaymentInputs[item.id]?.received || ""
-                              }
-                              onChange={(e) =>
-                                setProductPaymentInputs((prev) => ({
-                                  ...prev,
-                                  [item.id]: {
-                                    ...prev[item.id],
-                                    received: e.target.value,
-                                  },
-                                }))
-                              }
-                              className="w-full px-4 py-2 rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                            />
-
-                            {/* Veresiye için Müşteri Seçimi */}
-                            {productPaymentInputs[item.id]?.paymentMethod ===
-                              "veresiye" && (
-                              <select
-                                value={
-                                  productPaymentInputs[item.id]?.customerId ||
-                                  ""
-                                }
-                                onChange={(e) =>
-                                  setProductPaymentInputs((prev) => ({
-                                    ...prev,
-                                    [item.id]: {
-                                      ...prev[item.id],
-                                      customerId: e.target.value,
-                                    },
-                                  }))
-                                }
-                                className="w-full px-4 py-2 rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                              >
-                                <option value="">Müşteri Seçin</option>
-                                {customers.map((customer) => (
-                                  <option key={customer.id} value={customer.id}>
-                                    {customer.name} (
-                                    {formatCurrency(customer.currentDebt)} /
-                                    {formatCurrency(customer.creditLimit)})
-                                  </option>
-                                ))}
-                              </select>
+                            {/* Veresiye müşteri */}
+                            {input.paymentMethod === "veresiye" && (
+                              <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Müşteri Seçin
+                                </label>
+                                <select
+                                  value={input.customerId}
+                                  onChange={(e) =>
+                                    setProductPaymentInputs((prev) => {
+                                      const oldVal = getOrInit(prev, item.id);
+                                      return {
+                                        ...prev,
+                                        [item.id]: {
+                                          ...oldVal,
+                                          customerId: e.target.value,
+                                        },
+                                      };
+                                    })
+                                  }
+                                  className="w-full px-4 py-2 rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                >
+                                  <option value="">Müşteri Seçin</option>
+                                  {customers.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {c.name} ({formatCurrency(c.currentDebt)}/
+                                      {formatCurrency(c.creditLimit)})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                             )}
 
-                            {/* Öde Butonu */}
+                            {/* Alınan Tutar */}
+                            <div className="mb-2">
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Alınan Tutar
+                              </label>
+                              <input
+                                type="number"
+                                placeholder={`(Min: ${formatCurrency(partialCost)})`}
+                                value={input.received}
+                                onChange={(e) =>
+                                  setProductPaymentInputs((prev) => {
+                                    const oldVal = getOrInit(prev, item.id);
+                                    return {
+                                      ...prev,
+                                      [item.id]: {
+                                        ...oldVal,
+                                        received: e.target.value,
+                                      },
+                                    };
+                                  })
+                                }
+                                className="w-full px-4 py-2 rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                              />
+                            </div>
+
+                            <p className="text-sm text-gray-600 mb-2">
+                              <strong>Ödenecek Tutar:</strong>{" "}
+                              {formatCurrency(partialCost)}
+                            </p>
+
+                            {/* Para üstü (Ürün bazında “fazla ödeme” anında verilebilir) */}
+                            {showChange && (
+                              <p className="text-sm font-medium text-green-600 mb-2">
+                                Para Üstü: {formatCurrency(receivedNum - partialCost)}
+                              </p>
+                            )}
+
                             <button
                               onClick={() => handleProductPay(item.id)}
                               disabled={
-                                !productPaymentInputs[item.id]?.received ||
-                                parseFloat(
-                                  productPaymentInputs[item.id]?.received
-                                ) < item.amount ||
-                                (productPaymentInputs[item.id]
-                                  ?.paymentMethod === "veresiye" &&
-                                  !productPaymentInputs[item.id]?.customerId)
+                                input.selectedQuantity === 0 ||
+                                receivedNum < partialCost ||
+                                (input.paymentMethod === "veresiye" && !input.customerId)
                               }
                               className={`w-full py-3 rounded-lg font-medium transition-all duration-200 ${
-                                !productPaymentInputs[item.id]?.received ||
-                                parseFloat(
-                                  productPaymentInputs[item.id]?.received
-                                ) < item.amount ||
-                                (productPaymentInputs[item.id]
-                                  ?.paymentMethod === "veresiye" &&
-                                  !productPaymentInputs[item.id]?.customerId)
+                                input.selectedQuantity === 0 ||
+                                receivedNum < partialCost ||
+                                (input.paymentMethod === "veresiye" && !input.customerId)
                                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                                   : "bg-primary-600 text-white hover:bg-primary-700 shadow-md shadow-primary-100"
                               }`}
@@ -778,49 +841,45 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                               Öde
                             </button>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
-                    {/* Tamamlanan Ödemeler Özeti */}
+                    {/* Product Ödemeleri */}
                     {productPayments.length > 0 && (
                       <div className="bg-gray-50 rounded-xl p-6">
                         <h4 className="text-lg font-medium text-gray-900 mb-4">
                           Tamamlanan Ödemeler
                         </h4>
                         <div className="space-y-3">
-                          {productPayments.map((payment, index) => {
-                            const item = items.find(
-                              (i) => i.id === payment.itemId
-                            );
-                            if (!item) return null;
+                          {productPayments.map((pmt, i) => {
+                            const originalItem = items.find((x) => x.id === pmt.itemId);
+                            if (!originalItem) return null;
 
                             return (
                               <div
-                                key={index}
+                                key={i}
                                 className="bg-white rounded-lg p-4 border border-gray-200 flex items-center justify-between"
                               >
                                 <div>
                                   <span className="font-medium text-gray-900">
-                                    {item.name}
+                                    {originalItem.name}
                                   </span>
                                   <div className="text-sm text-gray-500 mt-1">
-                                    {payment.paymentMethod === "veresiye" &&
-                                    payment.customer
-                                      ? `Veresiye: ${payment.customer.name}`
-                                      : payment.paymentMethod}
+                                    {pmt.paidQuantity} adet,{" "}
+                                    {pmt.paymentMethod === "veresiye" && pmt.customer
+                                      ? `Veresiye: ${pmt.customer.name}`
+                                      : pmt.paymentMethod}
                                   </div>
                                 </div>
                                 <div className="text-right">
                                   <div className="font-medium text-primary-600">
-                                    {formatCurrency(payment.received)}
+                                    {formatCurrency(pmt.received)}
                                   </div>
-                                  {payment.received > item.amount && (
+                                  {pmt.received > pmt.paidAmount && (
                                     <div className="text-sm text-green-600">
                                       Para Üstü:{" "}
-                                      {formatCurrency(
-                                        payment.received - item.amount
-                                      )}
+                                      {formatCurrency(pmt.received - pmt.paidAmount)}
                                     </div>
                                   )}
                                 </div>
@@ -831,7 +890,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                       </div>
                     )}
 
-                    {/* Ürün Bazında Bölünmede Tüm Ödemeleri Tamamla Butonu */}
+                    {/* Kalan ürün yoksa buton */}
                     {remainingItems.length === 0 && (
                       <button
                         onClick={handleFinalizeSplit}
@@ -843,10 +902,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                   </div>
                 )}
 
-                {/* Eşit Bölünmüş UI */}
+                {/* Eşit Bölüşüm */}
                 {splitType === "equal" && (
                   <div className="space-y-6">
-                    {/* Kişi Sayısı Girişi */}
                     <div className="bg-white rounded-xl border-2 border-gray-200 p-6">
                       <div className="flex items-center gap-6">
                         <div className="flex-1">
@@ -857,10 +915,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                             type="number"
                             value={friendCount}
                             onChange={(e) => {
-                              const count = Math.max(
-                                1,
-                                parseInt(e.target.value) || 1
-                              );
+                              const val = parseInt(e.target.value) || 1;
+                              const count = Math.max(val, 1);
                               setFriendCount(count);
                               setEqualPayments(
                                 Array(count).fill({
@@ -874,10 +930,9 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                             className="w-full px-4 py-2 rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           />
                         </div>
+                        {/* Sadece bilgilendirme: kişi başına pay */}
                         <div className="text-right">
-                          <div className="text-sm text-gray-500">
-                            Kişi Başına:
-                          </div>
+                          <div className="text-sm text-gray-500">Kişi Başına:</div>
                           <div className="text-2xl font-bold text-primary-600">
                             {formatCurrency(total / friendCount)}
                           </div>
@@ -885,15 +940,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Bireysel Ödeme Formları */}
                     <div className="grid gap-4">
                       {Array.from({ length: friendCount }, (_, i) => {
-                        const payment = equalPayments[i] || {
-                          paymentMethod: "nakit",
+                        const p = equalPayments[i] || {
+                          paymentMethod: "nakit" as PaymentMethod,
                           received: "",
                           customerId: "",
                         };
-                        const perPersonAmount = total / friendCount;
+
+                        // Artık p.received > payAmount => anlık "para üstü" göstermiyoruz
+                        // Yalnızca finalde totalPaid > total => "toplam para üstü"
 
                         return (
                           <div
@@ -906,79 +962,69 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                                   Kişi {i + 1}
                                 </h4>
                                 <span className="text-sm text-gray-500">
-                                  Ödenecek Tutar: {formatCurrency(perPersonAmount)}
+                                  Ödeme Payı:{" "}
+                                  {formatCurrency(total / friendCount)}
                                 </span>
                               </div>
 
-                              {/* Ödeme Yöntemleri */}
+                              {/* Ödeme Yöntemi */}
                               <div className="grid grid-cols-2 gap-2">
-                                {(
-                                  [
-                                    "nakit",
-                                    "kart",
-                                    "veresiye",
-                                    "nakitpos",
-                                  ] as PaymentMethod[]
-                                ).map((method) => (
-                                  <button
-                                    key={method}
-                                    onClick={() =>
-                                      handleEqualChange(i, {
-                                        ...payment,
-                                        paymentMethod: method,
-                                      })
-                                    }
-                                    className={`py-2 px-3 rounded-lg text-sm transition-colors ${
-                                      payment.paymentMethod === method
-                                        ? "bg-primary-600 text-white"
-                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                    }`}
-                                  >
-                                    <span className="flex items-center justify-center gap-2">
+                                {(["nakit", "kart", "veresiye", "nakitpos"] as PaymentMethod[]).map(
+                                  (method) => (
+                                    <button
+                                      key={method}
+                                      onClick={() =>
+                                        handleEqualChange(i, {
+                                          ...p,
+                                          paymentMethod: method,
+                                        })
+                                      }
+                                      className={`py-2 px-3 rounded-lg text-sm transition-colors ${
+                                        p.paymentMethod === method
+                                          ? "bg-primary-600 text-white"
+                                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                      }`}
+                                    >
                                       {method === "nakit" && "💵 Nakit"}
                                       {method === "kart" && "💳 Kart"}
                                       {method === "veresiye" && "🧾 Veresiye"}
                                       {method === "nakitpos" && "💵 Nakit POS"}
-                                    </span>
-                                  </button>
-                                ))}
+                                    </button>
+                                  )
+                                )}
                               </div>
 
-                              {/* Tutar Girişi */}
+                              {/* Alınan Tutar */}
                               <input
                                 type="number"
                                 placeholder="Ödeme Tutarı"
-                                value={payment.received}
+                                value={p.received}
                                 onChange={(e) =>
                                   handleEqualChange(i, {
-                                    ...payment,
+                                    ...p,
                                     received: e.target.value,
                                   })
                                 }
                                 className="w-full px-4 py-2 rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                               />
 
-                              {/* Veresiye için Müşteri Seçimi */}
-                              {payment.paymentMethod === "veresiye" && (
+                              {/* Veresiye müşteri */}
+                              {p.paymentMethod === "veresiye" && (
                                 <select
-                                  value={payment.customerId}
+                                  value={p.customerId}
                                   onChange={(e) =>
                                     handleEqualChange(i, {
-                                      ...payment,
+                                      ...p,
                                       customerId: e.target.value,
                                     })
                                   }
                                   className="w-full px-4 py-2 rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                                 >
                                   <option value="">Müşteri Seçin</option>
-                                  {customers.map((customer) => (
-                                    <option
-                                      key={customer.id}
-                                      value={customer.id}
-                                    >
-                                      {customer.name} (
-                                      {formatCurrency(customer.currentDebt)} /
-                                      {formatCurrency(customer.creditLimit)})
+                                  {customers.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {c.name} ({formatCurrency(c.currentDebt)}/
+                                      {formatCurrency(c.creditLimit)})
                                     </option>
                                   ))}
                                 </select>
@@ -989,10 +1035,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                       })}
                     </div>
 
-                    {/* Eşit Bölüşüm Ödeme Özeti */}
-                    {equalPayments.some(
-                      (p) => parseFloat(p.received || "0") > 0
-                    ) && (
+                    {/* Ödeme Özeti */}
+                    {equalPayments.some((p) => parseFloat(p.received) > 0) && (
                       <div className="bg-gray-50 rounded-xl p-6">
                         <h4 className="text-lg font-medium text-gray-900 mb-4">
                           Ödeme Özeti
@@ -1003,8 +1047,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                             <span className="font-medium">
                               {formatCurrency(
                                 equalPayments.reduce(
-                                  (sum, p) =>
-                                    sum + (parseFloat(p.received) || 0),
+                                  (sum, x) => sum + (parseFloat(x.received) || 0),
                                   0
                                 )
                               )}
@@ -1012,29 +1055,21 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                           </div>
                           <div className="flex justify-between text-gray-700">
                             <span>Toplam Tutar:</span>
-                            <span className="font-medium">
-                              {formatCurrency(total)}
-                            </span>
+                            <span className="font-medium">{formatCurrency(total)}</span>
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {/* Eşit Bölüşüm Ödemelerini Tamamla Butonu */}
+                    {/* Ödemeleri Tamamla */}
                     <button
                       onClick={handleFinalizeSplit}
                       className={`w-full py-4 rounded-xl font-medium transition-all duration-200 ${
-                        !equalPayments.every(
-                          (p) => parseFloat(p.received || "0") > 0
-                        )
+                        !equalPayments.every((p) => parseFloat(p.received) > 0)
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                           : "bg-green-600 text-white hover:bg-green-700 shadow-lg shadow-green-100"
                       }`}
-                      disabled={
-                        !equalPayments.every(
-                          (p) => parseFloat(p.received || "0") > 0
-                        )
-                      }
+                      disabled={!equalPayments.every((p) => parseFloat(p.received) > 0)}
                     >
                       Ödemeleri Tamamla
                     </button>
@@ -1045,7 +1080,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
           </div>
         </div>
 
-        {/* Alt Kısım */}
+        {/* ALT KISIM */}
         <div className="px-8 py-6 border-t border-gray-100 bg-white">
           <div className="flex justify-between items-center">
             <button
@@ -1072,6 +1107,11 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                 Ödemeyi Tamamla
               </button>
             )}
+
+            {/* Split modunda:
+                - Ürün bazında => en altta "Tüm Ödemeleri Tamamla" (kalan yoksa)
+                - Eşit => "Ödemeleri Tamamla" butonu yukarıda
+            */}
           </div>
         </div>
       </div>

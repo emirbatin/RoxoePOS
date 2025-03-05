@@ -1,18 +1,23 @@
+// salesDB.ts
 import { Sale } from "../types/sales";
+import DBVersionHelper from '../helpers/DBVersionHelper';
 
 const DB_NAME = "salesDB";
 const STORE_NAME = "sales";
-const DB_VERSION = 2;
 
-// IndexedDB veritabanını başlatma
+// IndexedDB veritabanını başlatma - DBVersionHelper kullanarak
 async function initSalesDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    const dbVersion = DBVersionHelper.getVersion(DB_NAME);
+    const request = indexedDB.open(DB_NAME, dbVersion);
 
     request.onupgradeneeded = (event) => {
       const db = request.result;
+      console.log(`Upgrading ${DB_NAME} from ${event.oldVersion} to ${event.newVersion}`);
+      
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: "id" });
+        console.log(`Created ${STORE_NAME} store`);
       }
     };
 

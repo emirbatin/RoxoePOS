@@ -18,6 +18,7 @@ import AlertProvider from "./components/AlertProvider";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import LicenseActivation from "./components/LicenseActivation";
 import UpdateNotification from "./components/UpdateNotification";
+import KasaYonetimi from "./pages/CashRegisterPage";
 
 function App() {
   const [isLicensed, setIsLicensed] = useState(false);
@@ -66,6 +67,7 @@ function App() {
                   <Route path="/products" element={<ProductsPage />} />
                   <Route path="/credit" element={<CreditPage />} />
                   <Route path="/history" element={<SalesHistoryPage />} />
+                  <Route path="/cash" element={<KasaYonetimi />} />
                   <Route path="/reports" element={<DashboardPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/sales/:id" element={<SaleDetailPage />} />

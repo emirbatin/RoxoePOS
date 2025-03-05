@@ -12,12 +12,13 @@ import { Pagination } from "../components/ui/Pagination";
 import PageLayout from "../components/layout/PageLayout";
 import SearchFilterPanel from "../components/SearchFilterPanel";
 import { useAlert } from "../components/AlertProvider";
-import { useCustomers } from "../hooks/useCustomers";  // <-- YENİ
+import { useCustomers } from "../hooks/useCustomers";
 import { creditService } from "../services/creditServices"; 
 import { CustomerSummary } from "../types/credit";
+import { cashRegisterService, CashTransactionType } from "../services/cashRegisterDB"; // Kasa entegrasyonu için
 
 const CreditPage: React.FC = () => {
-  const { showError } = useAlert();
+  const { showSuccess, showError, confirm } = useAlert();
 
   // 1) Müşteri hook'u (tüm müşteri listesi burada geliyor)
   const {
@@ -197,6 +198,7 @@ const CreditPage: React.FC = () => {
   }) => {
     if (!selectedTransactionCustomer) return;
     try {
+      // 1. Veresiye işlemini kaydet
       await creditService.addTransaction({
         customerId: selectedTransactionCustomer.id,
         type: transactionType,
@@ -205,12 +207,39 @@ const CreditPage: React.FC = () => {
         dueDate: data.dueDate,
         description: data.description,
       });
-      // Tekrar verileri yenile
+      
+      // 2. Eğer ödeme işlemi ise, kasaya kaydet
+      if (transactionType === "payment") {
+        try {
+          // Aktif kasa dönemi kontrolü
+          const activeSession = await cashRegisterService.getActiveSession();
+          if (activeSession) {
+            // Kasaya nakit girişi olarak ekle
+            await cashRegisterService.addCashTransaction(
+              activeSession.id,
+              CashTransactionType.DEPOSIT,
+              data.amount,
+              `Veresiye Tahsilatı - ${selectedTransactionCustomer.name}`
+            );
+            showSuccess("Tahsilat başarıyla kaydedildi ve kasaya işlendi");
+          } else {
+            // Kasa kapalı uyarısı
+            showSuccess("Tahsilat başarıyla kaydedildi, ancak açık kasa dönemli olmadığı için kasaya işlenemedi");
+          }
+        } catch (cashError) {
+          console.error("Kasa kayıt hatası:", cashError);
+          showSuccess("Tahsilat başarıyla kaydedildi, ancak kasaya işlenirken bir hata oluştu");
+        }
+      } else {
+        showSuccess("Veresiye borç başarıyla kaydedildi");
+      }
+      
+      // 3. Verileri yenile
       loadCustomers();
       setShowTransactionModal(false);
       setSelectedTransactionCustomer(null);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Bir hata oluştu");
+      showError(error instanceof Error ? error.message : "Bir hata oluştu");
     }
   };
 
@@ -227,7 +256,7 @@ const CreditPage: React.FC = () => {
   };
 
   return (
-    <PageLayout title="Veresiye">
+    <PageLayout>
       {/* İstatistik Kartları */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <div className="bg-white rounded-lg border p-4">

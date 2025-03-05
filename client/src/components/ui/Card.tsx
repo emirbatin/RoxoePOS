@@ -24,6 +24,7 @@ export interface CardProps {
   className?: string;
   onAddToGroup?: () => void;
   onRemoveFromGroup?: () => void;
+  size?: "normal" | "small"; // Size prop'u
 }
 
 const Card: React.FC<CardProps> = ({
@@ -45,6 +46,7 @@ const Card: React.FC<CardProps> = ({
   className,
   onAddToGroup,
   onRemoveFromGroup,
+  size = "normal", // Varsayılan olarak normal
 }) => {
   if (variant === "addProduct") {
     return (
@@ -55,8 +57,11 @@ const Card: React.FC<CardProps> = ({
           className
         )}
       >
-        {icon || <Plus size={28} className="text-gray-400 group-hover:text-primary-500 mb-2" />}
-        <span className="text-sm font-medium text-gray-600 group-hover:text-primary-600">{title || "Ürün Ekle"}</span>
+        {icon || <Plus size={size === "small" ? 24 : 28} className="text-gray-400 group-hover:text-primary-500 mb-2" />}
+        <span className={clsx(
+          "font-medium text-gray-600 group-hover:text-primary-600",
+          size === "small" ? "text-sm" : "text-sm"
+        )}>{title || "Ürün Ekle"}</span>
       </button>
     );
   }
@@ -74,21 +79,25 @@ const Card: React.FC<CardProps> = ({
         "relative group overflow-hidden rounded-xl transition-all duration-300 h-full flex flex-col",
         "border border-gray-100 hover:border-primary-200 bg-white hover:shadow-md",
         disabled && "opacity-50 cursor-not-allowed grayscale",
+        size === "small" ? "text-sm" : "text-sm", // Küçük boyut için yazı boyutu normal ile aynı yaptık
         className
       )}>
         {/* Grup İşlem Butonları */}
         {(onAddToGroup || onRemoveFromGroup) && (
-          <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+          <div className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
             {onAddToGroup && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onAddToGroup();
                 }}
-                className="p-1.5 bg-primary-500 text-white rounded-full hover:bg-primary-600 shadow-sm"
+                className={clsx(
+                  "bg-primary-500 text-white rounded-full hover:bg-primary-600 shadow-sm",
+                  size === "small" ? "p-1.5" : "p-1.5" // Padding boyutunu küçük kartlarda da normal yapıyoruz
+                )}
                 title="Gruba Ekle"
               >
-                <Plus size={14} />
+                <Plus size={size === "small" ? 12 : 14} />
               </button>
             )}
             {onRemoveFromGroup && (
@@ -97,10 +106,13 @@ const Card: React.FC<CardProps> = ({
                   e.stopPropagation();
                   onRemoveFromGroup();
                 }}
-                className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-sm"
+                className={clsx(
+                  "bg-red-500 text-white rounded-full hover:bg-red-600 shadow-sm",
+                  size === "small" ? "p-1.5" : "p-1.5" // Padding boyutunu küçük kartlarda da normal yapıyoruz
+                )}
                 title="Gruptan Çıkar"
               >
-                <Minus size={14} />
+                <Minus size={size === "small" ? 12 : 14} />
               </button>
             )}
           </div>
@@ -108,8 +120,9 @@ const Card: React.FC<CardProps> = ({
 
         {/* Stok Durumu İşareti */}
         <div className={clsx(
-          "absolute top-0 right-0 w-2 h-2 m-2 rounded-full",
-          stockStatusColor
+          "absolute top-0 right-0 rounded-full",
+          stockStatusColor,
+          size === "small" ? "w-2 h-2 m-1.5" : "w-2 h-2 m-2" // Biraz daha büyük yapıyoruz
         )} title={`Stok: ${stock ?? 'Belirtilmemiş'}`} />
 
         {/* Ürün İçeriği */}
@@ -118,8 +131,11 @@ const Card: React.FC<CardProps> = ({
           disabled={disabled}
           className="w-full h-full text-left outline-none focus:outline-none flex flex-col"
         >
-          {/* Resim Alanı */}
-          <div className="w-full aspect-square overflow-hidden bg-gray-50 relative">
+          {/* Resim Alanı - Küçük boyut için height artırıldı */}
+          <div className={clsx(
+            "w-full overflow-hidden bg-gray-50 relative",
+            size === "small" ? "h-24" : "aspect-square" // Yüksekliği 16'dan 24'e çıkardık
+          )}>
             {imageUrl ? (
               <img
                 src={imageUrl}
@@ -128,48 +144,69 @@ const Card: React.FC<CardProps> = ({
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full">
-                <Image size={36} className="text-gray-300" strokeWidth={1} />
+                <Image size={size === "small" ? 30 : 36} className="text-gray-300" strokeWidth={1} />
               </div>
             )}
             
             {/* KDV Bilgisi Etiketi */}
             {vatRate && (
-              <div className="absolute bottom-2 left-2 bg-gray-800 bg-opacity-70 text-white px-2 py-0.5 rounded-md text-xs flex items-center gap-1">
+              <div className={clsx(
+                "absolute bottom-1 left-1 bg-gray-800 bg-opacity-70 text-white rounded-md flex items-center gap-1",
+                size === "small" ? "px-1.5 py-0.5 text-xs" : "px-2 py-0.5 text-xs" // Font boyutunu ve padding'i artırdık
+              )}>
                 {vatRate} KDV
               </div>
             )}
             
             {/* Kategori Etiketi */}
             {category && (
-              <div className="absolute top-2 left-2 bg-primary-100 text-primary-700 px-2 py-0.5 rounded-md text-xs">
+              <div className={clsx(
+                "absolute top-1 left-1 bg-primary-100 text-primary-700 rounded-md",
+                size === "small" ? "px-1.5 py-0.5 text-xs" : "px-2 py-0.5 text-xs" // Font boyutunu ve padding'i artırdık
+              )}>
                 {category}
               </div>
             )}
           </div>
 
           {/* Ürün Bilgileri */}
-          <div className="p-3 flex-1 flex flex-col">
+          <div className={clsx(
+            "flex-1 flex flex-col",
+            size === "small" ? "p-2" : "p-3" // Padding'i biraz artırdık
+          )}>
             {/* Ürün Adı */}
-            <h3 className="font-medium text-gray-800 line-clamp-2">
+            <h3 className={clsx(
+              "font-medium text-gray-800 line-clamp-2",
+              size === "small" ? "text-sm line-clamp-2" : "" // Font boyutunu text-xs'den text-sm'e yükselttik, line-clamp 2 satır
+            )}>
               {title || "İsimsiz Ürün"}
             </h3>
             
             {/* Stok Bilgisi - stock undefined değilse göster */}
             {stock !== undefined && (
-              <div className="mt-1 text-xs text-gray-500 flex items-center gap-1">
+              <div className={clsx(
+                "text-gray-500 flex items-center gap-1",
+                size === "small" ? "mt-1 text-xs" : "mt-1 text-xs" // margin ve font boyutunu biraz artırdık
+              )}>
                 Stok: <span className={clsx(
                   stock === 0 ? "text-red-500 font-medium" : 
                   stock < 5 ? "text-orange-500 font-medium" : 
                   "text-gray-600"
                 )}>{stock}</span>
-                {stock < 5 && stock > 0 && <AlertTriangle size={12} className="text-orange-500" />}
+                {stock < 5 && stock > 0 && <AlertTriangle size={size === "small" ? 10 : 12} className="text-orange-500" />}
                 {stock === 0 && <span className="text-red-500 font-medium">Tükendi</span>}
               </div>
             )}
             
             {/* Fiyat Alanı */}
-            <div className="mt-2 flex justify-between items-center">
-              <div className="font-bold text-lg text-primary-700">
+            <div className={clsx(
+              "flex justify-between items-center",
+              size === "small" ? "mt-1" : "mt-2" // margin'i koruduk
+            )}>
+              <div className={clsx(
+                "font-bold text-primary-700",
+                size === "small" ? "text-base" : "text-lg" // Font boyutunu text-sm'den text-base'e yükselttik
+              )}>
                 {price || "Fiyat belirtilmemiş"}
               </div>
             </div>

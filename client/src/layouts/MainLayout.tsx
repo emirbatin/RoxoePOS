@@ -25,7 +25,7 @@ const TopNav = () => {
       <div className="flex-1 flex justify-center">
         <nav className="flex items-center gap-4">
           {/*
-<div className="fixed bottom-2 right-2">
+          <div className="fixed bottom-2 right-2">
             <ResetDatabaseButton />
           </div>
           */}
@@ -36,6 +36,13 @@ const TopNav = () => {
           >
             <ShoppingCart size={20} />
             <span className="font-medium">Satış</span>
+          </button>
+          <button
+            onClick={() => navigate("/cash")}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-50"
+          >
+            <ShoppingCart size={20} />
+            <span className="font-medium">Kasa</span>
           </button>
           <button
             onClick={() => navigate("/products")}

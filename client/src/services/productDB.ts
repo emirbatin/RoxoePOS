@@ -1,6 +1,7 @@
 // productDB.ts
 import { openDB, IDBPDatabase } from "idb";
 import { Product, Category } from "../types/product";
+import initUnifiedPOSDB from './UnifiedDBInitializer';
 
 export interface ProductGroup {
   id: number;
@@ -15,7 +16,6 @@ export interface ProductGroupRelation {
 }
 
 const DB_NAME = "posDB";
-const DB_VERSION = 2;
 
 // Veritabanını sıfırlama fonksiyonu
 export const resetDatabases = async (): Promise<boolean> => {
@@ -40,8 +40,6 @@ export const resetDatabases = async (): Promise<boolean> => {
 
 export const initProductDB = async () => {
   try {
-    console.log(`Initializing IndexedDB: ${DB_NAME}, version ${DB_VERSION}`);
-    
     // Zorla sıfırlama kontrolü
     const forceReset = localStorage.getItem('db_force_reset');
     if (forceReset === 'true') {
@@ -50,72 +48,12 @@ export const initProductDB = async () => {
       localStorage.removeItem('db_force_reset');
     }
     
-    const db = await openDB(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion, newVersion) {
-        console.log(
-          `Upgrading database from ${oldVersion} to ${newVersion || "unknown"}`
-        );
-
-        // Versiyon 1 store'ları
-        if (oldVersion < 1) {
-          console.log("Creating version 1 stores");
-          if (!db.objectStoreNames.contains("products")) {
-            const productStore = db.createObjectStore("products", {
-              keyPath: "id",
-              autoIncrement: true,
-            });
-            productStore.createIndex("barcode", "barcode", { unique: true });
-            console.log("Created products store");
-          }
-          if (!db.objectStoreNames.contains("categories")) {
-            db.createObjectStore("categories", {
-              keyPath: "id",
-              autoIncrement: true,
-            });
-            console.log("Created categories store");
-          }
-        }
-
-        // Versiyon 2 store'ları
-        if (oldVersion < 2) {
-          console.log("Creating version 2 stores");
-          if (!db.objectStoreNames.contains("productGroups")) {
-            const groupStore = db.createObjectStore("productGroups", {
-              keyPath: "id",
-              autoIncrement: true,
-            });
-            groupStore.createIndex("order", "order");
-            console.log("Created product groups store");
-
-            // "Tümü" adında varsayılan grup ekleniyor
-            const defaultGroup = {
-              name: "Tümü",
-              order: 0,
-              isDefault: true,
-            };
-            groupStore.add(defaultGroup);
-            console.log("Added default group:", defaultGroup);
-          }
-
-          if (!db.objectStoreNames.contains("productGroupRelations")) {
-            const relationStore = db.createObjectStore(
-              "productGroupRelations",
-              {
-                keyPath: ["groupId", "productId"],
-              }
-            );
-            relationStore.createIndex("groupId", "groupId");
-            relationStore.createIndex("productId", "productId");
-            console.log("Created product group relations store");
-          }
-        }
-      },
-    });
-
+    // Birleştirilmiş veritabanı başlatma fonksiyonunu kullan
+    const db = await initUnifiedPOSDB();
+    
     // Veritabanı yapısının doğru olduğunu kontrol et
     try {
       // Test transaction - beklenen tüm store'ları içeren bir transaction oluştur
-      // Bu başarısız olursa, yapı bozuktur
       const testTx = db.transaction(["products", "categories", "productGroups", "productGroupRelations"], "readonly");
       testTx.abort(); // Sadece test amaçlı, işlemi iptal et
       console.log("Database structure verified successfully");
@@ -178,6 +116,10 @@ export const initProductDB = async () => {
 export const repairDatabase = async () => {
   try {
     await resetDatabases();
+    
+    // DB sürüm yükseltme işareti koy (yeni)
+    localStorage.setItem('db_version_upgraded', 'true');
+    
     console.log("Veritabanı başarıyla sıfırlandı, sayfa yenileniyor...");
     window.location.reload();
     return true;

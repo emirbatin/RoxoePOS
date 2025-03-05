@@ -12,6 +12,14 @@ autoUpdater.logger = log;
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
+// Sessiz güncelleme yapılandırması
+autoUpdater.allowDowngrade = false;
+autoUpdater.allowPrerelease = false;
+
+// Güncelleme durumu takibi
+let isUpdating = false;
+let updateSplashWindow: BrowserWindow | null = null;
+
 // GitHub token ayarları - private repo veya API rate limit aşımı durumlarında gerekli
 // Bu token'ı bir ortam değişkeni olarak (process.env.GH_TOKEN) ayarlamanız güvenlik için önemlidir
 const githubToken = process.env.GH_TOKEN;
@@ -39,6 +47,90 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 let win: BrowserWindow | null;
 new LicenseManager();
+
+// Güncelleme yükleme ekranını oluştur
+function createUpdateSplash() {
+  // Yeni bir pencere oluştur, sadece güncelleme durumu için
+  updateSplashWindow = new BrowserWindow({
+    width: 400,
+    height: 200,
+    frame: false,
+    resizable: false,
+    center: true,
+    show: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+
+  // HTML içeriği oluştur
+  const htmlContent = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Güncelleniyor</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+        color: #333;
+      }
+      
+      .container {
+        text-align: center;
+        padding: 20px;
+      }
+      
+      h2 {
+        margin-bottom: 20px;
+      }
+      
+      .loader {
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid #3498db;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 2s linear infinite;
+        margin: 0 auto 20px;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="loader"></div>
+      <h2>RoxoePOS Güncelleniyor</h2>
+      <p>Lütfen bekleyin, uygulama güncelleniyor...</p>
+    </div>
+  </body>
+  </html>
+  `;
+
+  // HTML içeriğini yükle
+  if (updateSplashWindow) {
+    updateSplashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+    
+    // Pencereyi göster
+    updateSplashWindow.once('ready-to-show', () => {
+      if (updateSplashWindow) {
+        updateSplashWindow.show();
+      }
+    });
+  }
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -172,7 +264,6 @@ autoUpdater.on('download-progress', (progressObj) => {
   }
 });
 
-
 autoUpdater.on('update-downloaded', (info) => {
   log.info('Güncelleme indirildi:', info);
   if (win) {
@@ -186,11 +277,26 @@ autoUpdater.on('update-downloaded', (info) => {
       type: 'info',
       title: 'Güncelleme Hazır',
       message: `Yeni sürüm (${info.version}) indirildi. Uygulamayı yeniden başlatarak güncellemeleri yükleyebilirsiniz.`,
-      buttons: ['Şimdi Yeniden Başlat', 'Daha Sonra'],
+      buttons: ['Şimdi Güncelle', 'Daha Sonra'],
       defaultId: 0
     }).then((returnValue) => {
       if (returnValue.response === 0) {
-        autoUpdater.quitAndInstall();
+        // Güncelleme durumunu işaretle
+        isUpdating = true;
+        
+        // Güncelleme splash ekranı göster
+        createUpdateSplash();
+        
+        // Ana pencereyi gizle
+        if (win) {
+          win.hide();
+        }
+        
+        // Kısa bir gecikme sonra güncelleme işlemini başlat
+        setTimeout(() => {
+          // Sessiz modda güncelleme başlat (yeniden başlatır, sessiz mod)
+          autoUpdater.quitAndInstall(false, true);
+        }, 1000);
       }
     });
   }
@@ -217,6 +323,27 @@ ipcMain.on('check-for-updates', () => {
   }
 });
 
+// Güncellemeyi uygulama ve yeniden başlatma
+ipcMain.on('quit-and-install', () => {
+  log.info('Kullanıcı güncelleme ve yeniden başlatma talep etti');
+  
+  // Güncelleme durumunu işaretle
+  isUpdating = true;
+  
+  // Güncelleme splash ekranı göster
+  createUpdateSplash();
+  
+  // Ana pencereyi gizle
+  if (win) {
+    win.hide();
+  }
+  
+  // Kısa bir gecikme sonra güncelleme işlemini başlat
+  setTimeout(() => {
+    autoUpdater.quitAndInstall(false, true);
+  }, 1000);
+});
+
 // Periyodik güncelleme kontrolü (her 4 saatte bir)
 setInterval(() => {
   if (app.isPackaged) {
@@ -224,6 +351,14 @@ setInterval(() => {
     log.info('Periyodik güncelleme kontrolü yapılıyor...');
   }
 }, 4 * 60 * 60 * 1000);
+
+// Uygulama kapatılmadan önce kontrol et
+app.on('before-quit', (event) => {
+  // Eğer güncelleme sürecindeyse, normal kapanma işlemini engelle
+  if (isUpdating && updateSplashWindow && !updateSplashWindow.isDestroyed()) {
+    event.preventDefault();
+  }
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

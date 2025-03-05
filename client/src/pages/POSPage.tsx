@@ -1,6 +1,14 @@
 // pages/POSPage.tsx
 import React, { useState, useRef, useMemo, useEffect } from "react";
-import { ShoppingCart, Plus, Minus, X, CreditCard, Trash2 } from "lucide-react";
+import {
+  ShoppingCart,
+  Plus,
+  Minus,
+  X,
+  CreditCard,
+  Trash2,
+  Banknote,
+} from "lucide-react";
 import { useHotkeys } from "../hooks/useHotkeys";
 import { CartTab, PaymentMethod, PaymentResult } from "../types/pos";
 import { ReceiptInfo } from "../types/receipt";
@@ -28,6 +36,9 @@ import { useProducts } from "../hooks/useProducts";
 import { useCart } from "../hooks/useCart";
 import { useProductGroups } from "../hooks/useProductGroups";
 import { posService } from "../services/posServices";
+
+// YENİ: Kasa yönetimi
+import { cashRegisterService } from "../services/cashRegisterDB";
 
 const POSPage: React.FC = () => {
   const { showError, showSuccess, confirm } = useAlert();
@@ -96,14 +107,15 @@ const POSPage: React.FC = () => {
 
   // Grupları yükledikten sonra varsayılan grubu (Tümü) bul ve aktif yap
   useEffect(() => {
-    if (productGroups.length > 0 && activeGroupId === 0) { // Yalnızca activeGroupId sıfır ise
+    if (productGroups.length > 0 && activeGroupId === 0) {
+      // Yalnızca activeGroupId sıfır ise
       const defaultGroup = productGroups.find((g) => g.isDefault);
       if (defaultGroup) {
         console.log("Setting default group as active:", defaultGroup);
         setActiveGroupId(defaultGroup.id);
       }
     }
-  }, [productGroups, activeGroupId]); // activeGroupId bağımlılık olarak eklendi
+  }, [productGroups, activeGroupId]);
 
   // 7) Barkod config + input ref
   const [barcodeConfig] = useState(() => {
@@ -119,87 +131,22 @@ const POSPage: React.FC = () => {
     setShowFilters(false);
   };
 
-  // POSPage.tsx içinde, useHotkeys hook'unu çağırmadan önce aşağıdaki fonksiyonları ekleyin:
+  // **KASA AÇIK MI?** Durumu
+  const [isRegisterOpen, setIsRegisterOpen] = useState<boolean>(false);
 
-  // Hızlı Nakit Ödeme Fonksiyonu (F7)
-  const handleQuickCashPayment = async () => {
-    if (!activeTab?.cart.length) {
-      showError("Sepet boş! Ödeme yapılamaz");
-      return;
-    }
-
-    try {
-      // Nakit ödeme için PaymentResult oluştur
-      const paymentResult: PaymentResult = {
-        mode: "normal",
-        paymentMethod: "nakit",
-        received: cartTotals.total, // Tam tutarı nakit olarak al
-      };
-
-      // Bilgi mesajı göster
-      showSuccess("Nakit ödeme işlemi başlatıldı...");
-
-      // Ödeme işlemini tamamla
-      await handlePaymentComplete(paymentResult);
-      
-      // Başarılı ödeme bildirimi
-      showSuccess("Nakit ödeme başarıyla tamamlandı");
-    } catch (error) {
-      console.error("Hızlı nakit ödeme hatası:", error);
-      showError("Ödeme işlemi sırasında bir hata oluştu");
-    }
-  };
-
-  // Hızlı Kredi Kartı Ödeme Fonksiyonu (F8)
-  const handleQuickCardPayment = async () => {
-    if (!activeTab?.cart.length) {
-      showError("Sepet boş! Ödeme yapılamaz");
-      return;
-    }
-
-    try {
-      // POS işleminin manuel modda olup olmadığını kontrol et
-      const isManualMode = await posService.isManualMode();
-      
-      if (!isManualMode) {
-        // Manuel mod değilse, POS cihazına bağlan
-        showSuccess("Kredi kartı işlemi başlatılıyor...");
-        const connected = await posService.connect("Ingenico");
-        
-        if (!connected) {
-          showError("POS cihazına bağlanılamadı!");
-          return;
-        }
-        
-        // POS işlemini başlat
-        const result = await posService.processPayment(cartTotals.total);
-        
-        // Bağlantıyı kapat
-        await posService.disconnect();
-        
-        if (!result.success) {
-          showError(result.message);
-          return;
-        }
+  // Sayfa yüklendiğinde kasa oturumunu kontrol et
+  useEffect(() => {
+    const checkCashRegister = async () => {
+      try {
+        const activeSession = await cashRegisterService.getActiveSession();
+        setIsRegisterOpen(!!activeSession); // session varsa true, yoksa false
+      } catch (error) {
+        console.error("Kasa durumu sorgulanırken hata:", error);
+        showError("Kasa durumu sorgulanırken bir hata oluştu!");
       }
-      
-      // Kredi kartı ödeme için PaymentResult oluştur
-      const paymentResult: PaymentResult = {
-        mode: "normal",
-        paymentMethod: "kart", // Düzeltildi: "kredikarti" -> "kart"
-        received: cartTotals.total, // Tam tutarı kredi kartı ile öde
-      };
-
-      // Ödeme işlemini tamamla
-      await handlePaymentComplete(paymentResult);
-      
-      // Başarılı ödeme bildirimi
-      showSuccess("Kredi kartı ile ödeme başarıyla tamamlandı");
-    } catch (error) {
-      console.error("Hızlı kredi kartı ödeme hatası:", error);
-      showError("Ödeme işlemi sırasında bir hata oluştu");
-    }
-  };
+    };
+    checkCashRegister();
+  }, [showError]);
 
   // Start new sale
   async function startNewSale(): Promise<void> {
@@ -217,11 +164,10 @@ const POSPage: React.FC = () => {
     }
   }
 
-  // Yeni grup ekleme işlemi - geliştirilmiş hata yakalama ile
+  // Yeni grup ekleme işlemi
   const handleAddGroup = async () => {
     console.log("Add group handler triggered");
     try {
-      // Sabit isim kullan
       const groupName = "Yeni Grup";
       console.log(`Adding new group: ${groupName}`);
 
@@ -236,98 +182,135 @@ const POSPage: React.FC = () => {
     }
   };
 
-  // POSPage bileşeninde handleBarcodeDetected fonksiyonunu bu şekilde güncelleyin
+  // Barkod algılama
   const handleBarcodeDetected = (barcode: string) => {
     console.log("Barkod algılandı:", barcode);
     console.log("Toplam ürün sayısı:", products.length);
     console.log("Filtrelenmiş ürün sayısı:", filteredProducts.length);
 
-    // 1. Adım: Önce barkod alanına göre eşleşme ara
+    // 1) Barkod alanı ile tam eşleşme
     let matchingProduct = products.find((p) => p.barcode === barcode);
 
-    if (matchingProduct) {
-      console.log("Barkod ile tam eşleşme bulundu:", matchingProduct);
-    } else {
-      // 2. Adım: Barkod sayısal ise, ID ile eşleşme ara
+    if (!matchingProduct) {
+      // 2) Barkod sayısal ise ID ile dene
       const numericBarcode = parseInt(barcode);
       if (!isNaN(numericBarcode)) {
         matchingProduct = products.find((p) => p.id === numericBarcode);
-        if (matchingProduct) {
-          console.log("ID ile tam eşleşme bulundu:", matchingProduct);
-        }
       }
 
-      // 3. Adım: Hala bulunamadıysa, isim ile tam eşleşme ara
+      // 3) İsim ile tam eşleşme
       if (!matchingProduct) {
         matchingProduct = products.find(
           (p) => p.name.toLowerCase() === barcode.toLowerCase()
         );
-
-        if (matchingProduct) {
-          console.log("İsim ile tam eşleşme bulundu:", matchingProduct);
-        }
       }
     }
 
-    // 4. Adım: Eşleşme varsa ve stok yeterliyse sepete ekle
     if (matchingProduct) {
+      // Stok kontrol
       if (matchingProduct.stock > 0) {
-        console.log(
-          "Ürün bulundu ve stokta var, sepete ekleniyor:",
-          matchingProduct
-        );
         addToCart(matchingProduct);
         showSuccess(`${matchingProduct.name} sepete eklendi`);
       } else {
-        console.log("Ürün bulundu fakat stokta yok:", matchingProduct);
         showError(`${matchingProduct.name} stokta yok`);
       }
       return;
     }
 
-    // 5. Adım: Hiçbir eşleşme bulunamadıysa, kısmi eşleşmeleri kontrol et
-    console.log("Tam eşleşme bulunamadı, kısmi eşleşmeler aranıyor...");
-
-    // Barkodu içeren ürünleri bul
+    // 4) Kısmi eşleşme ara
     const partialMatches = products.filter(
       (p) =>
-        p.barcode.includes(barcode) || // Barkod içinde geçiyorsa
-        p.name.toLowerCase().includes(barcode.toLowerCase()) // İsim içinde geçiyorsa
+        p.barcode.includes(barcode) ||
+        p.name.toLowerCase().includes(barcode.toLowerCase())
     );
 
-    console.log(`${partialMatches.length} kısmi eşleşme bulundu`);
-
     if (partialMatches.length === 1) {
-      // Tek kısmi eşleşme varsa
+      // Tek kısmi eşleşme
       const match = partialMatches[0];
       if (match.stock > 0) {
-        console.log("Tek kısmi eşleşme ekleniyor:", match);
         addToCart(match);
         showSuccess(`${match.name} sepete eklendi`);
-        return;
       } else {
-        console.log("Kısmi eşleşen ürün stokta yok:", match);
         showError(`${match.name} stokta yok`);
-        return;
       }
     } else if (partialMatches.length > 1) {
-      // Birden çok kısmi eşleşme varsa, arama terimini güncelle ve sonuçları göster
-      console.log(
-        "Birden çok kısmi eşleşme bulundu, arama terimi güncelleniyor"
-      );
+      // Birden çok kısmi eşleşme ⇒ arama terimi
       setSearchTerm(barcode);
+    } else {
+      // Hiç eşleşme yok
+      setSearchTerm(barcode);
+    }
+  };
+
+  // Hızlı Nakit Ödeme
+  const handleQuickCashPayment = async () => {
+    if (!activeTab?.cart.length) {
+      showError("Sepet boş! Ödeme yapılamaz");
+      return;
+    }
+    if (!isRegisterOpen) {
+      showError("Kasa henüz açılmadı! Lütfen önce kasayı açın.");
       return;
     }
 
-    // 6. Adım: Hiçbir eşleşme bulunamadıysa
-    console.log(
-      "Hiçbir eşleşme bulunamadı, arama terimi güncelleniyor:",
-      barcode
-    );
-    setSearchTerm(barcode);
+    try {
+      const paymentResult: PaymentResult = {
+        mode: "normal",
+        paymentMethod: "nakit",
+        received: cartTotals.total,
+      };
+      showSuccess("Nakit ödeme işlemi başlatıldı...");
+      await handlePaymentComplete(paymentResult);
+      showSuccess("Nakit ödeme başarıyla tamamlandı");
+    } catch (error) {
+      console.error("Hızlı nakit ödeme hatası:", error);
+      showError("Ödeme işlemi sırasında bir hata oluştu");
+    }
   };
 
-  // Hotkeys setup
+  // Hızlı Kart Ödeme
+  const handleQuickCardPayment = async () => {
+    if (!activeTab?.cart.length) {
+      showError("Sepet boş! Ödeme yapılamaz");
+      return;
+    }
+    if (!isRegisterOpen) {
+      showError("Kasa henüz açılmadı! Lütfen önce kasayı açın.");
+      return;
+    }
+
+    try {
+      const isManualMode = await posService.isManualMode();
+      if (!isManualMode) {
+        showSuccess("Kredi kartı işlemi başlatılıyor...");
+        const connected = await posService.connect("Ingenico");
+        if (!connected) {
+          showError("POS cihazına bağlanılamadı!");
+          return;
+        }
+        const result = await posService.processPayment(cartTotals.total);
+        await posService.disconnect();
+        if (!result.success) {
+          showError(result.message);
+          return;
+        }
+      }
+
+      const paymentResult: PaymentResult = {
+        mode: "normal",
+        paymentMethod: "kart",
+        received: cartTotals.total,
+      };
+
+      await handlePaymentComplete(paymentResult);
+      showSuccess("Kredi kartı ile ödeme başarıyla tamamlandı");
+    } catch (error) {
+      console.error("Hızlı kredi kartı ödeme hatası:", error);
+      showError("Ödeme işlemi sırasında bir hata oluştu");
+    }
+  };
+
+  // Hotkeys
   const { quantityMode, tempQuantity } = useHotkeys({
     hotkeys: [
       {
@@ -403,12 +386,7 @@ const POSPage: React.FC = () => {
     },
   });
 
-  // Grup için geliştirilen özelliklerin durumu hakkında ek log
-  useEffect(() => {
-    console.log("Product groups loaded:", productGroups);
-  }, [productGroups]);
-
-  // Çoklu ürün ekleme (SelectProductsModal)
+  // Çoklu ürün ekleme
   const handleAddMultipleProducts = async (productIds: number[]) => {
     if (activeGroupId === 0) return;
     try {
@@ -425,16 +403,16 @@ const POSPage: React.FC = () => {
     }
   };
 
-  // Group'a göre filtre - Tümü grubu için tüm ürünleri göster
+  // Grup filtre
   const finalFilteredProducts = useMemo(() => {
     const defaultGroup = productGroups.find((g) => g.isDefault);
 
-    // Eğer aktif grup varsayılan grup ise tüm filtrelenmiş ürünleri göster
+    // Varsayılan grupta => filteredProducts'ı olduğu gibi göster
     if (defaultGroup && activeGroupId === defaultGroup.id) {
       return filteredProducts;
     }
 
-    // Diğer gruplar için sadece o gruba ait ürünleri göster
+    // Diğer gruplarda => o gruba ait productIds'e sahip ürünleri göster
     const group = productGroups.find((g) => g.id === activeGroupId);
     return filteredProducts.filter((p) =>
       (group?.productIds ?? []).includes(p.id)
@@ -495,7 +473,61 @@ const POSPage: React.FC = () => {
     try {
       const newSale = await salesDB.addSale(saleData);
 
-      // Veresiye işlemleri
+      // Kasa entegrasyonu
+      try {
+        const activeSession = await cashRegisterService.getActiveSession();
+        if (activeSession) {
+          if (paymentResult.mode === "normal") {
+            if (paymentResult.paymentMethod === "nakit") {
+              await cashRegisterService.recordSale(total, 0);
+            } else if (paymentResult.paymentMethod === "kart") {
+              await cashRegisterService.recordSale(0, total);
+            } else if (paymentResult.paymentMethod === "nakitpos") {
+              await cashRegisterService.recordSale(total, 0);
+            }
+            // veresiye kasayı etkilemez
+          } else {
+            // split
+            let totalCash = 0;
+            let totalCard = 0;
+            if (paymentResult.productPayments) {
+              for (const payment of paymentResult.productPayments) {
+                if (
+                  payment.paymentMethod === "nakit" ||
+                  payment.paymentMethod === "nakitpos"
+                ) {
+                  totalCash += payment.received;
+                } else if (payment.paymentMethod === "kart") {
+                  totalCard += payment.received;
+                }
+              }
+            }
+            if (paymentResult.equalPayments) {
+              for (let i = 0; i < paymentResult.equalPayments.length; i++) {
+                const eq = paymentResult.equalPayments[i];
+                if (
+                  eq.paymentMethod === "nakit" ||
+                  eq.paymentMethod === "nakitpos"
+                ) {
+                  totalCash += eq.received;
+                } else if (eq.paymentMethod === "kart") {
+                  totalCard += eq.received;
+                }
+              }
+            }
+            await cashRegisterService.recordSale(totalCash, totalCard);
+          }
+        } else {
+          console.warn(
+            "Satış yapıldı, ancak kasa kapalı görüldü. Kasa kaydı güncellenmedi."
+          );
+        }
+      } catch (cashError) {
+        console.error("Kasa kaydı güncellenirken hata:", cashError);
+        // Ana satış tamamlandı. Kasa hatası ekrana yansıtıp yansıtmayacağımıza siz karar verin.
+      }
+
+      // Veresiye
       if (paymentResult.mode === "normal") {
         if (paymentResult.paymentMethod === "veresiye" && selectedCustomer) {
           await creditService.addTransaction({
@@ -507,6 +539,7 @@ const POSPage: React.FC = () => {
           });
         }
       } else {
+        // productPayments
         if (paymentResult.productPayments) {
           for (const pp of paymentResult.productPayments) {
             if (pp.paymentMethod === "veresiye" && pp.customer) {
@@ -520,6 +553,7 @@ const POSPage: React.FC = () => {
             }
           }
         }
+        // equalPayments
         if (paymentResult.equalPayments) {
           for (let i = 0; i < paymentResult.equalPayments.length; i++) {
             const eq = paymentResult.equalPayments[i];
@@ -541,11 +575,15 @@ const POSPage: React.FC = () => {
         await productService.updateStock(cartItem.id, -cartItem.quantity);
       }
 
-      // Sepeti temizle
       clearCart();
       setSelectedCustomer(null);
       setShowPaymentModal(false);
+
       showSuccess(`Satış başarıyla tamamlandı! Fiş No: ${newSale.receiptNo}`);
+
+      // (İsteğe bağlı) Kasa durumunu tekrar sorgulayabilirsiniz:
+      const activeAgain = await cashRegisterService.getActiveSession();
+      setIsRegisterOpen(!!activeAgain);
     } catch (error) {
       console.error("Satış kaydedilirken hata:", error);
       showError("Satış sırasında bir hata oluştu!");
@@ -553,7 +591,7 @@ const POSPage: React.FC = () => {
   };
 
   return (
-    <PageLayout title="Satış">
+    <PageLayout>
       <div className="flex h-[calc(100vh-11rem)] gap-6">
         {/* Sol Panel */}
         <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden h-full">
@@ -606,7 +644,7 @@ const POSPage: React.FC = () => {
             groups={productGroups}
             activeGroupId={activeGroupId}
             onGroupChange={setActiveGroupId}
-            onAddGroup={handleAddGroup} // Geliştirilmiş fonksiyon kullanıyoruz
+            onAddGroup={handleAddGroup}
             onRenameGroup={renameGroup}
             onDeleteGroup={async (gid) => {
               const c = await confirm(
@@ -617,7 +655,7 @@ const POSPage: React.FC = () => {
                 await productService.deleteProductGroup(gid);
                 await refreshGroups();
 
-                // Eğer silinen grup aktif grupsa, varsayılan gruba dön
+                // Silinen grup aktif grupsa, varsayılan gruba dön
                 if (activeGroupId === gid) {
                   const defaultGroup = productGroups.find((g) => g.isDefault);
                   if (defaultGroup) {
@@ -635,16 +673,21 @@ const POSPage: React.FC = () => {
 
           {/* Ürün Grid */}
           <div className="flex-1 p-4 overflow-y-auto">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-lg:grid-cols-4 gap-4">
-              {/* Grup'a çoklu ekleme butonu - varsayılan grup değilse göster */}
-              {activeGroupId !== 0 &&
-                !productGroups.find((g) => g.id === activeGroupId)
-                  ?.isDefault && (
-                  <Card
-                    variant="addProduct"
+            {/* Gruba Ürün Ekle butonu (varsayılan değilse) */}
+            {activeGroupId !== 0 &&
+              !productGroups.find((g) => g.id === activeGroupId)?.isDefault && (
+                <div className="mb-4">
+                  <button
                     onClick={() => setShowSelectProductsModal(true)}
-                  />
-                )}
+                    className="w-full py-2 px-4 bg-primary-50 text-primary-600 flex items-center justify-center gap-2 rounded-lg hover:bg-primary-100 transition-colors"
+                  >
+                    <Plus size={18} />
+                    Gruba Ürün Ekle
+                  </button>
+                </div>
+              )}
+
+            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
               {finalFilteredProducts.map((product) => (
                 <Card
                   key={product.id}
@@ -653,7 +696,6 @@ const POSPage: React.FC = () => {
                   imageUrl={product.imageUrl}
                   category={product.category}
                   price={formatCurrency(product.priceWithVat)}
-                  vatRate={formatVatRate(product.vatRate)}
                   stock={product.stock}
                   onClick={() => addToCart(product)}
                   disabled={product.stock === 0}
@@ -675,6 +717,7 @@ const POSPage: React.FC = () => {
                       ? () => removeProductFromGroup(activeGroupId, product.id)
                       : undefined
                   }
+                  size="small"
                 />
               ))}
             </div>
@@ -837,19 +880,68 @@ const POSPage: React.FC = () => {
                     </span>
                   </div>
                 </div>
+
+                {/* ÖDEME YAP BUTONU */}
                 <Button
-                  onClick={() => setShowPaymentModal(true)}
+                  onClick={() => {
+                    if (!isRegisterOpen) {
+                      showError(
+                        "Kasa henüz açılmadı! Lütfen önce kasayı açın."
+                      );
+                      return;
+                    }
+                    setShowPaymentModal(true);
+                  }}
                   disabled={!activeTab.cart.length}
                   variant="primary"
                   icon={CreditCard}
                 >
                   Ödeme Yap
                 </Button>
+
+                <div className="flex flex-row justify-between my-4">
+                  <Button
+                    className="mr-2 red"
+                    onClick={() => {
+                      if (!isRegisterOpen) {
+                        showError(
+                          "Kasa henüz açılmadı! Lütfen önce kasayı açın."
+                        );
+                        return;
+                      }
+                      handleQuickCashPayment();
+                    }}
+                    disabled={!activeTab.cart.length}
+                    variant="primary"
+                    icon={Banknote}
+                  >
+                    Hızlı Nakit
+                  </Button>
+
+                  <Button
+                    className="ml-2"
+                    onClick={() => {
+                      if (!isRegisterOpen) {
+                        showError(
+                          "Kasa henüz açılmadı! Lütfen önce kasayı açın."
+                        );
+                        return;
+                      }
+                      handleQuickCardPayment();
+                    }}
+                    disabled={!activeTab.cart.length}
+                    variant="primary"
+                    icon={CreditCard}
+                  >
+                    Hızlı Kart
+                  </Button>
+                </div>
               </div>
             </>
           )}
         </div>
 
+        {/* Debug panel */}
         {process.env.NODE_ENV === "development" && (
           <div className="fixed bottom-4 left-4 z-50">
             <div className="bg-white p-4 rounded-lg shadow-lg border space-y-3">
@@ -887,14 +979,11 @@ const POSPage: React.FC = () => {
                   onClick={() => {
                     console.log("****** ÜRÜN LISTESI DEBUG ******");
                     console.log("Toplam ürün sayısı:", products.length);
-
-                    // Tüm ürünleri listele
                     products.forEach((product) => {
                       console.log(
                         `Ürün: ${product.name}, ID: ${product.id}, Barkod: ${product.barcode}, Stok: ${product.stock}`
                       );
                     });
-
                     console.log("********************************");
                   }}
                   className="bg-purple-500 text-white px-3 py-1 rounded hover:bg-purple-600 w-full"
@@ -906,20 +995,12 @@ const POSPage: React.FC = () => {
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    // İlk ürünü test et
                     if (products.length > 0) {
                       const firstProduct = products[0];
                       console.log("İlk ürün test ediliyor:", firstProduct);
-
-                      // Barkod ile test et
                       if (firstProduct.barcode) {
-                        console.log(
-                          `Barkod kullanılıyor: ${firstProduct.barcode}`
-                        );
                         handleBarcodeDetected(firstProduct.barcode);
                       } else {
-                        // ID ile test et
-                        console.log(`ID kullanılıyor: ${firstProduct.id}`);
                         handleBarcodeDetected(firstProduct.id.toString());
                       }
                     } else {
@@ -935,14 +1016,8 @@ const POSPage: React.FC = () => {
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    // Manuel ürün ekleme testi
                     if (products.length > 0) {
                       const firstProduct = products[0];
-                      console.log(
-                        "İlk ürün doğrudan sepete ekleniyor:",
-                        firstProduct
-                      );
-
                       if (firstProduct.stock > 0) {
                         addToCart(firstProduct);
                         showSuccess(`${firstProduct.name} sepete eklendi`);
@@ -992,6 +1067,7 @@ const POSPage: React.FC = () => {
             ? activeTab.cart.map((item) => ({
                 id: item.id,
                 name: item.name,
+                quantity: item.quantity,
                 amount: item.totalWithVat ?? item.salePrice * item.quantity,
               }))
             : []

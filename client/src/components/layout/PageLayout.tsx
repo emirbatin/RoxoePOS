@@ -2,14 +2,14 @@
 import React from "react";
 
 interface PageLayoutProps {
-  title: string;
+  //title: string;
   children: React.ReactNode;
 }
 
-const PageLayout: React.FC<PageLayoutProps> = ({ title, children }) => {
+const PageLayout: React.FC<PageLayoutProps> = ({ children }) => {
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-semibold text-gray-800 mb-6">{title}</h1>
+      {/*<h1 className="text-2xl font-semibold text-gray-800 mb-6">{title}</h1>*/}
       <div>{children}</div>
     </div>
   );

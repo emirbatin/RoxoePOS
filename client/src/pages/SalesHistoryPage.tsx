@@ -11,6 +11,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { useAlert } from "../components/AlertProvider";
 import PageLayout from "../components/layout/PageLayout";
 import SearchFilterPanel from "../components/SearchFilterPanel";
+import { cashRegisterService, CashTransactionType } from "../services/cashRegisterDB";
 
 const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -301,11 +302,42 @@ const SalesHistoryPage: React.FC = () => {
   const handleCancelConfirm = async (reason: string) => {
     if (!selectedSaleId) return;
     try {
+      // Önce satış bilgilerini alalım - fiyat bilgilerine ihtiyaç var
+      const saleToCancel = await salesDB.getSaleById(selectedSaleId);
+      if (!saleToCancel) {
+        showError("İptal edilecek satış bulunamadı!");
+        return;
+      }
+  
       const updatedSale = await salesDB.cancelSale(selectedSaleId, reason);
       if (updatedSale) {
         setSales((prev) =>
           prev.map((sale) => (sale.id === selectedSaleId ? updatedSale : sale))
         );
+        
+        // YENİ: Kasa entegrasyonu - Nakit satışsa kasadan çıkış yap
+        try {
+          // Aktif kasa dönemi kontrolü
+          const activeSession = await cashRegisterService.getActiveSession();
+          if (activeSession) {
+            if (saleToCancel.paymentMethod === "nakit" || saleToCancel.paymentMethod === "nakitpos") {
+              // Nakit satış iptali - kasadan para çıkışı
+              await cashRegisterService.addCashTransaction(
+                activeSession.id,
+                CashTransactionType.WITHDRAWAL, // "ÇIKIŞ" değerini enum üzerinden kullanıyoruz
+                saleToCancel.total,
+                `Satış İptali - Fiş No: ${saleToCancel.receiptNo}`
+              );
+            }
+            // Diğer ödeme tipleri kasada nakit hareketi yapmaz
+          } else {
+            console.warn("Satış iptal edildi ancak açık kasa dönemi bulunamadı. Kasa kayıtları güncellenmedi.");
+          }
+        } catch (cashError) {
+          console.error("Kasa kaydı güncellenirken hata:", cashError);
+          // Ana iptal işlemi tamamlandı, kasa hatası gösterilmeyebilir
+        }
+        
         showSuccess("Satış başarıyla iptal edildi.");
       } else {
         showError("Satış iptal edilirken bir hata oluştu!");
@@ -317,16 +349,47 @@ const SalesHistoryPage: React.FC = () => {
       setShowCancelModal(false);
       setSelectedSaleId(null);
     }
-  };
+  }; 
 
   const handleRefundConfirm = async (reason: string) => {
     if (!selectedSaleId) return;
     try {
+      // Önce satış bilgilerini alalım - fiyat bilgilerine ihtiyaç var
+      const saleToRefund = await salesDB.getSaleById(selectedSaleId);
+      if (!saleToRefund) {
+        showError("İade edilecek satış bulunamadı!");
+        return;
+      }
+      
       const updatedSale = await salesDB.refundSale(selectedSaleId, reason);
       if (updatedSale) {
         setSales((prev) =>
           prev.map((sale) => (sale.id === selectedSaleId ? updatedSale : sale))
         );
+        
+        // YENİ: Kasa entegrasyonu - Nakit satışsa kasadan çıkış yap
+        try {
+          // Aktif kasa dönemi kontrolü
+          const activeSession = await cashRegisterService.getActiveSession();
+          if (activeSession) {
+            if (saleToRefund.paymentMethod === "nakit" || saleToRefund.paymentMethod === "nakitpos") {
+              // Nakit satış iadesi - kasadan para çıkışı
+              await cashRegisterService.addCashTransaction(
+                activeSession.id,
+                CashTransactionType.WITHDRAWAL, // "ÇIKIŞ" değerini enum üzerinden kullanıyoruz
+                saleToRefund.total,
+                `Satış İadesi - Fiş No: ${saleToRefund.receiptNo}`
+              );
+            }
+            // Diğer ödeme tipleri kasada nakit hareketi yapmaz
+          } else {
+            console.warn("Satış iade edildi ancak açık kasa dönemi bulunamadı. Kasa kayıtları güncellenmedi.");
+          }
+        } catch (cashError) {
+          console.error("Kasa kaydı güncellenirken hata:", cashError);
+          // Ana iade işlemi tamamlandı, kasa hatası gösterilmeyebilir
+        }
+        
         showSuccess("İade işlemi başarıyla tamamlandı.");
       } else {
         showError("İade işlemi sırasında bir hata oluştu!");
@@ -348,7 +411,7 @@ const SalesHistoryPage: React.FC = () => {
   };
 
   return (
-    <PageLayout title="Satış Geçmişi">
+    <PageLayout>
       {/* Üst Kısım - Arama, Filtre Toggle ve Sıfırlama */}
       <SearchFilterPanel
         searchTerm={searchTerm}

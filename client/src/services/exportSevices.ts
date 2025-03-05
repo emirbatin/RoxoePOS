@@ -27,7 +27,27 @@ interface ProductReportData {
   'Kâr Marjı (%)': number;
 }
 
-type ReportType = 'sale' | 'product';
+// Kasa verileri için interface
+interface CashExportData {
+  summary: {
+    openingBalance: number;
+    currentBalance: number;
+    totalDeposits: number;
+    totalWithdrawals: number;
+    veresiyeCollections: number;
+    cashSalesTotal: number;
+    cardSalesTotal: number;
+  };
+  dailyData: Array<{
+    date: string;
+    deposits: number;
+    withdrawals: number;
+    veresiye: number;
+    total: number;
+  }>;
+}
+
+type ReportType = 'sale' | 'product' | 'cash';
 
 class ExportService {
   // Fiş bazlı veri hazırlama
@@ -36,8 +56,6 @@ class ExportService {
       'Fiş No': sale.receiptNo,
       'Tarih': new Date(sale.date),
       'Tutar': sale.total,
-      // ÖNCEKİ: sale.paymentMethod === 'nakit' ? 'Nakit' : 'Kredi Kartı'
-      // YENİ:
       'Ödeme': getPaymentMethodDisplay(sale.paymentMethod),
       'Durum': sale.status === 'completed' 
                 ? 'Tamamlandı' 
@@ -49,7 +67,6 @@ class ExportService {
     }));
   }
   
-
   // Ürün bazlı veri hazırlama
   private prepareProductData(sales: Sale[]): ProductReportData[] {
     const productStats = sales.reduce((acc, sale) => {
@@ -82,7 +99,166 @@ class ExportService {
     }));
   }
 
+  // Kasa verilerini Excel formatına export etme
+  async exportCashDataToExcel(data: CashExportData, title: string) {
+    const workbook = new ExcelJS.Workbook();
+    
+    // Özet Sayfası
+    const summarySheet = workbook.addWorksheet('Kasa Özeti');
+    
+    // Başlık
+    summarySheet.mergeCells('A1:C1');
+    summarySheet.getCell('A1').value = 'KASA RAPORU ÖZETİ';
+    summarySheet.getCell('A1').style = {
+      font: { size: 14, bold: true },
+      alignment: { horizontal: 'center' }
+    };
+    
+    // Alt başlık (Tarih aralığı)
+    const titleParts = title.split(' ');
+    if (titleParts.length > 2) {
+      const dateRange = titleParts.slice(2).join(' ');
+      summarySheet.mergeCells('A2:C2');
+      summarySheet.getCell('A2').value = dateRange;
+      summarySheet.getCell('A2').style = {
+        font: { size: 10 },
+        alignment: { horizontal: 'center' }
+      };
+    }
+    
+    // Özet veriler
+    const summaryData = [
+      ['Açılış Bakiyesi', data.summary.openingBalance, '₺'],
+      ['Güncel Bakiye', data.summary.currentBalance, '₺'],
+      ['Toplam Nakit Girişler', data.summary.totalDeposits, '₺'],
+      ['Toplam Nakit Çıkışlar', data.summary.totalWithdrawals, '₺'],
+      ['Veresiye Tahsilatları', data.summary.veresiyeCollections, '₺'],
+      ['Nakit Satış Toplamı', data.summary.cashSalesTotal, '₺'],
+      ['Kredi Kartı Satış Toplamı', data.summary.cardSalesTotal, '₺']
+    ];
+    
+    // Boşluk ve başlık ekleme
+    summarySheet.addRow([]);
+    
+    // Tablo başlığı
+    const headerRow = summarySheet.addRow(['Açıklama', 'Tutar', 'Birim']);
+    headerRow.eachCell((cell) => {
+      cell.style = {
+        font: { size: 12, bold: true, color: { argb: 'FFFFFF' } },
+        fill: {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: '2980B9' }
+        } as ExcelJS.FillPattern,
+        alignment: { horizontal: 'center' }
+      };
+    });
+    
+    // Özet verilerini ekle
+    summaryData.forEach(row => {
+      const dataRow = summarySheet.addRow(row);
+      dataRow.getCell(2).numFmt = '#,##0.00';
+    });
+    
+    // Sütun genişliklerini ayarla
+    summarySheet.getColumn('A').width = 30;
+    summarySheet.getColumn('B').width = 15;
+    summarySheet.getColumn('C').width = 10;
+    
+    // Günlük Veriler Sayfası
+    const dailySheet = workbook.addWorksheet('Günlük Veriler');
+    
+    // Başlık
+    dailySheet.mergeCells('A1:E1');
+    dailySheet.getCell('A1').value = 'GÜNLÜK KASA HAREKETLERİ';
+    dailySheet.getCell('A1').style = {
+      font: { size: 14, bold: true },
+      alignment: { horizontal: 'center' }
+    };
+    
+    // Alt başlık (tarih aralığı)
+    if (titleParts.length > 2) {
+      const dateRange = titleParts.slice(2).join(' ');
+      dailySheet.mergeCells('A2:E2');
+      dailySheet.getCell('A2').value = dateRange;
+      dailySheet.getCell('A2').style = {
+        font: { size: 10 },
+        alignment: { horizontal: 'center' }
+      };
+    }
+    
+    // Boşluk ve tablo başlığı
+    dailySheet.addRow([]);
+    
+    // Tablo sütun tanımları
+    dailySheet.columns = [
+      { header: 'Tarih', key: 'date', width: 15 },
+      { header: 'Nakit Girişler', key: 'deposits', width: 15, style: { numFmt: '#,##0.00 ₺' } },
+      { header: 'Nakit Çıkışlar', key: 'withdrawals', width: 15, style: { numFmt: '#,##0.00 ₺' } },
+      { header: 'Veresiye Tahsilatları', key: 'veresiye', width: 20, style: { numFmt: '#,##0.00 ₺' } },
+      { header: 'Günlük Toplam', key: 'total', width: 15, style: { numFmt: '#,##0.00 ₺' } }
+    ];
+    
+    // Tablo başlık stilini ayarla
+    dailySheet.getRow(4).eachCell((cell) => {
+      cell.style = {
+        font: { size: 12, bold: true, color: { argb: 'FFFFFF' } },
+        fill: {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: '2980B9' }
+        } as ExcelJS.FillPattern,
+        alignment: { horizontal: 'center' }
+      };
+    });
+    
+    // Günlük verileri ekle
+    data.dailyData.forEach(day => {
+      dailySheet.addRow({
+        date: day.date,
+        deposits: day.deposits,
+        withdrawals: day.withdrawals,
+        veresiye: day.veresiye,
+        total: day.total
+      });
+    });
+    
+    // Toplamlar satırı
+    const totals = {
+      date: 'TOPLAM',
+      deposits: data.dailyData.reduce((sum, day) => sum + day.deposits, 0),
+      withdrawals: data.dailyData.reduce((sum, day) => sum + day.withdrawals, 0),
+      veresiye: data.dailyData.reduce((sum, day) => sum + day.veresiye, 0),
+      total: data.dailyData.reduce((sum, day) => sum + day.total, 0)
+    };
+    
+    const totalRow = dailySheet.addRow(totals);
+    totalRow.eachCell((cell) => {
+      cell.style = { font: { bold: true } };
+    });
+    
+    // Excel'i indir
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title.replace(/ /g, '_')}.xlsx`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    return true;
+  }
+
   async exportToExcel(sales: Sale[], dateRange: string, type: ReportType = 'product') {
+    // Eğer kasa raporu isteniyorsa uyarı göster ve fonksiyondan çık
+    if (type === 'cash') {
+      console.error('Kasa verileri için exportCashDataToExcel fonksiyonunu kullanın.');
+      throw new Error('Kasa verileri için exportCashDataToExcel fonksiyonunu kullanın.');
+    }
+    
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(type === 'product' ? 'Ürün Satışları' : 'Satışlar');
 
@@ -169,6 +345,12 @@ class ExportService {
   }
 
   async exportToPDF(sales: Sale[], dateRange: string, type: ReportType = 'product') {
+    // Eğer kasa raporu isteniyorsa uyarı göster
+    if (type === 'cash') {
+      console.error('Kasa raporları için PDF export henüz desteklenmiyor!');
+      throw new Error('Kasa raporları için PDF export henüz desteklenmiyor!');
+    }
+    
     const doc = new jsPDF();
     
     if (type === 'product') {
@@ -234,12 +416,23 @@ class ExportService {
     doc.save(`${type === 'product' ? 'Ürün_Satış_Raporu' : 'Satış_Raporu'}_${dateRange}.pdf`);
   }
 
+  // Kasa verileri için PDF export fonksiyonu (gelecekte geliştirilebilir)
+  async exportCashDataToPDF(data: CashExportData, title: string) {
+    // Bu özellik henüz desteklenmiyor
+    throw new Error('Kasa raporları için PDF export henüz desteklenmiyor!');
+  }
+
   getDateRange(
-    period: "day" | "week" | "month" | "year",
+    period: "day" | "week" | "month" | "year" | "custom",
     isPrevious: boolean = false
   ): [Date, Date] {
     const end = new Date();
     const start = new Date();
+  
+    // "custom" periyodu için mevcut tarihleri koru
+    if (period === "custom") {
+      return [start, end];
+    }
   
     if (isPrevious) {
       switch (period) {

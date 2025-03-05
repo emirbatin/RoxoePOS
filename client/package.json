@@ -1,7 +1,7 @@
 {
   "name": "roxoepos",
   "private": true,
-  "version": "0.0.7",
+  "version": "0.1.0",
   "type": "module",
   "description": "",
   "author": {
@@ -57,6 +57,7 @@
     "@types/papaparse": "^5.3.15",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
     "@vitejs/plugin-react": "^4.2.1",
@@ -102,11 +103,15 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "public/icon.icns",
@@ -117,11 +122,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "public/icon.ico"
@@ -130,23 +139,32 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "category": "Office"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "RoxoePOS-Setup-${version}.${ext}"
+      "artifactName": "RoxoePOS-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false,
+      "differentialPackage": true,
+      "include": "installer.nsh"
     },
     "portable": {
       "artifactName": "RoxoePOS-Portable-${version}.${ext}"
     },
     "dmg": {
       "artifactName": "RoxoePOS-Installer-${version}.${ext}"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/better-sqlite3"
+    ]
   }
 }

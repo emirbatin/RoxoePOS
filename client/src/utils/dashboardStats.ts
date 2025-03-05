@@ -10,6 +10,7 @@ export interface CategoryStat {
   name: string; // Kategori adı
   revenue: number; // O kategorideki toplam ciro
   profit: number; // O kategorideki toplam kâr
+  quantity: number; // O kategorideki toplam ürün adedi
 }
 
 /**
@@ -37,6 +38,7 @@ export interface DashboardStats {
   dailySalesData: DailySalesData[];
   categoryData: CategoryStat[];
   productStats: ProductStats[];
+  categoryList: string[]; // Benzersiz kategorilerin listesi
 }
 
 export function calculateStatsForDashboard(sales: Sale[]): DashboardStats {
@@ -60,7 +62,7 @@ export function calculateStatsForDashboard(sales: Sale[]): DashboardStats {
   let totalQuantity = 0;
 
   // 4) Kategori/Ürün/Days map'leri
-  const categoryMap: Record<string, { revenue: number; profit: number }> = {};
+  const categoryMap: Record<string, { revenue: number; profit: number; quantity: number }> = {};
   const productMap: Record<
     string,
     {
@@ -91,10 +93,11 @@ export function calculateStatsForDashboard(sales: Sale[]): DashboardStats {
       // Kategori
       const catKey = item.category || "Diğer";
       if (!categoryMap[catKey]) {
-        categoryMap[catKey] = { revenue: 0, profit: 0 };
+        categoryMap[catKey] = { revenue: 0, profit: 0, quantity: 0 };
       }
       categoryMap[catKey].revenue += itemRevenue;
       categoryMap[catKey].profit += itemProfit;
+      categoryMap[catKey].quantity += item.quantity;
 
       // Ürün
       const productKey = item.name;
@@ -137,12 +140,16 @@ export function calculateStatsForDashboard(sales: Sale[]): DashboardStats {
       return da - db;
     });
 
+  // Kategori listesini oluştur
+  const categoryList = Object.keys(categoryMap);
+
   // 7) categoryData
   const categoryData: CategoryStat[] = Object.entries(categoryMap).map(
     ([name, data]) => ({
       name,
       revenue: data.revenue,
       profit: data.profit,
+      quantity: data.quantity,
     })
   );
 
@@ -171,5 +178,6 @@ export function calculateStatsForDashboard(sales: Sale[]): DashboardStats {
     dailySalesData,
     categoryData,
     productStats,
+    categoryList,
   };
 }

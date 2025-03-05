@@ -153,7 +153,7 @@ const SaleDetailPage: React.FC = () => {
   // Yükleniyorsa
   if (loading) {
     return (
-      <PageLayout title="Satış Detayı">
+      <PageLayout>
         <div className="p-8 text-center">Yükleniyor...</div>
       </PageLayout>
     );
@@ -162,7 +162,7 @@ const SaleDetailPage: React.FC = () => {
   // Satış yoksa
   if (!sale) {
     return (
-      <PageLayout title="Satış Detayı">
+      <PageLayout>
         <div className="p-8 text-center">
           <div className="text-gray-500 mb-4">Satış bulunamadı</div>
           <Button variant="primary" onClick={() => navigate("/history")}>
@@ -175,7 +175,7 @@ const SaleDetailPage: React.FC = () => {
 
   // Sale verisi varsa göster
   return (
-    <PageLayout title="Satış Detayı">
+    <PageLayout>
       <div className="flex justify-between items-center mb-6">
         <button
           onClick={() => navigate("/history")}

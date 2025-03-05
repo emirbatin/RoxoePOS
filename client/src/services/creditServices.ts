@@ -1,20 +1,45 @@
+// creditService.ts
 import { openDB } from "idb";
 import { Customer, CreditTransaction, CustomerSummary } from "../types/credit";
+import DBVersionHelper from '../helpers/DBVersionHelper';
 
 const DB_NAME = "creditDB";
-const DB_VERSION = 2;
 
 class CreditService {
-  private dbPromise = openDB(DB_NAME, DB_VERSION, {
-    upgrade(db) {
+  private dbPromise = openDB(DB_NAME, DBVersionHelper.getVersion(DB_NAME), {
+    upgrade(db, oldVersion, newVersion) {
+      console.log(`Upgrading ${DB_NAME} from ${oldVersion} to ${newVersion}`);
+      
       if (!db.objectStoreNames.contains("customers")) {
         db.createObjectStore("customers", { keyPath: "id", autoIncrement: true });
+        console.log("Created customers store");
       }
       if (!db.objectStoreNames.contains("transactions")) {
         db.createObjectStore("transactions", { keyPath: "id", autoIncrement: true });
+        console.log("Created transactions store");
       }
     },
   });
+
+  // Veritabanını yeniden başlatma metodu (gerektiğinde çağrılabilir)
+  async initCreditDB() {
+    this.dbPromise = openDB(DB_NAME, DBVersionHelper.getVersion(DB_NAME), {
+      upgrade(db, oldVersion, newVersion) {
+        console.log(`Upgrading ${DB_NAME} from ${oldVersion} to ${newVersion}`);
+        
+        if (!db.objectStoreNames.contains("customers")) {
+          db.createObjectStore("customers", { keyPath: "id", autoIncrement: true });
+          console.log("Created customers store");
+        }
+        if (!db.objectStoreNames.contains("transactions")) {
+          db.createObjectStore("transactions", { keyPath: "id", autoIncrement: true });
+          console.log("Created transactions store");
+        }
+      },
+    });
+    
+    return this.dbPromise;
+  }
 
   // Müşteri işlemleri
   async getAllCustomers(): Promise<Customer[]> {

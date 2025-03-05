@@ -3,7 +3,7 @@ import { Upload, Download, AlertTriangle, FileDown } from "lucide-react";
 import { Product } from "../types/product";
 import { importExportService } from "../services/importExportServices";
 import { productService } from "../services/productDB";
-import ColumnMappingModal from "./modals/ColumnMappingModal";
+import ColumnMappingModal from "../components/modals/ColumnMappingModal";
 import { useAlert } from "../components/AlertProvider";
 
 interface BulkProductOperationsProps {

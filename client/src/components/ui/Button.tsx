@@ -2,28 +2,36 @@ import React, { ReactNode } from "react";
 import clsx from "clsx";
 
 interface ButtonProps {
-  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void | Promise<void>;
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void | Promise<void>;
   disabled?: boolean;
   children?: ReactNode;
-  variant?: "primary" | "secondary" | "danger" | "save";
+  variant?: "primary" | "secondary" | "danger" | "save" | "outline";
   icon?: React.ElementType;
   className?: string;
   type?: "button" | "submit" | "reset";
   title?: string;
+  size?: "sm" | "md" | "lg";
 }
 
-const Button: React.FC<ButtonProps> = ({
-  onClick,
+export const Button: React.FC<ButtonProps> = ({
+  onClick = () => {},
   disabled = false,
   children,
   variant = "primary",
   icon: Icon,
   className,
   type = "button",
+  size = "md",
   ...props
 }) => {
   const baseClasses =
-    "w-full py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 focus:outline-none transition-colors duration-200";
+    "w-full rounded-lg font-semibold flex items-center justify-center gap-2 focus:outline-none transition-colors duration-200";
+
+  const sizeClasses = {
+    sm: "py-2 px-3 text-sm",
+    md: "py-3 px-4 text-base",
+    lg: "py-4 px-5 text-lg",
+  };
 
   const variants = {
     primary:
@@ -33,7 +41,9 @@ const Button: React.FC<ButtonProps> = ({
     danger:
       "bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed",
     save:
-      "bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed", // Düzeltildi
+      "bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed",
+    outline:
+      "border border-gray-400 text-gray-700 hover:bg-gray-100 disabled:bg-gray-100 disabled:cursor-not-allowed",
   };
 
   return (
@@ -41,10 +51,10 @@ const Button: React.FC<ButtonProps> = ({
       onClick={onClick}
       disabled={disabled}
       type={type}
-      className={clsx(baseClasses, variants[variant], className)}
+      className={clsx(baseClasses, sizeClasses[size], variants[variant], className)}
       {...props}
     >
-      {Icon && <Icon size={20} className="text-current" />} {/* İkon rengi uyumlu */}
+      {Icon && <Icon size={20} className="text-current" />}
       {children}
     </button>
   );
