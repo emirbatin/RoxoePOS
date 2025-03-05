@@ -9,6 +9,7 @@ import {
   Settings,
   Bell,
   History,
+  Calculator
 } from "lucide-react";
 import { useNotifications } from "../contexts/NotificationContext";
 import NotificationPopup from "../components/NotificationPopup";
@@ -41,7 +42,7 @@ const TopNav = () => {
             onClick={() => navigate("/cash")}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-50"
           >
-            <ShoppingCart size={20} />
+            <Calculator size={20} />
             <span className="font-medium">Kasa</span>
           </button>
           <button
