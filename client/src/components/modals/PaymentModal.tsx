@@ -31,6 +31,9 @@ type ProductPaymentInput = {
   selectedQuantity: number;
 };
 
+// İndirim tipleri
+type DiscountType = "percentage" | "amount";
+
 function getDefaultProductInput(): ProductPaymentInput {
   return {
     paymentMethod: "nakit",
@@ -72,6 +75,14 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
   const receivedInputRef = useRef<HTMLInputElement>(null);
   const [processingPOS, setProcessingPOS] = useState(false);
 
+  // İndirim state'i
+  const [applyDiscount, setApplyDiscount] = useState(false);
+  const [discountType, setDiscountType] = useState<DiscountType>("percentage");
+  const [discountValue, setDiscountValue] = useState("");
+  
+  // İndirim sonrası toplam tutar
+  const [discountedTotal, setDiscountedTotal] = useState(total);
+
   // Ürün Bazında state
   const [remainingItems, setRemainingItems] = useState<PosItem[]>(items);
   const [productPaymentInputs, setProductPaymentInputs] =
@@ -90,6 +101,25 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
     }
   }, [isOpen]);
 
+  // İndirim hesaplama
+  useEffect(() => {
+    if (!applyDiscount) {
+      setDiscountedTotal(total);
+      return;
+    }
+
+    const discountNumValue = parseFloat(discountValue) || 0;
+    
+    if (discountType === "percentage") {
+      // Yüzde olarak indirim
+      const discount = total * (discountNumValue / 100);
+      setDiscountedTotal(total - discount);
+    } else {
+      // Tutar olarak indirim
+      setDiscountedTotal(Math.max(0, total - discountNumValue));
+    }
+  }, [total, applyDiscount, discountType, discountValue]);
+
   // Modal kapandığında her şeyi resetle
   useEffect(() => {
     if (!isOpen) {
@@ -99,6 +129,12 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
       setReceivedAmount("");
       setSelectedCustomer(null);
       setProcessingPOS(false);
+      
+      // İndirim
+      setApplyDiscount(false);
+      setDiscountType("percentage");
+      setDiscountValue("");
+      setDiscountedTotal(total);
 
       // Ürün Bazında
       setRemainingItems(items);
@@ -109,7 +145,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
       setFriendCount(2);
       setEqualPayments([]);
     }
-  }, [isOpen, items, setSelectedCustomer]);
+  }, [isOpen, items, setSelectedCustomer, total]);
 
   // Veresiye limiti kontrol
   const checkVeresiyeLimit = (cust: Customer, amount: number) =>
@@ -123,7 +159,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
   const handleNormalPayment = async () => {
     if (
       (paymentMethod === "nakit" || paymentMethod === "nakitpos") &&
-      parsedReceived < total
+      parsedReceived < discountedTotal
     ) {
       showError("Nakit/NakitPOS için eksik tutar girdiniz!");
       return;
@@ -134,7 +170,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
         showError("Veresiye için müşteri seçmelisiniz!");
         return;
       }
-      if (!checkVeresiyeLimit(selectedCustomer, total)) {
+      if (!checkVeresiyeLimit(selectedCustomer, discountedTotal)) {
         showError("Müşteri limiti yetersiz!");
         return;
       }
@@ -152,7 +188,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
             setProcessingPOS(false);
             return;
           }
-          const result = await posService.processPayment(total);
+          const result = await posService.processPayment(discountedTotal);
           if (!result.success) {
             showError(result.message);
             setProcessingPOS(false);
@@ -166,6 +202,11 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
           mode: "normal",
           paymentMethod,
           received: parsedReceived,
+          discount: applyDiscount ? {
+            type: discountType,
+            value: parseFloat(discountValue) || 0,
+            discountedTotal: discountedTotal
+          } : undefined
         });
       } catch (error) {
         showError("POS işleminde hata!");
@@ -181,6 +222,11 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
       mode: "normal",
       paymentMethod,
       received: parsedReceived,
+      discount: applyDiscount ? {
+        type: discountType,
+        value: parseFloat(discountValue) || 0,
+        discountedTotal: discountedTotal
+      } : undefined
     });
   };
 
@@ -333,7 +379,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
   /** ===================
    *   EŞİT BÖLÜŞÜM SPLIT
    *  =================== */
-  // Burada kişi bazında “fazla ödeme” => anında "para üstü" göstermiyoruz
+  // Burada kişi bazında "fazla ödeme" => anında "para üstü" göstermiyoruz
   // Sadece finalde total > fatura ise para üstü
   const handleEqualChange = (
     index: number,
@@ -407,17 +453,17 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
 
       setProcessingPOS(false);
 
-      // Son kontrol: totalPaid < total => eksik
-      if (totalPaid < total) {
+      // Son kontrol: totalPaid < discountedTotal => eksik
+      if (totalPaid < discountedTotal) {
         showError(
           `Eksik ödeme! Toplam ödendi: ${formatCurrency(totalPaid)}, Fatura: ${formatCurrency(
-            total
+            discountedTotal
           )}`
         );
         return;
-      } else if (totalPaid > total) {
+      } else if (totalPaid > discountedTotal) {
         // "toplam para üstü" diyerek confirm
-        const change = totalPaid - total;
+        const change = totalPaid - discountedTotal;
         const ok = await confirm(
           `Toplam para üstü: ${formatCurrency(change)} verilecek. Devam edilsin mi?`
         );
@@ -443,6 +489,12 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                   : null,
             }))
           : undefined,
+      // İndirim
+      discount: applyDiscount ? {
+        type: discountType,
+        value: parseFloat(discountValue) || 0,
+        discountedTotal: discountedTotal
+      } : undefined
     });
   };
 
@@ -450,6 +502,11 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
    *     RENDER
    * ================ */
   if (!isOpen) return null;
+
+  // İndirim hesaplama
+  const discountAmountValue = discountType === "percentage" 
+    ? total * (parseFloat(discountValue) || 0) / 100
+    : parseFloat(discountValue) || 0;
 
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -465,7 +522,16 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
               <div className="text-right">
                 <p className="text-sm text-gray-500">Toplam Tutar</p>
                 <p className="text-2xl font-semibold text-primary-600">
-                  {formatCurrency(total)}
+                  {applyDiscount ? (
+                    <>
+                      <span className="line-through text-gray-400 text-lg mr-2">
+                        {formatCurrency(total)}
+                      </span>
+                      {formatCurrency(discountedTotal)}
+                    </>
+                  ) : (
+                    formatCurrency(total)
+                  )}
                 </p>
               </div>
               <button
@@ -512,10 +578,89 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                   <span>KDV</span>
                   <span className="font-medium">{formatCurrency(vatAmount)}</span>
                 </div>
+                
+                {/* İndirim toggle */}
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="apply-discount"
+                      checked={applyDiscount}
+                      onChange={(e) => setApplyDiscount(e.target.checked)}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500"
+                    />
+                    <label htmlFor="apply-discount" className="ml-2 text-gray-700">
+                      İndirim Uygula
+                    </label>
+                  </div>
+                </div>
+                
+                {/* İndirim işlemleri */}
+                {applyDiscount && (
+                  <div className="bg-white p-3 rounded-lg border border-gray-200 space-y-3">
+                    <div className="flex gap-3">
+                      <div className="flex items-center">
+                        <input
+                          type="radio"
+                          id="discount-percentage"
+                          name="discount-type"
+                          checked={discountType === "percentage"}
+                          onChange={() => setDiscountType("percentage")}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500"
+                        />
+                        <label htmlFor="discount-percentage" className="ml-2 text-gray-700">
+                          Yüzde (%)
+                        </label>
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          type="radio"
+                          id="discount-amount"
+                          name="discount-type"
+                          checked={discountType === "amount"}
+                          onChange={() => setDiscountType("amount")}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500"
+                        />
+                        <label htmlFor="discount-amount" className="ml-2 text-gray-700">
+                          Tutar (₺)
+                        </label>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={discountValue}
+                        onChange={(e) => setDiscountValue(e.target.value)}
+                        placeholder={discountType === "percentage" ? "Yüzde (%)" : "Tutar (₺)"}
+                        className="w-full px-3 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">İndirim Tutarı:</span>
+                      <span className="font-medium text-red-600">
+                        -{formatCurrency(discountAmountValue)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="h-px bg-gray-200 my-2" />
                 <div className="flex justify-between text-lg font-semibold text-gray-900">
                   <span>Toplam</span>
-                  <span className="text-primary-600">{formatCurrency(total)}</span>
+                  <span className="text-primary-600">
+                    {applyDiscount ? (
+                      <span className="flex flex-col items-end">
+                        <span className="line-through text-gray-400 text-sm">
+                          {formatCurrency(total)}
+                        </span>
+                        {formatCurrency(discountedTotal)}
+                      </span>
+                    ) : (
+                      formatCurrency(total)
+                    )}
+                  </span>
                 </div>
               </div>
             </div>
@@ -595,9 +740,9 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                         className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-lg"
                         placeholder="0.00"
                       />
-                      {parsedReceived > total && (
+                      {parsedReceived > discountedTotal && (
                         <div className="absolute right-0 top-full mt-2 text-green-600 font-medium">
-                          Para Üstü: {formatCurrency(parsedReceived - total)}
+                          Para Üstü: {formatCurrency(parsedReceived - discountedTotal)}
                         </div>
                       )}
                     </div>
@@ -619,6 +764,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                       }
                       className="w-full px-4 py-3 rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-700"
                     >
+                      /* Yarım kalan kısmın devamı (müşteri seçim dropdown) */
                       <option value="">Bir Müşteri Seçin</option>
                       {customers.map((customer) => (
                         <option key={customer.id} value={customer.id}>
@@ -816,7 +962,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                               {formatCurrency(partialCost)}
                             </p>
 
-                            {/* Para üstü (Ürün bazında “fazla ödeme” anında verilebilir) */}
+                            {/* Para üstü (Ürün bazında "fazla ödeme" anında verilebilir) */}
                             {showChange && (
                               <p className="text-sm font-medium text-green-600 mb-2">
                                 Para Üstü: {formatCurrency(receivedNum - partialCost)}
@@ -934,7 +1080,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                         <div className="text-right">
                           <div className="text-sm text-gray-500">Kişi Başına:</div>
                           <div className="text-2xl font-bold text-primary-600">
-                            {formatCurrency(total / friendCount)}
+                            {formatCurrency(discountedTotal / friendCount)}
                           </div>
                         </div>
                       </div>
@@ -963,7 +1109,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                                 </h4>
                                 <span className="text-sm text-gray-500">
                                   Ödeme Payı:{" "}
-                                  {formatCurrency(total / friendCount)}
+                                  {formatCurrency(discountedTotal / friendCount)}
                                 </span>
                               </div>
 
@@ -1055,7 +1201,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                           </div>
                           <div className="flex justify-between text-gray-700">
                             <span>Toplam Tutar:</span>
-                            <span className="font-medium">{formatCurrency(total)}</span>
+                            <span className="font-medium">{formatCurrency(discountedTotal)}</span>
                           </div>
                         </div>
                       </div>
@@ -1094,11 +1240,11 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
               <button
                 onClick={handleNormalPayment}
                 disabled={
-                  (paymentMethod === "nakit" && parsedReceived < total) ||
+                  (paymentMethod === "nakit" && parsedReceived < discountedTotal) ||
                   (paymentMethod === "veresiye" && !selectedCustomer)
                 }
                 className={`px-8 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  (paymentMethod === "nakit" && parsedReceived < total) ||
+                  (paymentMethod === "nakit" && parsedReceived < discountedTotal) ||
                   (paymentMethod === "veresiye" && !selectedCustomer)
                     ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                     : "bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-100"

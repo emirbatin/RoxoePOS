@@ -1,5 +1,6 @@
 import { CartItem, PaymentMethod } from "./pos";
 import { VatRate } from "./product";
+import { DiscountInfo } from "./sales"; // sales modülünden DiscountInfo tipini import ediyoruz
 
 export interface ReceiptInfo {
   receiptNo: string;
@@ -8,6 +9,8 @@ export interface ReceiptInfo {
   subtotal: number; // KDV'siz toplam
   vatAmount: number; // Toplam KDV tutarı
   total: number; // KDV'li toplam
+  originalTotal?: number; // İndirim öncesi toplam tutar (indirim varsa)
+  discount?: DiscountInfo; // İndirim bilgisi
   paymentMethod: PaymentMethod;
   cashReceived?: number;
   changeAmount?: number;

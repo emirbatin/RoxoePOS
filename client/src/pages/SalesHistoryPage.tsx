@@ -12,6 +12,7 @@ import { useAlert } from "../components/AlertProvider";
 import PageLayout from "../components/layout/PageLayout";
 import SearchFilterPanel from "../components/SearchFilterPanel";
 import { cashRegisterService, CashTransactionType } from "../services/cashRegisterDB";
+import { SalesHelper } from "../types/sales";
 
 const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -35,7 +36,7 @@ const SalesHistoryPage: React.FC = () => {
     averageAmount: 0,
     vatBreakdown: [],
   });
-  // 4) Arama ve diğer state’ler
+  // 4) Arama ve diğer state'ler
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,7 +72,23 @@ const SalesHistoryPage: React.FC = () => {
       key: "total",
       title: "Tutar",
       render: (sale) => (
-        <span className="text-sm text-gray-900">₺{sale.total.toFixed(2)}</span>
+        <span className="text-sm text-gray-900">
+          {sale.originalTotal ? (
+            <div>
+              <span className="line-through text-gray-400">₺{sale.originalTotal.toFixed(2)}</span>
+              <span className="ml-1 font-medium">₺{sale.total.toFixed(2)}</span>
+              {sale.discount && (
+                <div className="text-xs text-green-600 font-medium mt-1">
+                  {sale.discount.type === 'percentage' 
+                    ? `%${sale.discount.value} indirim` 
+                    : `₺${sale.discount.value.toFixed(2)} indirim`}
+                </div>
+              )}
+            </div>
+          ) : (
+            <span>₺{sale.total.toFixed(2)}</span>
+          )}
+        </span>
       ),
     },
     {
@@ -220,6 +237,14 @@ const SalesHistoryPage: React.FC = () => {
       result = result.filter((sale) => sale.paymentMethod === filter.paymentMethod);
     }
 
+    // İndirim filtresi
+    if (filter.hasDiscount === true) {
+      result = result.filter((sale) => !!sale.discount);
+    }
+    if (filter.hasDiscount === false) {
+      result = result.filter((sale) => !sale.discount);
+    }
+
     setFilteredSales(result);
     setCurrentPage(1);
   }, [sales, filter, searchTerm]);
@@ -247,7 +272,16 @@ const SalesHistoryPage: React.FC = () => {
           ),
         0
       ),
+      // İndirimli tutarları topluyoruz (mevcut total değerleri)
       totalAmount: filteredSales.reduce((sum, sale) => sum + sale.total, 0),
+      // Toplam indirim tutarı (tüm satışların indirim miktarı)
+      totalDiscount: filteredSales.reduce((sum, sale) => 
+        sum + SalesHelper.calculateDiscountAmount(sale), 0),
+      // Orijinal toplam tutar (indirimsiz)
+      originalAmount: filteredSales.reduce((sum, sale) => 
+        sum + (sale.originalTotal || sale.total), 0),
+      // İndirimli satış sayısı
+      discountedSalesCount: filteredSales.filter(s => s.discount).length,
       cancelledCount: filteredSales.filter((s) => s.status === "cancelled").length,
       refundedCount: filteredSales.filter((s) => s.status === "refunded").length,
       cashSales: filteredSales.filter((s) => s.paymentMethod === "nakit").length,
@@ -548,6 +582,30 @@ const SalesHistoryPage: React.FC = () => {
                 <option value="mixed">Karışık (Split)</option>
               </select>
             </div>
+            {/* YENİ: İndirim Filtresi */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                İndirim Durumu
+              </label>
+              <select
+                className="w-full p-2 border rounded-lg"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFilter((prev) => ({
+                    ...prev,
+                    hasDiscount: value === "" 
+                      ? undefined 
+                      : value === "true" 
+                        ? true 
+                        : false,
+                  }));
+                }}
+              >
+                <option value="">Tümü</option>
+                <option value="true">İndirimli Satışlar</option>
+                <option value="false">İndirimsiz Satışlar</option>
+              </select>
+            </div>
           </div>
         </div>
       )}
@@ -556,41 +614,83 @@ const SalesHistoryPage: React.FC = () => {
       <div className="mb-6">
         <div className="bg-white p-4 border rounded-lg">
           <h3 className="font-medium mb-4">Satış Özeti</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span>Toplam Satış:</span>
-              <span className="font-medium">{summary.totalSales}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span>Toplam Satış:</span>
+                <span className="font-medium">{summary.totalSales}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Toplam Tutar:</span>
+                <span className="font-medium">
+                  ₺{summary.totalAmount.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>İptal Edilen:</span>
+                <span className="font-medium text-red-500">
+                  {summary.cancelledCount}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>İade Edilen:</span>
+                <span className="font-medium text-orange-500">
+                  {summary.refundedCount}
+                </span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span>Toplam Tutar:</span>
-              <span className="font-medium">
-                ₺{summary.totalAmount.toFixed(2)}
-              </span>
+            
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span>Nakit / Kart:</span>
+                <span className="font-medium">
+                  {summary.cashSales} / {summary.cardSales}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Ortalama Satış:</span>
+                <span className="font-medium">
+                  ₺{summary.averageAmount.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>İndirimli Satışlar:</span>
+                <span className="font-medium text-green-600">
+                  {summary.discountedSalesCount || 0}
+                </span>
+              </div>
+              {(summary.totalDiscount || 0) > 0 && (
+                <div className="flex justify-between">
+                  <span>Toplam İndirim:</span>
+                  <span className="font-medium text-green-600">
+                    ₺{(summary.totalDiscount || 0).toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
-            <div className="flex justify-between">
-              <span>İptal Edilen:</span>
-              <span className="font-medium text-red-500">
-                {summary.cancelledCount}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>İade Edilen:</span>
-              <span className="font-medium text-orange-500">
-                {summary.refundedCount}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Nakit / Kart:</span>
-              <span className="font-medium">
-                {summary.cashSales} / {summary.cardSales}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Ortalama Satış:</span>
-              <span className="font-medium">
-                ₺{summary.averageAmount.toFixed(2)}
-              </span>
-            </div>
+            
+            {(summary.originalAmount || 0) > 0 && (summary.totalDiscount || 0) > 0 && (
+              <div className="space-y-2 text-sm col-span-2">
+                <div className="flex justify-between">
+                  <span>İndirimsiz Toplam:</span>
+                  <span className="font-medium text-gray-500">
+                    ₺{(summary.originalAmount || 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>İndirimli Toplam:</span>
+                  <span className="font-medium text-green-600">
+                    ₺{summary.totalAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>İndirim Oranı:</span>
+                  <span className="font-medium text-green-600">
+                    %{((summary.totalDiscount || 0) / (summary.originalAmount || 1) * 100).toFixed(1)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

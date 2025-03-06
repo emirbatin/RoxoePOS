@@ -9,6 +9,7 @@ import {
   CreditCard,
   XCircle,
   RotateCcw,
+  Tag,
 } from "lucide-react";
 import PageLayout from "../components/layout/PageLayout";
 import ReceiptModal from "../components/modals/ReceiptModal";
@@ -18,14 +19,15 @@ import { Table } from "../components/ui/Table";
 import { Column } from "../types/table";
 import { CartItem } from "../types/pos";
 import { formatCurrency, formatVatRate } from "../utils/vatUtils";
-import { salesDB } from "../services/salesDB"; 
+import { salesDB } from "../services/salesDB";
 import { creditService } from "../services/creditServices";
 import { useAlert } from "../components/AlertProvider";
 import { Sale } from "../types/sales";
 import { ReceiptInfo } from "../types/receipt";
+import { SalesHelper } from "../types/sales";
 
 const SaleDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();   // route param
+  const { id } = useParams<{ id: string }>(); // route param
   const navigate = useNavigate();
   const { showSuccess, showError, confirm } = useAlert();
 
@@ -38,7 +40,9 @@ const SaleDetailPage: React.FC = () => {
 
   // Receipt modal
   const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [currentReceipt, setCurrentReceipt] = useState<ReceiptInfo | null>(null);
+  const [currentReceipt, setCurrentReceipt] = useState<ReceiptInfo | null>(
+    null
+  );
 
   // 1) Tekil satışı yükleme
   useEffect(() => {
@@ -73,7 +77,9 @@ const SaleDetailPage: React.FC = () => {
       key: "salePrice",
       title: "Birim Fiyat",
       className: "text-right",
-      render: (item) => <div className="text-sm">{formatCurrency(item.salePrice)}</div>,
+      render: (item) => (
+        <div className="text-sm">{formatCurrency(item.salePrice)}</div>
+      ),
     },
     {
       key: "quantity",
@@ -85,7 +91,9 @@ const SaleDetailPage: React.FC = () => {
       key: "vatRate",
       title: "KDV",
       className: "text-right",
-      render: (item) => <div className="text-sm">{formatVatRate(item.vatRate)}</div>,
+      render: (item) => (
+        <div className="text-sm">{formatVatRate(item.vatRate)}</div>
+      ),
     },
     {
       key: "total",
@@ -105,6 +113,8 @@ const SaleDetailPage: React.FC = () => {
       subtotal: sale.subtotal,
       vatAmount: sale.vatAmount,
       total: sale.total,
+      originalTotal: sale.originalTotal, // İndirim öncesi tutarı ekle
+      discount: sale.discount, // İndirim bilgisini ekle
       items: sale.items,
       date: sale.date,
     };
@@ -149,6 +159,19 @@ const SaleDetailPage: React.FC = () => {
       setShowRefundModal(false);
     }
   };
+
+  // İndirim uygulanmış mı kontrolü
+  const hasDiscount = sale?.discount || sale?.originalTotal;
+
+  // İndirim tutarı hesaplama
+  const discountAmount = sale ? SalesHelper.calculateDiscountAmount(sale) : 0;
+
+  // İndirim bilgisi formatı
+  const discountInfo = sale?.discount
+    ? sale.discount.type === "percentage"
+      ? `%${sale.discount.value} İndirim`
+      : `₺${sale.discount.value.toFixed(2)} İndirim`
+    : "";
 
   // Yükleniyorsa
   if (loading) {
@@ -197,6 +220,32 @@ const SaleDetailPage: React.FC = () => {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-6 rounded-lg border">
             <h2 className="text-xl font-semibold mb-4">Satış Bilgileri</h2>
+
+            {/* İndirim Bilgisi - Eğer indirim uygulanmışsa */}
+            {hasDiscount && (
+              <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200 flex items-start">
+                <div className="mr-3 bg-green-100 p-2 rounded-full">
+                  <Tag size={16} className="text-green-600" />
+                </div>
+                <div>
+                  <div className="font-medium text-green-800">
+                    {discountInfo}
+                  </div>
+                  <div className="text-sm text-green-600 mt-1">
+                    Orijinal tutar:{" "}
+                    <span className="line-through">
+                      {formatCurrency(sale.originalTotal || 0)}
+                    </span>
+                    &nbsp;→ İndirimli tutar:{" "}
+                    <span className="font-medium">
+                      {formatCurrency(sale.total)}
+                    </span>
+                    &nbsp;({formatCurrency(discountAmount)} tasarruf)
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="text-sm text-gray-500">Fiş No</div>
@@ -211,7 +260,18 @@ const SaleDetailPage: React.FC = () => {
               <div>
                 <div className="text-sm text-gray-500">Toplam Tutar</div>
                 <div className="font-medium text-lg">
-                  {formatCurrency(sale.total)}
+                  {hasDiscount ? (
+                    <div className="flex flex-col">
+                      <span className="line-through text-gray-400 text-base">
+                        {formatCurrency(sale.originalTotal || 0)}
+                      </span>
+                      <span className="text-green-600">
+                        {formatCurrency(sale.total)}
+                      </span>
+                    </div>
+                  ) : (
+                    formatCurrency(sale.total)
+                  )}
                 </div>
               </div>
               <div>
@@ -226,7 +286,9 @@ const SaleDetailPage: React.FC = () => {
                 {/* Karışık ödeme detayları varsa göster */}
                 {sale.paymentMethod === "mixed" && sale.splitDetails && (
                   <div className="mt-4 p-4 border rounded bg-gray-50">
-                    <h3 className="font-semibold mb-2">Karışık Ödeme Detayları</h3>
+                    <h3 className="font-semibold mb-2">
+                      Karışık Ödeme Detayları
+                    </h3>
                     {/* Ürün bazında ödeme */}
                     {sale.splitDetails.productPayments &&
                       sale.splitDetails.productPayments.length > 0 && (
@@ -333,9 +395,29 @@ const SaleDetailPage: React.FC = () => {
                     <span>KDV:</span>
                     <span>{formatCurrency(sale.vatAmount)}</span>
                   </div>
+
+                  {/* İndirim tutarı gösterimi */}
+                  {hasDiscount && (
+                    <div className="flex justify-between text-green-600">
+                      <span>İndirim:</span>
+                      <span>-{formatCurrency(discountAmount)}</span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between font-semibold text-lg">
                     <span>Toplam:</span>
-                    <span>{formatCurrency(sale.total)}</span>
+                    {hasDiscount ? (
+                      <div className="flex flex-col items-end">
+                        <span className="line-through text-gray-400 text-sm">
+                          {formatCurrency(sale.originalTotal || 0)}
+                        </span>
+                        <span className="text-green-600">
+                          {formatCurrency(sale.total)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span>{formatCurrency(sale.total)}</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -392,6 +474,59 @@ const SaleDetailPage: React.FC = () => {
             </div>
           </div>
 
+          {/* İndirim Detayları - Yan panel için */}
+          {hasDiscount && (
+            <div className="bg-white p-6 rounded-lg border">
+              <h2 className="text-lg font-semibold mb-4">İndirim Detayları</h2>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">İndirim Türü:</span>
+                  <span className="font-medium">
+                    {sale.discount?.type === "percentage"
+                      ? "Yüzdelik (%)"
+                      : "Sabit Tutar (₺)"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">İndirim Değeri:</span>
+                  <span className="font-medium">
+                    {sale.discount?.type === "percentage"
+                      ? `%${sale.discount.value}`
+                      : `₺${(sale.discount?.value || 0).toFixed(2)}`}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">İndirimsiz Tutar:</span>
+                  <span className="font-medium">
+                    {formatCurrency(sale.originalTotal || 0)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">İndirim Tutarı:</span>
+                  <span className="font-medium text-green-600">
+                    {formatCurrency(discountAmount)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">İndirimli Tutar:</span>
+                  <span className="font-medium text-green-600">
+                    {formatCurrency(sale.total)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">İndirim Oranı:</span>
+                  <span className="font-medium text-green-600">
+                    %
+                    {(
+                      (discountAmount / (sale.originalTotal || sale.total)) *
+                      100
+                    ).toFixed(1)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* İşlem Geçmişi (örnek) */}
           <div className="bg-white p-6 rounded-lg border">
             <h2 className="text-lg font-semibold mb-4">İşlem Geçmişi</h2>
@@ -416,7 +551,9 @@ const SaleDetailPage: React.FC = () => {
                   <div>
                     {sale.status === "cancelled" ? (
                       <>
-                        <div className="text-sm font-medium">Satış İptal Edildi</div>
+                        <div className="text-sm font-medium">
+                          Satış İptal Edildi
+                        </div>
                         <div className="text-xs text-gray-500">
                           {sale.cancelDate &&
                             new Date(sale.cancelDate).toLocaleString("tr-TR")}
@@ -427,7 +564,9 @@ const SaleDetailPage: React.FC = () => {
                       </>
                     ) : sale.status === "refunded" ? (
                       <>
-                        <div className="text-sm font-medium">Satış İade Edildi</div>
+                        <div className="text-sm font-medium">
+                          Satış İade Edildi
+                        </div>
                         <div className="text-xs text-gray-500">
                           {sale.refundDate &&
                             new Date(sale.refundDate).toLocaleString("tr-TR")}

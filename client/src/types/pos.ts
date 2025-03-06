@@ -30,6 +30,7 @@ export type NormalPaymentData = {
   mode: "normal";
   paymentMethod: PaymentMethod; // "nakit" | "kart" | "veresiye" | "nakitpos"
   received: number;
+  discount?: DiscountInfo; 
 };
 
 export type ProductPaymentDetail = {
@@ -53,6 +54,7 @@ export type SplitPaymentData = {
   productPayments?: ProductPaymentDetail[];
   // Eşit bölüşüm ödemeler:
   equalPayments?: EqualPaymentDetail[];
+  discount?: DiscountInfo;
 };
 
 export type PaymentResult = NormalPaymentData | SplitPaymentData;
@@ -104,4 +106,13 @@ export interface SerialPort {
 export interface SerialPortInfo {
   usbVendorId: number;
   usbProductId: number;
+}
+
+export type DiscountType = "percentage" | "amount";
+
+// İndirim bilgilerini içeren arayüz
+export interface DiscountInfo {
+  type: DiscountType;       // Yüzde veya sabit tutar
+  value: number;            // İndirim değeri (yüzde veya miktar)
+  discountedTotal: number;  // İndirim sonrası toplam tutar
 }

@@ -269,6 +269,20 @@ const DashboardPage: React.FC = () => {
     loading: cashLoading,
   } = useCashDataWithClosedSessions(startDate, endDate);
 
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof ProductStats;
+    direction: "asc" | "desc";
+  }>({ key: "quantity", direction: "desc" });
+
+  // Başlık tıklama işlevi:
+  const handleSort = (key: keyof ProductStats) => {
+    let direction: "asc" | "desc" = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction });
+  };
+
   // Dashboard istatistikleri
   const {
     totalSales,
@@ -276,19 +290,105 @@ const DashboardPage: React.FC = () => {
     netProfit,
     profitMargin,
     averageBasket,
-    cancelRate, // Bu değerleri alıyoruz
-    refundRate, // Bu değerleri alıyoruz
+    cancelRate,
+    refundRate,
     dailySalesData,
     categoryData,
     productStats,
   } = useMemo(() => {
-    return calculateStatsForDashboard(filteredSales);
-  }, [filteredSales]);
+    return calculateStatsForDashboard(filteredSales, period === "day");
+  }, [filteredSales, period]);
 
   // Ürün tablosu ayarları
-  const sortedProducts = [...productStats].sort(
-    (a, b) => b.quantity - a.quantity
-  );
+  // Ürün verisini sıralamak için useMemo kullanımı:
+  const sortedProducts = useMemo(() => {
+    let sortableProducts = [...productStats];
+    if (sortConfig !== null) {
+      sortableProducts.sort((a, b) => {
+        const key = sortConfig.key;
+        let aVal = a[key];
+        let bVal = b[key];
+
+        // Eğer değerler sayısal ise karşılaştırmayı buna göre yap
+        if (typeof aVal === "number" && typeof bVal === "number") {
+          return sortConfig.direction === "asc" ? aVal - bVal : bVal - aVal;
+        }
+
+        // Değerler string ise:
+        aVal = String(aVal).toLowerCase();
+        bVal = String(bVal).toLowerCase();
+        if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return sortableProducts;
+  }, [productStats, sortConfig]);
+
+  // Sıralama için kullanılacak anahtarların tanımı (hesaplanan "totalSales" da dahil)
+  type CashSortKey =
+    | "openingDate"
+    | "closingDate"
+    | "cashSalesTotal"
+    | "cardSalesTotal"
+    | "totalSales"
+    | "countingDifference";
+
+  // Sıralama state’i
+  const [cashSortConfig, setCashSortConfig] = useState<{
+    key: CashSortKey;
+    direction: "asc" | "desc";
+  }>({
+    key: "openingDate",
+    direction: "desc",
+  });
+
+  // Kapanmış oturumları sıralayan useMemo
+  const sortedClosedSessions = useMemo(() => {
+    let sessions = [...closedSessions];
+    if (cashSortConfig) {
+      sessions.sort((a, b) => {
+        const key = cashSortConfig.key;
+        let aVal: any, bVal: any;
+        if (key === "totalSales") {
+          // Toplam satış hesaplanıyor: nakit satış + kart satış
+          aVal = (a.cashSalesTotal || 0) + (a.cardSalesTotal || 0);
+          bVal = (b.cashSalesTotal || 0) + (b.cardSalesTotal || 0);
+        } else {
+          aVal = a[key];
+          bVal = b[key];
+          if (key === "openingDate" || key === "closingDate") {
+            aVal = new Date(aVal);
+            bVal = new Date(bVal);
+          }
+        }
+        if (typeof aVal === "number" && typeof bVal === "number") {
+          return cashSortConfig.direction === "asc" ? aVal - bVal : bVal - aVal;
+        }
+        if (aVal instanceof Date && bVal instanceof Date) {
+          return cashSortConfig.direction === "asc"
+            ? aVal.getTime() - bVal.getTime()
+            : bVal.getTime() - aVal.getTime();
+        }
+        aVal = String(aVal).toLowerCase();
+        bVal = String(bVal).toLowerCase();
+        if (aVal < bVal) return cashSortConfig.direction === "asc" ? -1 : 1;
+        if (aVal > bVal) return cashSortConfig.direction === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return sessions;
+  }, [closedSessions, cashSortConfig]);
+
+  // Sütun başlığına tıklanınca sıralama yönünü değiştiren fonksiyon
+  const handleCashSort = (key: CashSortKey) => {
+    let direction: "asc" | "desc" = "asc";
+    if (cashSortConfig.key === key && cashSortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setCashSortConfig({ key, direction });
+  };
+
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
   const idxLast = currentPage * itemsPerPage;
@@ -829,6 +929,11 @@ const DashboardPage: React.FC = () => {
                       dataKey="date"
                       tick={{ fontSize: 12 }}
                       stroke="#94a3b8"
+                      label={{
+                        value: period === "day" ? "Saat" : "Tarih",
+                        position: "insideBottom",
+                        offset: -5,
+                      }}
                     />
                     <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
                     <Tooltip
@@ -849,8 +954,6 @@ const DashboardPage: React.FC = () => {
                       dataKey="total"
                       stroke="#4f46e5"
                       strokeWidth={2}
-                      dot={{ stroke: "#4f46e5", strokeWidth: 2, r: 4 }}
-                      activeDot={{ stroke: "#4f46e5", strokeWidth: 2, r: 6 }}
                       name="Ciro"
                     />
                     <Line
@@ -858,8 +961,6 @@ const DashboardPage: React.FC = () => {
                       dataKey="profit"
                       stroke="#10b981"
                       strokeWidth={2}
-                      dot={{ stroke: "#10b981", strokeWidth: 2, r: 4 }}
-                      activeDot={{ stroke: "#10b981", strokeWidth: 2, r: 6 }}
                       name="Kâr"
                     />
                   </LineChart>
@@ -1006,65 +1107,21 @@ const DashboardPage: React.FC = () => {
               Tümünü Gör
             </button>
           </div>
-
           {!sortedProducts.length ? (
             <div className="p-8 text-center text-gray-500">
               <p>Bu dönemde satış verisi bulunmuyor.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Ürün
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Kategori
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      Adet
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      Ciro
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      Kâr
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {sortedProducts.slice(0, 5).map((product, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-800">
-                          {product.name}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">
-                          {product.category}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="text-sm text-gray-800">
-                          {product.quantity}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="text-sm text-gray-800">
-                          ₺{product.revenue.toFixed(2)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="text-sm font-medium text-green-600">
-                          ₺{product.profit.toFixed(2)}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <Table
+                data={sortedProducts.slice(0, 5)}
+                columns={productColumns}
+                enableSorting={true}
+                defaultSortKey="name"
+                defaultSortDirection="asc"
+                loading={isLoading}
+                emptyMessage="Bu dönemde satış verisi bulunmuyor."
+              />
             </div>
           )}
         </div>
@@ -1471,100 +1528,26 @@ const DashboardPage: React.FC = () => {
               Tümünü Gör
             </span>
           </div>
-
-          {closedSessions.length === 0 ? (
+          {!sortedClosedSessions.length ? (
             <div className="p-8 text-center text-gray-500">
               <p>Seçilen dönemde kapalı kasa oturumu bulunmuyor.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Tarih
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      Nakit Satış
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      Kart Satış
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      Toplam Satış
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                      Sayım Farkı
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {closedSessions.slice(0, 5).map((session, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-800">
-                          {new Date(
-                            session.closingDate || session.openingDate
-                          ).toLocaleDateString("tr-TR")}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(
-                            session.closingDate || session.openingDate
-                          ).toLocaleTimeString("tr-TR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="text-sm text-gray-800">
-                          ₺{(session.cashSalesTotal || 0).toFixed(2)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="text-sm text-gray-800">
-                          ₺{(session.cardSalesTotal || 0).toFixed(2)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="text-sm font-medium text-gray-800">
-                          ₺
-                          {(
-                            (session.cashSalesTotal || 0) +
-                            (session.cardSalesTotal || 0)
-                          ).toFixed(2)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        {session.countingDifference != null ? (
-                          <span
-                            className={`px-2 py-1 text-xs inline-flex items-center rounded-full font-medium ${
-                              session.countingDifference < 0
-                                ? "bg-red-100 text-red-800"
-                                : session.countingDifference > 0
-                                ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {session.countingDifference > 0 && "+"}₺
-                            {session.countingDifference.toFixed(2)}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-500">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              data={sortedClosedSessions.slice(0, 5)}
+              columns={closedColumns}
+              enableSorting={true}
+              defaultSortKey="openingDate"
+              defaultSortDirection="desc"
+              loading={isLoading}
+              emptyMessage="Seçilen dönemde kapalı kasa oturumu bulunmuyor."
+            />
           )}
         </div>
       </div>
     );
   };
 
-  /** 3) Modern ve Şık Satış Analizi Sekmesi */
   /** 3) Modern ve Şık Satış Analizi Sekmesi */
   const renderSalesAnalysisTab = () => {
     return (
@@ -2112,97 +2095,16 @@ const DashboardPage: React.FC = () => {
               </button>
             </div>
           </div>
-
-          <div className="overflow-x-auto">
-            {/* Responsive, yüksek kaliteli tablo */}
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 text-left">
-                  <th className="whitespace-nowrap px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ürün
-                  </th>
-                  <th className="whitespace-nowrap px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Kategori
-                  </th>
-                  <th className="whitespace-nowrap px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
-                    Adet
-                  </th>
-                  <th className="whitespace-nowrap px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
-                    Ciro (₺)
-                  </th>
-                  <th className="whitespace-nowrap px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
-                    Kâr (₺)
-                  </th>
-                  <th className="whitespace-nowrap px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider text-right">
-                    Kâr (%)
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center">
-                      <div className="flex justify-center">
-                        <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-indigo-500"></div>
-                      </div>
-                      <div className="mt-2 text-sm text-gray-500">
-                        Veriler yükleniyor...
-                      </div>
-                    </td>
-                  </tr>
-                ) : currentProducts.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-6 py-10 text-center text-gray-500"
-                    >
-                      Seçilen dönemde satış verisi bulunmuyor.
-                    </td>
-                  </tr>
-                ) : (
-                  currentProducts.map((product, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-800">
-                          {product.name}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500">
-                          {product.category}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="text-sm text-gray-800">
-                          {product.quantity}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="text-sm text-gray-800">
-                          {product.revenue.toFixed(2)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="text-sm font-medium text-green-600">
-                          {product.profit.toFixed(2)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="text-sm font-medium text-blue-600">
-                          {((product.profit / product.revenue) * 100).toFixed(
-                            1
-                          )}
-                          %
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Sayfalama */}
+          {/* Ürün Tablosu */}
+          <Table
+            data={currentProducts}
+            columns={productColumns}
+            enableSorting={true} // Sıralamayı aktif et
+            defaultSortKey="name" // İlk başta "name" sütunu üzerinden sıralasın
+            defaultSortDirection="asc"
+            loading={isLoading}
+            emptyMessage="Seçilen dönemde satış verisi bulunmuyor."
+          />
           <div className="px-6 py-4 border-t border-gray-100">
             <Pagination
               currentPage={currentPage}

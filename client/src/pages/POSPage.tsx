@@ -425,170 +425,192 @@ const POSPage: React.FC = () => {
     : { subtotal: 0, vatAmount: 0, total: 0, vatBreakdown: [] };
 
   // Ödeme tamamlandığında
-  const handlePaymentComplete = async (paymentResult: PaymentResult) => {
-    if (!activeTab) return;
-    const { subtotal, vatAmount, total } = cartTotals;
+  // Ödeme tamamlandığında
+const handlePaymentComplete = async (paymentResult: PaymentResult) => {
+  if (!activeTab) return;
+  const { subtotal, vatAmount, total } = cartTotals;
 
-    let paymentMethodForSale: PaymentMethod = "nakit";
-    let cashReceived: number | undefined;
-    let splitDetails: Sale["splitDetails"] | undefined = undefined;
+  let paymentMethodForSale: PaymentMethod = "nakit";
+  let cashReceived: number | undefined;
+  let splitDetails: Sale["splitDetails"] | undefined = undefined;
 
-    if (paymentResult.mode === "normal") {
-      paymentMethodForSale = paymentResult.paymentMethod;
-      cashReceived = paymentResult.received;
-    } else {
-      paymentMethodForSale = "mixed";
-      splitDetails = {
-        productPayments: paymentResult.productPayments,
-        equalPayments: paymentResult.equalPayments,
-      };
-    }
+  // İndirim bilgisini al
+  const discount = paymentResult.discount;
+  
+  // Toplam tutarları belirle (indirimli veya indirimsiz)
+  let finalTotal = total;
+  let originalTotal: number | undefined = undefined;
+  
+  // Eğer indirim uygulanmışsa
+  if (discount) {
+    finalTotal = discount.discountedTotal; // indirimli tutar
+    originalTotal = total; // orijinal tutar (indirimsiz)
+    console.log("İndirim uygulandı:", {
+      originalTotal,
+      finalTotal,
+      discountType: discount.type,
+      discountValue: discount.value
+    });
+  }
 
-    const saleData: Omit<Sale, "id"> = {
-      items: activeTab.cart.map((item) => ({
-        ...item,
-        salePrice: item.salePrice,
-        priceWithVat: item.priceWithVat,
-        total: item.salePrice * item.quantity,
-        totalWithVat: item.priceWithVat * item.quantity,
-        vatAmount: (item.priceWithVat - item.salePrice) * item.quantity,
-      })),
-      subtotal,
-      vatAmount,
-      total,
-      paymentMethod: paymentMethodForSale,
-      cashReceived,
-      changeAmount:
-        paymentResult.mode === "normal" &&
-        (paymentResult.paymentMethod === "nakit" ||
-          paymentResult.paymentMethod === "nakitpos")
-          ? (cashReceived || 0) - total
-          : undefined,
-      date: new Date(),
-      status: "completed",
-      receiptNo: salesDB.generateReceiptNo(),
-      splitDetails,
+  if (paymentResult.mode === "normal") {
+    paymentMethodForSale = paymentResult.paymentMethod;
+    cashReceived = paymentResult.received;
+  } else {
+    paymentMethodForSale = "mixed";
+    splitDetails = {
+      productPayments: paymentResult.productPayments,
+      equalPayments: paymentResult.equalPayments,
     };
+  }
 
+  const saleData: Omit<Sale, "id"> = {
+    items: activeTab.cart.map((item) => ({
+      ...item,
+      salePrice: item.salePrice,
+      priceWithVat: item.priceWithVat,
+      total: item.salePrice * item.quantity,
+      totalWithVat: item.priceWithVat * item.quantity,
+      vatAmount: (item.priceWithVat - item.salePrice) * item.quantity,
+    })),
+    subtotal,
+    vatAmount,
+    total: finalTotal, // İndirimli tutar
+    originalTotal, // İndirimsiz tutar (indirim varsa)
+    discount, // İndirim bilgisi
+    paymentMethod: paymentMethodForSale,
+    cashReceived,
+    changeAmount:
+      paymentResult.mode === "normal" &&
+      (paymentResult.paymentMethod === "nakit" ||
+        paymentResult.paymentMethod === "nakitpos")
+        ? (cashReceived || 0) - finalTotal  // Para üstü hesaplaması indirimli tutara göre
+        : undefined,
+    date: new Date(),
+    status: "completed",
+    receiptNo: salesDB.generateReceiptNo(),
+    splitDetails,
+  };
+
+  try {
+    const newSale = await salesDB.addSale(saleData);
+
+    // Kasa entegrasyonu
     try {
-      const newSale = await salesDB.addSale(saleData);
-
-      // Kasa entegrasyonu
-      try {
-        const activeSession = await cashRegisterService.getActiveSession();
-        if (activeSession) {
-          if (paymentResult.mode === "normal") {
-            if (paymentResult.paymentMethod === "nakit") {
-              await cashRegisterService.recordSale(total, 0);
-            } else if (paymentResult.paymentMethod === "kart") {
-              await cashRegisterService.recordSale(0, total);
-            } else if (paymentResult.paymentMethod === "nakitpos") {
-              await cashRegisterService.recordSale(total, 0);
-            }
-            // veresiye kasayı etkilemez
-          } else {
-            // split
-            let totalCash = 0;
-            let totalCard = 0;
-            if (paymentResult.productPayments) {
-              for (const payment of paymentResult.productPayments) {
-                if (
-                  payment.paymentMethod === "nakit" ||
-                  payment.paymentMethod === "nakitpos"
-                ) {
-                  totalCash += payment.received;
-                } else if (payment.paymentMethod === "kart") {
-                  totalCard += payment.received;
-                }
-              }
-            }
-            if (paymentResult.equalPayments) {
-              for (let i = 0; i < paymentResult.equalPayments.length; i++) {
-                const eq = paymentResult.equalPayments[i];
-                if (
-                  eq.paymentMethod === "nakit" ||
-                  eq.paymentMethod === "nakitpos"
-                ) {
-                  totalCash += eq.received;
-                } else if (eq.paymentMethod === "kart") {
-                  totalCard += eq.received;
-                }
-              }
-            }
-            await cashRegisterService.recordSale(totalCash, totalCard);
+      const activeSession = await cashRegisterService.getActiveSession();
+      if (activeSession) {
+        if (paymentResult.mode === "normal") {
+          if (paymentResult.paymentMethod === "nakit") {
+            await cashRegisterService.recordSale(finalTotal, 0); // İndirimli tutar
+          } else if (paymentResult.paymentMethod === "kart") {
+            await cashRegisterService.recordSale(0, finalTotal); // İndirimli tutar
+          } else if (paymentResult.paymentMethod === "nakitpos") {
+            await cashRegisterService.recordSale(finalTotal, 0); // İndirimli tutar
           }
+          // veresiye kasayı etkilemez
         } else {
-          console.warn(
-            "Satış yapıldı, ancak kasa kapalı görüldü. Kasa kaydı güncellenmedi."
-          );
-        }
-      } catch (cashError) {
-        console.error("Kasa kaydı güncellenirken hata:", cashError);
-        // Ana satış tamamlandı. Kasa hatası ekrana yansıtıp yansıtmayacağımıza siz karar verin.
-      }
-
-      // Veresiye
-      if (paymentResult.mode === "normal") {
-        if (paymentResult.paymentMethod === "veresiye" && selectedCustomer) {
-          await creditService.addTransaction({
-            customerId: selectedCustomer.id,
-            type: "debt",
-            amount: total,
-            date: new Date(),
-            description: `Fiş No: ${newSale.receiptNo}`,
-          });
+          // split
+          let totalCash = 0;
+          let totalCard = 0;
+          if (paymentResult.productPayments) {
+            for (const payment of paymentResult.productPayments) {
+              if (
+                payment.paymentMethod === "nakit" ||
+                payment.paymentMethod === "nakitpos"
+              ) {
+                totalCash += payment.received;
+              } else if (payment.paymentMethod === "kart") {
+                totalCard += payment.received;
+              }
+            }
+          }
+          if (paymentResult.equalPayments) {
+            for (let i = 0; i < paymentResult.equalPayments.length; i++) {
+              const eq = paymentResult.equalPayments[i];
+              if (
+                eq.paymentMethod === "nakit" ||
+                eq.paymentMethod === "nakitpos"
+              ) {
+                totalCash += eq.received;
+              } else if (eq.paymentMethod === "kart") {
+                totalCard += eq.received;
+              }
+            }
+          }
+          await cashRegisterService.recordSale(totalCash, totalCard);
         }
       } else {
-        // productPayments
-        if (paymentResult.productPayments) {
-          for (const pp of paymentResult.productPayments) {
-            if (pp.paymentMethod === "veresiye" && pp.customer) {
-              await creditService.addTransaction({
-                customerId: pp.customer.id,
-                type: "debt",
-                amount: pp.received,
-                date: new Date(),
-                description: `Fiş No: ${newSale.receiptNo} (Ürün ID: ${pp.itemId})`,
-              });
-            }
-          }
-        }
-        // equalPayments
-        if (paymentResult.equalPayments) {
-          for (let i = 0; i < paymentResult.equalPayments.length; i++) {
-            const eq = paymentResult.equalPayments[i];
-            if (eq.paymentMethod === "veresiye" && eq.customer) {
-              await creditService.addTransaction({
-                customerId: eq.customer.id,
-                type: "debt",
-                amount: eq.received,
-                date: new Date(),
-                description: `Fiş No: ${newSale.receiptNo} (Kişi ${i + 1})`,
-              });
-            }
-          }
-        }
+        console.warn(
+          "Satış yapıldı, ancak kasa kapalı görüldü. Kasa kaydı güncellenmedi."
+        );
       }
-
-      // Stok güncelle
-      for (const cartItem of activeTab.cart) {
-        await productService.updateStock(cartItem.id, -cartItem.quantity);
-      }
-
-      clearCart();
-      setSelectedCustomer(null);
-      setShowPaymentModal(false);
-
-      showSuccess(`Satış başarıyla tamamlandı! Fiş No: ${newSale.receiptNo}`);
-
-      // (İsteğe bağlı) Kasa durumunu tekrar sorgulayabilirsiniz:
-      const activeAgain = await cashRegisterService.getActiveSession();
-      setIsRegisterOpen(!!activeAgain);
-    } catch (error) {
-      console.error("Satış kaydedilirken hata:", error);
-      showError("Satış sırasında bir hata oluştu!");
+    } catch (cashError) {
+      console.error("Kasa kaydı güncellenirken hata:", cashError);
+      // Ana satış tamamlandı. Kasa hatası ekrana yansıtıp yansıtmayacağımıza siz karar verin.
     }
-  };
+
+    // Veresiye
+    if (paymentResult.mode === "normal") {
+      if (paymentResult.paymentMethod === "veresiye" && selectedCustomer) {
+        await creditService.addTransaction({
+          customerId: selectedCustomer.id,
+          type: "debt",
+          amount: finalTotal, // İndirimli tutar
+          date: new Date(),
+          description: `Fiş No: ${newSale.receiptNo}`,
+        });
+      }
+    } else {
+      // productPayments
+      if (paymentResult.productPayments) {
+        for (const pp of paymentResult.productPayments) {
+          if (pp.paymentMethod === "veresiye" && pp.customer) {
+            await creditService.addTransaction({
+              customerId: pp.customer.id,
+              type: "debt",
+              amount: pp.received,
+              date: new Date(),
+              description: `Fiş No: ${newSale.receiptNo} (Ürün ID: ${pp.itemId})`,
+            });
+          }
+        }
+      }
+      // equalPayments
+      if (paymentResult.equalPayments) {
+        for (let i = 0; i < paymentResult.equalPayments.length; i++) {
+          const eq = paymentResult.equalPayments[i];
+          if (eq.paymentMethod === "veresiye" && eq.customer) {
+            await creditService.addTransaction({
+              customerId: eq.customer.id,
+              type: "debt",
+              amount: eq.received,
+              date: new Date(),
+              description: `Fiş No: ${newSale.receiptNo} (Kişi ${i + 1})`,
+            });
+          }
+        }
+      }
+    }
+
+    // Stok güncelle
+    for (const cartItem of activeTab.cart) {
+      await productService.updateStock(cartItem.id, -cartItem.quantity);
+    }
+
+    clearCart();
+    setSelectedCustomer(null);
+    setShowPaymentModal(false);
+
+    showSuccess(`Satış başarıyla tamamlandı! Fiş No: ${newSale.receiptNo}`);
+
+    // (İsteğe bağlı) Kasa durumunu tekrar sorgulayabilirsiniz:
+    const activeAgain = await cashRegisterService.getActiveSession();
+    setIsRegisterOpen(!!activeAgain);
+  } catch (error) {
+    console.error("Satış kaydedilirken hata:", error);
+    showError("Satış sırasında bir hata oluştu!");
+  }
+};
 
   return (
     <PageLayout>

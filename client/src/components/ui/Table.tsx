@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Column, TableId } from "../../types/table";
 
 interface TableProps<T extends { [key: string]: any }, K extends TableId = TableId> {
@@ -14,6 +14,14 @@ interface TableProps<T extends { [key: string]: any }, K extends TableId = Table
   selectable?: boolean;
   loading?: boolean;
   emptyMessage?: string;
+
+  /** 
+   * Eğer tablo içinden sıralama yönetmek istemiyorsanız, 
+   * bu iki prop'u silebilirsiniz. 
+   */
+  enableSorting?: boolean;      // Sıralama açık/kapat
+  defaultSortKey?: keyof T;     // Başlangıçta hangi alana göre sıralasın
+  defaultSortDirection?: "asc" | "desc";
 }
 
 export function Table<
@@ -32,17 +40,60 @@ export function Table<
   selectable = false,
   loading = false,
   emptyMessage = "Veri bulunamadı.",
+  enableSorting = false,
+  defaultSortKey,
+  defaultSortDirection = "asc",
 }: TableProps<T, K>) {
-  const handleSelectAll = (checked: boolean) => {
-    if (onSelectAll) {
-      onSelectAll(checked);
+  
+  // İçeride sıralama mantığını tutmak için state
+  const [sortKey, setSortKey] = useState<keyof T | undefined>(defaultSortKey);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">(defaultSortDirection);
+
+  // Tüm veriyi sıralamak için basit bir yardımcı fonksiyon
+  function sortData(dataToSort: T[]): T[] {
+    if (!enableSorting || !sortKey) return dataToSort;
+    let sorted = [...dataToSort];
+    sorted.sort((a, b) => {
+      const aVal = a[sortKey];
+      const bVal = b[sortKey];
+      
+      // Sayısal karşılaştırma
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return sortDirection === "asc" ? aVal - bVal : bVal - aVal;
+      }
+      // String karşılaştırma
+      const aStr = String(aVal).toLowerCase();
+      const bStr = String(bVal).toLowerCase();
+      if (aStr < bStr) return sortDirection === "asc" ? -1 : 1;
+      if (aStr > bStr) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }
+
+  // Seçili veriyi sıralayalım
+  const sortedData = sortData(data);
+
+  // Sütun başlığına tıklandığında çalışır
+  const handleHeaderClick = (columnKey: keyof T) => {
+    if (!enableSorting) return;
+    
+    if (sortKey === columnKey) {
+      // Aynı sütuna tıklandı -> yön değiştir
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      // Farklı sütun -> sıralama bu sütunda asc başlasın
+      setSortKey(columnKey);
+      setSortDirection("asc");
     }
   };
 
+  const handleSelectAll = (checked: boolean) => {
+    onSelectAll?.(checked);
+  };
+
   const handleSelectRow = (item: T, checked: boolean) => {
-    if (onSelect) {
-      onSelect(item[idField] as K, checked);
-    }
+    onSelect?.(item[idField] as K, checked);
   };
 
   if (loading) {
@@ -53,7 +104,7 @@ export function Table<
     );
   }
 
-  if (!data.length) {
+  if (!sortedData.length) {
     return (
       <div className="w-full p-8 text-center text-gray-500">{emptyMessage}</div>
     );
@@ -74,20 +125,32 @@ export function Table<
                 />
               </th>
             )}
-            {columns.map((column) => (
-              <th
-                key={column.key}
-                className={`px-6 py-4 text-sm font-semibold text-gray-900 ${
-                  column.className || ""
-                }`}
-              >
-                {column.title}
-              </th>
-            ))}
+            {columns.map((column) => {
+              const isSorted = enableSorting && column.key === sortKey;
+              return (
+                <th
+                  key={column.key}
+                  className={`px-6 py-4 text-sm font-semibold text-gray-900 ${
+                    column.className || ""
+                  } ${enableSorting ? "cursor-pointer select-none" : ""}`}
+                  onClick={() => handleHeaderClick(column.key as keyof T)}
+                >
+                  <div className="inline-flex items-center gap-1">
+                    {column.title}
+                    {/* Eğer bu sütun sıralama sütunuysa yön simgesi göster */}
+                    {isSorted && (
+                      <span>
+                        {sortDirection === "asc" ? "▲" : "▼"}
+                      </span>
+                    )}
+                  </div>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
-          {data.map((item, index) => (
+          {sortedData.map((item, index) => (
             <tr
               key={index}
               onClick={() => onRowClick?.(item)}

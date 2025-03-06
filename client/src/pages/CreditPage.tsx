@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { DollarSign, Users, AlertTriangle, CreditCard, UserPlus } from "lucide-react";
-import { Customer } from "../types/credit";
+import { Customer, CreditTransaction } from "../types/credit";
 import CustomerList from "../components/ui/CustomerList";
 import CustomerModal from "../components/modals/CustomerModal";
 import TransactionModal from "../components/modals/TransactionModal";
@@ -34,6 +34,9 @@ const CreditPage: React.FC = () => {
   const [summaries, setSummaries] = useState<Record<number, CustomerSummary>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Müşteri işlemleri için yeni state
+  const [customerTransactions, setCustomerTransactions] = useState<CreditTransaction[]>([]);
 
   // Modallar
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -243,9 +246,20 @@ const CreditPage: React.FC = () => {
     }
   };
 
-  const handleViewCustomerDetail = (customer: Customer) => {
-    setSelectedDetailCustomer(customer);
-    setShowCustomerDetail(true);
+  // Güncellenmiş müşteri detayı görüntüleme fonksiyonu
+  const handleViewCustomerDetail = async (customer: Customer) => {
+    try {
+      // Müşterinin işlemlerini yükle
+      const transactions = await creditService.getTransactionsByCustomerId(customer.id);
+      setCustomerTransactions(transactions);
+      
+      // Modalı aç
+      setSelectedDetailCustomer(customer);
+      setShowCustomerDetail(true);
+    } catch (error) {
+      console.error("Müşteri işlemleri yüklenirken hata:", error);
+      showError("Müşteri işlemleri yüklenirken bir hata oluştu");
+    }
   };
 
   // Filtre reset
@@ -438,16 +452,17 @@ const CreditPage: React.FC = () => {
         />
       )}
 
-      {/* Müşteri Detay Modalı */}
+      {/* Müşteri Detay Modalı - Güncellenmiş */}
       {selectedDetailCustomer && (
         <CustomerDetailModal
           isOpen={showCustomerDetail}
           onClose={() => {
             setShowCustomerDetail(false);
             setSelectedDetailCustomer(null);
+            setCustomerTransactions([]); // Modal kapandığında işlemleri temizle
           }}
           customer={selectedDetailCustomer}
-          transactions={[]} 
+          transactions={customerTransactions} // Yüklenen işlemleri gönder
           onAddDebt={handleAddDebt}
           onAddPayment={handleAddPayment}
         />

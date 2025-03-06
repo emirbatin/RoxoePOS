@@ -102,7 +102,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onCancel,
 }) => {
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/25 backdrop-blur-sm z-50">
+    <div className="fixed inset-0 flex items-center justify-center bg-black/25 backdrop-blur-sm z-[9999]">
       <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-auto p-6 border-2 border-amber-100 animate-fade-in">
         <div className="flex gap-3 items-start">
           <div className="p-2 bg-amber-50 rounded-lg">
@@ -170,10 +170,12 @@ const AlertContainer: React.FC<AlertContainerProps> = ({
 
   return (
     <>
-      {/* Normal alert'ler için container */}
-      <div className="fixed top-4 left-4 space-y-3 min-w-[320px] max-w-[420px] p-4">
+      {/* Normal alert'ler için container - Z-index artırıldı */}
+      <div className="fixed top-4 left-4 space-y-3 min-w-[320px] max-w-[420px] p-4 z-[9999] pointer-events-none">
         {normalAlerts.map((alert) => (
-          <Alert key={alert.id} alert={alert} onRemove={onRemove} />
+          <div key={alert.id} className="pointer-events-auto">
+            <Alert alert={alert} onRemove={onRemove} />
+          </div>
         ))}
       </div>
 

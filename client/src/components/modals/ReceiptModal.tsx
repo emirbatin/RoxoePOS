@@ -16,6 +16,19 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({
   const [isPrinting, setIsPrinting] = useState(false);
   const [config, setConfig] = useState<ReceiptConfig | null>(null);
 
+  // Indirim durumu kontrolü
+  const hasDiscount = receiptData?.discount || receiptData?.originalTotal;
+  
+  // Eğer indirim varsa orijinal ve indirim miktarını hesapla
+  const originalTotal = receiptData?.originalTotal || receiptData?.total || 0;
+  const discountAmount = hasDiscount ? (originalTotal - (receiptData?.total || 0)) : 0;
+  
+  // İndirim bilgisi formatı
+  const discountInfo = receiptData?.discount ? 
+    (receiptData.discount.type === 'percentage' ? 
+      `%${receiptData.discount.value} İndirim` : 
+      `₺${receiptData.discount.value.toFixed(2)} İndirim`) : '';
+
   // Load receipt config from localStorage
   useEffect(() => {
     const savedConfig = localStorage.getItem("receiptConfig");
@@ -162,10 +175,32 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({
               {/* Totals */}
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px]">
-                  <span>TOPLAM</span>
-                  <span className="font-bold">
-                    {formatCurrency(receiptData.total)}
-                  </span>
+                  <span>ARA TOPLAM</span>
+                  <span>{formatCurrency(receiptData.subtotal)}</span>
+                </div>
+                
+                <div className="flex justify-between text-[10px]">
+                  <span>KDV TOPLAM</span>
+                  <span>{formatCurrency(receiptData.vatAmount)}</span>
+                </div>
+                
+                {/* İndirim Bilgisi - Eğer indirim uygulanmışsa */}
+                {hasDiscount && (
+                  <>
+                    <div className="flex justify-between text-[10px] font-bold">
+                      <span>{discountInfo}</span>
+                      <span>-{formatCurrency(discountAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-[10px]">
+                      <span>İNDİRİMSİZ TUTAR</span>
+                      <span>{formatCurrency(originalTotal)}</span>
+                    </div>
+                  </>
+                )}
+                
+                <div className="flex justify-between text-[10px] font-bold border-t border-dashed pt-1">
+                  <span>GENEL TOPLAM</span>
+                  <span>{formatCurrency(receiptData.total)}</span>
                 </div>
 
                 {/* KDV Breakdown */}
@@ -198,10 +233,45 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 </div>
               </div>
 
+              {/* Ödeme Bilgileri */}
+              <div className="mt-2 pt-2 border-t border-dashed">
+                <div className="flex justify-between text-[10px]">
+                  <span>ÖDEME YÖNTEMİ:</span>
+                  <span>
+                    {receiptData.paymentMethod === "nakit" && "NAKİT"}
+                    {receiptData.paymentMethod === "kart" && "KREDİ KARTI"}
+                    {receiptData.paymentMethod === "veresiye" && "VERESİYE"}
+                    {receiptData.paymentMethod === "nakitpos" && "NAKİT POS"}
+                    {receiptData.paymentMethod === "mixed" && "KARIŞIK ÖDEME"}
+                  </span>
+                </div>
+                
+                {/* Nakit alındı/para üstü bilgileri */}
+                {receiptData.paymentMethod === "nakit" && receiptData.cashReceived && (
+                  <>
+                    <div className="flex justify-between text-[10px]">
+                      <span>ALINAN:</span>
+                      <span>{formatCurrency(receiptData.cashReceived)}</span>
+                    </div>
+                    <div className="flex justify-between text-[10px]">
+                      <span>PARA ÜSTÜ:</span>
+                      <span>{formatCurrency(receiptData.changeAmount || 0)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
               <DottedLine />
 
               {/* Footer */}
               <div className="text-center space-y-2">
+                {/* İndirim bilgisi tekrarı - özel vurgu ile */}
+                {hasDiscount && (
+                  <div className="font-bold text-[10px] border-t border-b border-dashed py-1">
+                    *** {discountInfo} UYGULANMIŞTIR ***
+                  </div>
+                )}
+                
                 <div className="text-[10px]">
                   {config?.footer.returnPolicy ||
                     "Ürün iade ve değişimlerinde bu fiş ve ambalaj gereklidir"}

@@ -166,29 +166,43 @@ class CreditService {
   }
 
   // Özet istatistikler
-  async getCustomerSummary(customerId: number): Promise<CustomerSummary> {
-    const transactions = await this.getTransactionsByCustomerId(customerId);
-    const activeTransactions = transactions.filter(
-      (t) => t.status === "active" || t.status === "overdue"
-    );
+  // creditService.ts içindeki getCustomerSummary metodunu güncelle
+async getCustomerSummary(customerId: number): Promise<CustomerSummary> {
+  const transactions = await this.getTransactionsByCustomerId(customerId);
+  const activeTransactions = transactions.filter(
+    (t) => t.status === "active" || t.status === "overdue"
+  );
 
-    const summary: CustomerSummary = {
-      totalDebt: activeTransactions.reduce(
-        (sum, t) => sum + (t.type === "debt" ? t.amount : -t.amount),
-        0
-      ),
-      totalOverdue: activeTransactions
-        .filter((t) => t.status === "overdue")
-        .reduce((sum, t) => sum + t.amount, 0),
-      lastTransactionDate: transactions[0]?.date,
-      activeTransactions: activeTransactions.length,
-      overdueTransactions: activeTransactions.filter(
-        (t) => t.status === "overdue"
-      ).length,
-    };
+  // İndirimli işlemleri bul
+  const discountedTransactions = transactions.filter(
+    (t) => t.discountAmount && t.discountAmount > 0
+  );
+  
+  // Toplam indirim tutarı
+  const totalDiscount = discountedTransactions.reduce(
+    (sum, t) => sum + (t.discountAmount || 0), 0
+  );
 
-    return summary;
-  }
+  const summary: CustomerSummary = {
+    totalDebt: activeTransactions.reduce(
+      (sum, t) => sum + (t.type === "debt" ? t.amount : -t.amount),
+      0
+    ),
+    totalOverdue: activeTransactions
+      .filter((t) => t.status === "overdue")
+      .reduce((sum, t) => sum + t.amount, 0),
+    lastTransactionDate: transactions[0]?.date,
+    activeTransactions: activeTransactions.length,
+    overdueTransactions: activeTransactions.filter(
+      (t) => t.status === "overdue"
+    ).length,
+    // Eksik alanları ekle
+    discountedSalesCount: discountedTransactions.length,
+    totalDiscount: totalDiscount
+  };
+
+  return summary;
+}
 }
 
 export const creditService = new CreditService();

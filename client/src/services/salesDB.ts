@@ -1,5 +1,6 @@
 // salesDB.ts
-import { Sale } from "../types/sales";
+import { Sale, DiscountInfo } from "../types/sales";
+import { discountService } from "../services/discountService";
 import DBVersionHelper from '../helpers/DBVersionHelper';
 
 const DB_NAME = "salesDB";
@@ -40,8 +41,26 @@ class SalesService {
       const transaction = db.transaction(STORE_NAME, "readwrite");
       const store = transaction.objectStore(STORE_NAME);
 
+      // İndirimsiz durumu önce kontrol et
+      let finalData: Omit<Sale, "id"> = { ...saleData };
+      
+      // İndirim varsa
+      if (saleData.discount) {
+        // Orijinal tutarı öncelikle originalTotal'den al, yoksa total'den
+        const originalTotal = saleData.originalTotal || saleData.total;
+        
+        // Yeni kayıt için veriyi hazırla
+        finalData = {
+          ...saleData,
+          // İndirimli tutarı total'e ata
+          total: saleData.discount.discountedTotal,
+          // Orijinal tutarı (indirimsiz) originalTotal olarak sakla
+          originalTotal: originalTotal
+        };
+      }
+
       const newSale: Sale = {
-        ...saleData,
+        ...finalData,
         id: `SALE-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       };
 
@@ -74,6 +93,39 @@ class SalesService {
       request.onerror = () => {
         reject(request.error);
       };
+    });
+  }
+
+  // Filtrelenmiş satışları getirme (indirim filtresi dahil)
+  async getSalesWithFilter(filter: {
+    startDate?: Date;
+    endDate?: Date;
+    status?: string;
+    paymentMethod?: string;
+    hasDiscount?: boolean;
+  }): Promise<Sale[]> {
+    const sales = await this.getAllSales();
+    
+    return sales.filter(sale => {
+      // Tarih filtresi
+      if (filter.startDate && new Date(sale.date) < filter.startDate) return false;
+      if (filter.endDate) {
+        const endDateCopy = new Date(filter.endDate);
+        endDateCopy.setHours(23, 59, 59, 999);
+        if (new Date(sale.date) > endDateCopy) return false;
+      }
+      
+      // Durum filtresi
+      if (filter.status && sale.status !== filter.status) return false;
+      
+      // Ödeme yöntemi filtresi
+      if (filter.paymentMethod && sale.paymentMethod !== filter.paymentMethod) return false;
+      
+      // İndirim filtresi
+      if (filter.hasDiscount === true && !sale.discount) return false;
+      if (filter.hasDiscount === false && sale.discount) return false;
+      
+      return true;
     });
   }
 
@@ -114,7 +166,21 @@ class SalesService {
           return;
         }
 
-        const updatedSale = { ...sale, ...updates };
+        let finalUpdates = { ...updates };
+        
+        // Eğer güncelleme içinde indirim bilgisi varsa
+        if (updates.discount) {
+          // Orijinal tutarı, mevcut originalTotal veya total değerinden al
+          const originalTotal = updates.originalTotal || sale.originalTotal || sale.total;
+          
+          finalUpdates = {
+            ...updates,
+            total: updates.discount.discountedTotal,
+            originalTotal: originalTotal
+          };
+        }
+
+        const updatedSale = { ...sale, ...finalUpdates };
         const updateRequest = store.put(updatedSale);
 
         updateRequest.onsuccess = () => {
@@ -137,6 +203,7 @@ class SalesService {
     return this.updateSale(saleId, {
       status: "cancelled",
       cancelReason: reason,
+      cancelDate: new Date(),
     });
   }
 
@@ -163,6 +230,83 @@ class SalesService {
     });
   }
 
+  // İndirim uygulama (ayrı bir yardımcı fonksiyon)
+  applyDiscount(saleData: Sale, type: 'percentage' | 'amount', value: number): Sale {
+    // İndirimsiz fiyatı doğru şekilde al (orijinal fiyat veya mevcut fiyat)
+    const originalTotal = saleData.originalTotal || saleData.total;
+    
+    // İndirimli fiyatı hesapla
+    const discountedTotal = discountService.calculateDiscountedTotal(originalTotal, type, value);
+
+    return {
+      ...saleData,
+      // İndirimli tutarı total'e ata (dış sistemler bunu kullanacak)
+      total: discountedTotal,
+      // Orijinal tutarı originalTotal olarak sakla (raporlama için)
+      originalTotal: originalTotal,
+      // İndirim bilgilerini ekle/güncelle
+      discount: {
+        type,
+        value,
+        discountedTotal
+      }
+    };
+  }
+
+  // Satış özeti oluşturma (indirim bilgileri dahil)
+  async getSalesSummary(startDate: Date, endDate: Date): Promise<{
+    totalSales: number;
+    totalAmount: number;
+    totalDiscount: number;
+    originalAmount: number;
+    discountedSalesCount: number;
+    salesByPaymentMethod: Record<string, number>;
+  }> {
+    const sales = await this.getSalesWithFilter({
+      startDate,
+      endDate,
+      status: 'completed'
+    });
+    
+    let totalSales = 0;
+    let totalAmount = 0;
+    let totalDiscount = 0;
+    let originalAmount = 0;
+    let discountedSalesCount = 0;
+    const salesByPaymentMethod: Record<string, number> = {};
+    
+    for (const sale of sales) {
+      totalSales++;
+      // Her zaman indirimli (veya indirimsiz) toplam tutarı ekle
+      totalAmount += sale.total;
+      
+      // İndirim bilgileri
+      if (sale.discount && sale.originalTotal) {
+        discountedSalesCount++;
+        const discountAmount = sale.originalTotal - sale.total;
+        totalDiscount += discountAmount;
+        originalAmount += sale.originalTotal;
+      } else {
+        // İndirimsiz satışlar için total değerini ekle
+        originalAmount += sale.total;
+      }
+      
+      // Ödeme yöntemine göre grupla - her zaman mevcut total değerini kullan
+      const method = sale.paymentMethod;
+      salesByPaymentMethod[method] = (salesByPaymentMethod[method] || 0) + sale.total;
+    }
+    
+    return {
+      totalSales,
+      totalAmount,
+      totalDiscount,
+      originalAmount,
+      discountedSalesCount,
+      salesByPaymentMethod
+    };
+  }
+
+  // Fiş numarası oluştur
   generateReceiptNo(): string {
     const date = new Date();
     const year = date.getFullYear();
