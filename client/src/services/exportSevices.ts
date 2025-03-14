@@ -1,8 +1,8 @@
 import { Sale } from '../types/sales';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import { getPaymentMethodDisplay } from '../helpers/paymentMethodDisplay';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+
 
 // Fiş bazlı rapor için interface
 interface SaleReportData {
@@ -288,7 +288,7 @@ class ExportService {
         'Toplam Ciro': data.reduce((sum, row) => sum + row['Toplam Ciro'], 0),
         'Toplam Kâr': data.reduce((sum, row) => sum + row['Toplam Kâr'], 0),
         'Kâr Marjı (%)': Number(((data.reduce((sum, row) => sum + row['Toplam Kâr'], 0) / 
-                                 data.reduce((sum, row) => sum + row['Toplam Ciro'], 0)) * 100).toFixed(2))
+                               data.reduce((sum, row) => sum + row['Toplam Ciro'], 0)) * 100).toFixed(2))
       };
       worksheet.addRow(totals);
 
@@ -351,69 +351,293 @@ class ExportService {
       throw new Error('Kasa raporları için PDF export henüz desteklenmiyor!');
     }
     
-    const doc = new jsPDF();
+    // Yeni bir PDF dokümanı oluştur
+    const pdfDoc = await PDFDocument.create();
+    
+    // Font ekle
+    const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    
+    // Sayfa oluştur (A4)
+    // "let" kullanarak değişkene atama yaptık - artık sabit değil
+    let page = pdfDoc.addPage([595, 842]); // A4 boyutu
+    const { width, height } = page.getSize();
+    
+    // Değişkenler
+    const margin = 50;
+    const columnWidth = (width - (margin * 2)) / (type === 'product' ? 5 : 6);
+    
+    // Rapor Başlığı
+    page.drawText(type === 'product' ? 'Ürün Satış Raporu' : 'Satış Raporu', {
+      x: width / 2 - helveticaBold.widthOfTextAtSize('Ürün Satış Raporu', 16) / 2,
+      y: height - margin,
+      size: 16,
+      font: helveticaBold
+    });
+    
+    // Tarih Aralığı
+    page.drawText(dateRange, {
+      x: width / 2 - helvetica.widthOfTextAtSize(dateRange, 10) / 2,
+      y: height - margin - 20,
+      size: 10,
+      font: helvetica
+    });
+    
+    // Tablo başlıkları için Y pozisyonu
+    let y = height - margin - 50;
+    
+    // Tablo oluşturma fonksiyonu - Yardımcı metot
+    const drawTableHeader = (columns: string[], y: number) => {
+      // Tablo başlık arka planı
+      page.drawRectangle({
+        x: margin,
+        y: y - 15,
+        width: width - (margin * 2),
+        height: 20,
+        color: rgb(0.16, 0.5, 0.73), // #2980B9
+      });
+      
+      // Tablo başlıkları
+      columns.forEach((title, i) => {
+        page.drawText(title, {
+          x: margin + (columnWidth * i) + 5,
+          y: y - 10,
+          size: 10,
+          font: helveticaBold,
+          color: rgb(1, 1, 1) // white
+        });
+      });
+      
+      return y - 25; // Bir sonraki satır için Y pozisyonu
+    };
     
     if (type === 'product') {
       const data = this.prepareProductData(sales);
+      const columns = ['Ürün Adı', 'Kategori', 'Adet', 'Ciro', 'Kâr'];
       
-      doc.setFontSize(16);
-      doc.text("Ürün Satış Raporu", 14, 15);
-      doc.setFontSize(10);
-      doc.text(dateRange, 14, 22);
+      y = drawTableHeader(columns, y);
       
-      const columns = [
-        'Ürün Adı',
-        'Kategori',
-        'Satış Adedi',
-        'Toplam Ciro',
-        'Toplam Kâr'
-      ];
-
-      const tableData = data.map(item => [
-        item['Ürün Adı'],
-        item['Kategori'],
-        item['Satış Adedi'].toString(),
-        `₺${item['Toplam Ciro'].toFixed(2)}`,
-        `₺${item['Toplam Kâr'].toFixed(2)}`
-      ]);
-
-      (doc as any).autoTable({
-        head: [columns],
-        body: tableData,
-        startY: 25,
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [41, 128, 185] },
-        alternateRowStyles: { fillColor: [242, 242, 242] },
+      // Tablo satırları
+      data.forEach((item, i) => {
+        // Her ikinci satır için arka plan
+        if (i % 2 === 0) {
+          page.drawRectangle({
+            x: margin,
+            y: y - 15,
+            width: width - (margin * 2),
+            height: 20,
+            color: rgb(0.95, 0.95, 0.95), // Light gray
+          });
+        }
+        
+        // Ürün adı (kısaltılmış)
+        let productName = item['Ürün Adı'];
+        if (productName.length > 25) {
+          productName = productName.substring(0, 22) + '...';
+        }
+        
+        page.drawText(productName, {
+          x: margin + 5,
+          y: y - 10,
+          size: 9,
+          font: helvetica
+        });
+        
+        // Kategori
+        let category = item['Kategori'] || '';
+        if (category.length > 15) {
+          category = category.substring(0, 12) + '...';
+        }
+        
+        page.drawText(category, {
+          x: margin + columnWidth + 5,
+          y: y - 10,
+          size: 9,
+          font: helvetica
+        });
+        
+        // Satış Adedi
+        page.drawText(item['Satış Adedi'].toString(), {
+          x: margin + (columnWidth * 2) + 5,
+          y: y - 10,
+          size: 9,
+          font: helvetica
+        });
+        
+        // Toplam Ciro
+        page.drawText(`₺${item['Toplam Ciro'].toFixed(2)}`, {
+          x: margin + (columnWidth * 3) + 5,
+          y: y - 10,
+          size: 9,
+          font: helvetica
+        });
+        
+        // Toplam Kâr
+        page.drawText(`₺${item['Toplam Kâr'].toFixed(2)}`, {
+          x: margin + (columnWidth * 4) + 5,
+          y: y - 10,
+          size: 9,
+          font: helvetica
+        });
+        
+        y -= 20;
+        
+        // Sayfa sınırını aştık mı?
+        if (y < margin + 50) {
+          // Yeni sayfa ekle
+          page = pdfDoc.addPage([595, 842]);
+          y = height - margin - 30;
+          
+          // Yeni sayfada başlıkları tekrarla
+          y = drawTableHeader(columns, y);
+        }
       });
-
+      
+      // Toplam satırı
+      page.drawRectangle({
+        x: margin,
+        y: y - 15,
+        width: width - (margin * 2),
+        height: 25,
+        color: rgb(0.9, 0.9, 0.9), // Biraz daha koyu gri
+      });
+      
+      // TOPLAM yazısı
+      page.drawText('TOPLAM', {
+        x: margin + 5,
+        y: y - 10,
+        size: 10,
+        font: helveticaBold
+      });
+      
+      // Toplam Satış Adedi
+      const totalQuantity = data.reduce((sum, row) => sum + row['Satış Adedi'], 0);
+      page.drawText(totalQuantity.toString(), {
+        x: margin + (columnWidth * 2) + 5,
+        y: y - 10,
+        size: 10,
+        font: helveticaBold
+      });
+      
+      // Toplam Ciro
+      const totalRevenue = data.reduce((sum, row) => sum + row['Toplam Ciro'], 0);
+      page.drawText(`₺${totalRevenue.toFixed(2)}`, {
+        x: margin + (columnWidth * 3) + 5,
+        y: y - 10,
+        size: 10,
+        font: helveticaBold
+      });
+      
+      // Toplam Kâr
+      const totalProfit = data.reduce((sum, row) => sum + row['Toplam Kâr'], 0);
+      page.drawText(`₺${totalProfit.toFixed(2)}`, {
+        x: margin + (columnWidth * 4) + 5,
+        y: y - 10,
+        size: 10,
+        font: helveticaBold
+      });
+      
     } else {
+      // Satış raporu
       const data = this.prepareSaleData(sales);
+      const columns = ['Fiş No', 'Tarih', 'Tutar', 'Ödeme', 'Durum', 'Adet'];
       
-      doc.setFontSize(16);
-      doc.text("Satış Raporu", 14, 15);
-      doc.setFontSize(10);
-      doc.text(dateRange, 14, 22);
+      y = drawTableHeader(columns, y);
       
-      const columns = ['Fiş No', 'Tarih', 'Tutar', 'Ödeme', 'Durum'];
-      const tableData = data.map(item => [
-        item['Fiş No'],
-        new Date(item['Tarih']).toLocaleString('tr-TR'),
-        `₺${item['Tutar'].toFixed(2)}`,
-        item['Ödeme'],
-        item['Durum']
-      ]);
-
-      (doc as any).autoTable({
-        head: [columns],
-        body: tableData,
-        startY: 25,
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [41, 128, 185] },
-        alternateRowStyles: { fillColor: [242, 242, 242] },
+      // Tablo satırları
+      data.forEach((item, i) => {
+        // Her ikinci satır için arka plan
+        if (i % 2 === 0) {
+          page.drawRectangle({
+            x: margin,
+            y: y - 15,
+            width: width - (margin * 2),
+            height: 20,
+            color: rgb(0.95, 0.95, 0.95), // Light gray
+          });
+        }
+        
+        // Fiş No
+        page.drawText(item['Fiş No'], {
+          x: margin + 5,
+          y: y - 10,
+          size: 9,
+          font: helvetica
+        });
+        
+        // Tarih
+        const dateString = item['Tarih'] instanceof Date 
+          ? item['Tarih'].toLocaleString('tr-TR', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit', 
+              minute: '2-digit'
+            })
+          : new Date(item['Tarih']).toLocaleString('tr-TR');
+        
+        page.drawText(dateString, {
+          x: margin + columnWidth + 5,
+          y: y - 10,
+          size: 9,
+          font: helvetica
+        });
+        
+        // Tutar
+        page.drawText(`₺${item['Tutar'].toFixed(2)}`, {
+          x: margin + (columnWidth * 2) + 5,
+          y: y - 10,
+          size: 9,
+          font: helvetica
+        });
+        
+        // Ödeme
+        page.drawText(item['Ödeme'], {
+          x: margin + (columnWidth * 3) + 5,
+          y: y - 10,
+          size: 9,
+          font: helvetica
+        });
+        
+        // Durum
+        page.drawText(item['Durum'], {
+          x: margin + (columnWidth * 4) + 5,
+          y: y - 10,
+          size: 9,
+          font: helvetica
+        });
+        
+        // Ürün Sayısı
+        page.drawText(item['Ürün Sayısı'].toString(), {
+          x: margin + (columnWidth * 5) + 5,
+          y: y - 10,
+          size: 9,
+          font: helvetica
+        });
+        
+        y -= 20;
+        
+        // Sayfa sınırını aştık mı?
+        if (y < margin + 50) {
+          // Yeni sayfa ekle
+          page = pdfDoc.addPage([595, 842]);
+          y = height - margin - 30;
+          
+          // Yeni sayfada başlıkları tekrarla
+          y = drawTableHeader(columns, y);
+        }
       });
     }
-
-    doc.save(`${type === 'product' ? 'Ürün_Satış_Raporu' : 'Satış_Raporu'}_${dateRange}.pdf`);
+    
+    // PDF'i kaydet ve indir
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${type === 'product' ? 'Ürün_Satış_Raporu' : 'Satış_Raporu'}_${dateRange}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   // Kasa verileri için PDF export fonksiyonu (gelecekte geliştirilebilir)

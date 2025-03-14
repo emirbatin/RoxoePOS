@@ -2,27 +2,27 @@ const { v4: uuidv4 } = require("uuid");
 const LicenseKey = require("../models/LicenseKey");
 const { createLicenseToken } = require("../services/licenseService");
 
+function generateLicenseKey() {
+  return uuidv4().replace(/-/g, "").toUpperCase().match(/.{1,4}/g).join("-");
+}
+
 async function createLicenseKey(req, res) {
   try {
     const { maxActivations, expires, companyName } = req.body;
-    // Rastgele key oluşturuluyor
-    const newKey = uuidv4().toUpperCase();
+    const newKey = generateLicenseKey(); // UUID formatında ama daha okunaklı
 
     let expirationDate = null;
     if (expires) {
-      // Eğer expires değeri sayı veya sayı içeren bir stringse gün olarak yorumla
       if (!isNaN(Number(expires))) {
         const days = Number(expires);
         expirationDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
       } else {
-        // Aksi halde tarih stringi olarak gönderilmişse
         const parsedExpires = new Date(expires);
         if (!isNaN(parsedExpires.getTime()) && parsedExpires > new Date()) {
           expirationDate = parsedExpires;
         }
       }
     }
-    // Eğer expires gönderilmezse veya geçerli değilse, expirationDate null kalır (sınırsız)
 
     const newLicense = await LicenseKey.create({
       key: newKey,

@@ -18,21 +18,41 @@ const LicenseActivation: React.FC<LicenseActivationProps> = ({ onSuccess }) => {
 
   const { showSuccess } = useAlert();
 
+  const isElectron = window && window.ipcRenderer !== undefined;
+
   const handleActivate = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setStatus({ loading: true, error: null });
-
+  
     try {
-      const result = await window.ipcRenderer.invoke('activate-license', licenseKey);
-      
-      if (result.success) {
-        showSuccess('Lisans başarıyla aktive edildi');
-        onSuccess();
+      if (isElectron) {
+        // Masaüstü için IPC kullan
+        const result = await window.ipcRenderer.invoke('activate-license', licenseKey);
+        
+        if (result.success) {
+          showSuccess('Lisans başarıyla aktive edildi');
+          onSuccess();
+        } else {
+          throw new Error(result.error || 'Aktivasyon başarısız');
+        }
       } else {
-        setStatus({ 
-          loading: false, 
-          error: result.error || 'Aktivasyon başarısız' 
+        // Web için API çağrısı yap
+        const response = await fetch('https://roxoepos-server.onrender.com/api/licenses/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ licenseKey, machineId: 'web-user' }),
         });
+  
+        const result = await response.json();
+  
+        if (result.success) {
+          showSuccess('Lisans başarıyla aktive edildi (Web)');
+          onSuccess();
+        } else {
+          throw new Error(result.error || 'Web aktivasyonu başarısız');
+        }
       }
     } catch (error) {
       setStatus({
