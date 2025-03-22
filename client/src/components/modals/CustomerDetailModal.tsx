@@ -629,7 +629,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
             </button>
           </div>
 
-          {/* Debug Information */}
+          {/* Debug Information 
           {process.env.NODE_ENV === 'development' && (
             <div className="px-6 py-2 bg-yellow-50 border-b border-yellow-200 text-xs text-yellow-800">
               <p>Debug: Current View: {currentView}</p>
@@ -639,7 +639,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
               <p>Debug: Active Transactions: {activeTransactions.length}</p>
               <p>Debug: First Transaction: {sortedTransactions.length > 0 ? JSON.stringify(sortedTransactions[0]).substring(0, 100) + '...' : 'None'}</p>
             </div>
-          )}
+          )}*/}
 
           {/* Content */}
           {renderModalContent()}

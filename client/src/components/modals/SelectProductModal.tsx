@@ -66,7 +66,7 @@ const SelectProductsModal: React.FC<SelectProductsModalProps> = ({
               placeholder="Ürün ara..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
           </div>
@@ -81,7 +81,7 @@ const SelectProductsModal: React.FC<SelectProductsModalProps> = ({
                 onClick={() => handleToggleSelect(product.id)}
                 className={`flex items-center p-3 rounded-lg border cursor-pointer
                   ${selectedIds.includes(product.id)
-                    ? 'border-primary-500 bg-primary-50'
+                    ? 'border-indigo-500 bg-indigo-50'
                     : 'hover:bg-gray-50'
                   }`}
               >
@@ -89,7 +89,7 @@ const SelectProductsModal: React.FC<SelectProductsModalProps> = ({
                   type="checkbox"
                   checked={selectedIds.includes(product.id)}
                   onChange={() => handleToggleSelect(product.id)}
-                  className="mr-3 h-5 w-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  className="mr-3 h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div className="flex-1">
                   <div className="font-medium">{product.name}</div>
@@ -98,7 +98,7 @@ const SelectProductsModal: React.FC<SelectProductsModalProps> = ({
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-medium text-primary-600">
+                  <div className="font-medium text-indigo-600">
                     {formatCurrency(product.priceWithVat)}
                   </div>
                   <div className="text-sm text-gray-500">
@@ -126,7 +126,7 @@ const SelectProductsModal: React.FC<SelectProductsModalProps> = ({
               <button
                 onClick={handleSubmit}
                 disabled={selectedIds.length === 0}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Ekle
               </button>

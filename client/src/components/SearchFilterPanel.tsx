@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Search, Filter, RefreshCw } from "lucide-react";
+import { Search, Filter, RefreshCw, X, Loader2, Scan } from "lucide-react";
 
 interface SearchFilterPanelProps {
   searchTerm: string;
@@ -8,8 +8,9 @@ interface SearchFilterPanelProps {
   showFilter: boolean;
   toggleFilter: () => void;
   inputRef?: React.RefObject<HTMLInputElement>;
-  onBarcodeDetected?: (barcode: string) => void; // Barkod tarandığında çağrılacak fonksiyon
-  inputActive?: boolean; // Arama alanına odaklanılıp odaklanılmadığını izlemek için
+  onBarcodeDetected?: (barcode: string) => void;
+  inputActive?: boolean;
+  loading?: boolean; // Veri yüklenirken gösterilecek yükleme durumu
 }
 
 const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
@@ -21,144 +22,230 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
   inputRef,
   onBarcodeDetected,
   inputActive,
+  loading = false,
 }) => {
   const [barcodeBuffer, setBarcodeBuffer] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const lastKeyPressTime = useRef(Date.now());
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Barkod taramasını dinlemek için
   useEffect(() => {
-    // Klavye olayını dinleyecek fonksiyon
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Debug bilgisi
-      console.log("Key down:", event.key, "Active element:", document.activeElement?.tagName);
-      
-      // Eğer arama kutusu dışında başka bir input veya textarea üzerinde yazıyorsak
-      // ve bu element bizim arama kutumuz değilse, işlemi atla
+      console.log(
+        "Key down:",
+        event.key,
+        "Active element:",
+        document.activeElement?.tagName
+      );
+
       if (
         document.activeElement &&
         (document.activeElement.tagName === "INPUT" ||
-         document.activeElement.tagName === "TEXTAREA") &&
+          document.activeElement.tagName === "TEXTAREA") &&
         inputRef?.current !== document.activeElement
       ) {
-        // Başka bir input alanına yazılıyor
-        console.log("Başka bir input alanında yazılıyor, barkod algılama devre dışı");
+        console.log(
+          "Başka bir input alanında yazılıyor, barkod algılama devre dışı"
+        );
         return;
       }
 
-      // Zaman kontrolü
       const currentTime = Date.now();
       const timeSinceLastKeyPress = currentTime - lastKeyPressTime.current;
       lastKeyPressTime.current = currentTime;
-      
+
       console.log("Son tuş basma süresi:", timeSinceLastKeyPress, "ms");
-      
-      // Barkodlar genellikle çok hızlı gelir (< 100ms)
-      // Eğer yavaş yazılıyorsa barkod olarak algılama
+
       if (timeSinceLastKeyPress > 100) {
         console.log("Yavaş yazım tespit edildi, barkod bufferı temizleniyor");
-        setBarcodeBuffer(""); // Yeni giriş başlat
+        setBarcodeBuffer("");
       }
 
-      // Enter tuşuna basıldığında ve bir barkod varsa
       if (event.key === "Enter" && barcodeBuffer.length > 0) {
         console.log("Enter tuşu, mevcut barkod buffer:", barcodeBuffer);
-        
+
         if (!isFocused && onBarcodeDetected) {
-          console.log("Arama kutusuna odaklanılmamış, barkod sepete ekleniyor:", barcodeBuffer);
+          console.log(
+            "Arama kutusuna odaklanılmamış, barkod sepete ekleniyor:",
+            barcodeBuffer
+          );
           onBarcodeDetected(barcodeBuffer);
         } else {
-          console.log("Arama kutusuna odaklanılmış, normal arama yapılıyor:", barcodeBuffer);
+          console.log(
+            "Arama kutusuna odaklanılmış, normal arama yapılıyor:",
+            barcodeBuffer
+          );
           onSearchTermChange(barcodeBuffer);
         }
-        
-        setBarcodeBuffer(""); // Buffer'ı temizle
+
+        setBarcodeBuffer("");
         return;
       }
 
-      // Alfanumerik karakterleri buffer'a ekle
       if (/^[a-zA-Z0-9]$/.test(event.key)) {
         const newBuffer = barcodeBuffer + event.key;
         console.log("Barkod buffer güncellendi:", newBuffer);
         setBarcodeBuffer(newBuffer);
-        
-        // Varolan timeout'u temizle
+
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
         }
-        
-        // Yeni timeout ayarla
+
         timeoutRef.current = setTimeout(() => {
           console.log("Timeout tetiklendi, mevcut buffer:", newBuffer);
-          
-          // En az 3 karakter varsa barkod olarak değerlendir
+
           if (newBuffer.length >= 3) {
             if (!isFocused && onBarcodeDetected) {
-              console.log("Timeout üzerine barkod algılandı, sepete ekleniyor:", newBuffer);
+              console.log(
+                "Timeout üzerine barkod algılandı, sepete ekleniyor:",
+                newBuffer
+              );
               onBarcodeDetected(newBuffer);
             } else {
-              console.log("Timeout üzerine arama terimi güncelleniyor:", newBuffer);
+              console.log(
+                "Timeout üzerine arama terimi güncelleniyor:",
+                newBuffer
+              );
               onSearchTermChange(newBuffer);
             }
           }
-          
-          setBarcodeBuffer(""); // Her durumda temizle
-        }, 300); // 300ms içinde yeni giriş olmazsa tamamlandı say
+
+          setBarcodeBuffer("");
+        }, 300);
       }
     };
 
-    // Olay dinleyicisini ekle
     window.addEventListener("keydown", handleKeyDown);
-    
-    // Temizleme fonksiyonu
+
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      
-      // Varolan timeout'u temizle
+
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [barcodeBuffer, isFocused, onBarcodeDetected, onSearchTermChange, inputRef]);
+  }, [
+    barcodeBuffer,
+    isFocused,
+    onBarcodeDetected,
+    onSearchTermChange,
+    inputRef,
+  ]);
 
   return (
-    <div className="flex gap-2 mb-4">
-      <div className="flex-1 relative">
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Ara..."
-          value={searchTerm}
-          onChange={(e) => onSearchTermChange(e.target.value)}
-          onFocus={() => {
-            console.log("SearchFilterPanel input focus aldı");
-            setIsFocused(true);
-          }}
-          onBlur={() => {
-            console.log("SearchFilterPanel input focus kaybetti");
-            setIsFocused(false);
-          }}
-          className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-        />
-        <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+    <div className="mb-5">
+      <div className="flex flex-col md:flex-row gap-3">
+        {/* Ana Arama Kutusu */}
+        <div className="flex-1 relative">
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <Search
+                className={`${
+                  isFocused ? "text-indigo-600" : "text-gray-400"
+                } transition-colors duration-200`}
+                size={20}
+              />
+            </div>
+
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Ürün Adı, Barkod veya Kategori Ara..."
+              value={searchTerm}
+              onChange={(e) => onSearchTermChange(e.target.value)}
+              onFocus={() => {
+                console.log("SearchFilterPanel input focus aldı");
+                setIsFocused(true);
+              }}
+              onBlur={() => {
+                console.log("SearchFilterPanel input focus kaybetti");
+                setIsFocused(false);
+              }}
+              className="w-full pl-11 pr-12 h-11 bg-white border border-gray-200 rounded-xl shadow-sm 
+                         text-gray-800 text-base placeholder:text-gray-400
+                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500
+                         transition-all duration-200 ease-in-out"
+              aria-label="Arama"
+            />
+
+            {/* Temizleme Butonu */}
+            {searchTerm && (
+              <button
+                onClick={() => onSearchTermChange("")}
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
+                title="Aramayı Temizle"
+                aria-label="Aramayı Temizle"
+              >
+                <X size={18} />
+              </button>
+            )}
+
+            {/* Yükleniyor Göstergesi */}
+            {loading && (
+              <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-indigo-600">
+                <Loader2 size={18} className="animate-spin" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Butonlar Kısmı */}
+        <div className="flex gap-2 justify-end">
+          {/* Filtre Butonu - Sabit Genişlik */}
+          <button
+            onClick={toggleFilter}
+            className={`h-11 w-11 md:w-auto border rounded-xl flex items-center justify-center md:justify-start md:gap-2 md:px-3.5 transition-all duration-200
+                      hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500
+                      ${
+                        showFilter
+                          ? "bg-indigo-50 border-indigo-300 text-indigo-700"
+                          : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                      }`}
+            title={showFilter ? "Filtreleri Gizle" : "Filtreleri Göster"}
+            aria-label={showFilter ? "Filtreleri Gizle" : "Filtreleri Göster"}
+          >
+            <Filter size={18} />
+            <span className="font-medium hidden md:block whitespace-nowrap">
+              Filtreler
+            </span>
+            {showFilter && (
+              <span className="bg-indigo-100 text-indigo-800 text-xs font-medium px-2 py-0.5 rounded-full ml-1 hidden md:inline-block">
+                Aktif
+              </span>
+            )}
+            {showFilter && (
+              <span className="absolute -top-1 -right-1 bg-indigo-500 w-2.5 h-2.5 rounded-full md:hidden"></span>
+            )}
+          </button>
+
+          {/* Sıfırlama Butonu - Sabit Genişlik */}
+          <button
+            onClick={onReset}
+            className="h-11 w-11 md:w-auto bg-white border border-gray-200 rounded-xl flex items-center justify-center md:justify-start md:gap-2 md:px-3.5
+                     hover:bg-gray-50 hover:shadow-sm transition-all duration-200
+                     focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-500"
+            title="Arama ve Filtreleri Sıfırla"
+            aria-label="Arama ve Filtreleri Sıfırla"
+          >
+            <RefreshCw size={18} className="text-gray-600" />
+            <span className="font-medium text-gray-700 hidden md:block whitespace-nowrap">
+              Sıfırla
+            </span>
+          </button>
+        </div>
       </div>
-      <button
-        onClick={toggleFilter}
-        className={`p-2 border rounded-lg hover:bg-gray-50 ${
-          showFilter ? "bg-primary-50 border-primary-500" : ""
-        }`}
-        title="Filtreleri Göster/Gizle"
-      >
-        <Filter size={20} className="text-gray-600" />
-      </button>
-      <button
-        onClick={onReset}
-        className="p-2 border rounded-lg hover:bg-gray-50"
-        title="Filtreleri Sıfırla"
-      >
-        <RefreshCw size={20} className="text-gray-600" />
-      </button>
+
+      {/* Filtre Açıklaması - Filtreler aktifse göster */}
+      {showFilter && (
+        <div className="mt-3 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-lg text-sm text-indigo-800">
+          <div className="flex items-center">
+            <Filter size={16} className="mr-2 text-indigo-600" />
+            <span className="font-medium">Aktif Filtreler:</span>
+            <span className="ml-2">Tüm filtreler uygulanıyor</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

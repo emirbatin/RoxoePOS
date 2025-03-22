@@ -11,7 +11,10 @@ import { Pagination } from "../components/ui/Pagination";
 import { useAlert } from "../components/AlertProvider";
 import PageLayout from "../components/layout/PageLayout";
 import SearchFilterPanel from "../components/SearchFilterPanel";
-import { cashRegisterService, CashTransactionType } from "../services/cashRegisterDB";
+import {
+  cashRegisterService,
+  CashTransactionType,
+} from "../services/cashRegisterDB";
 import { SalesHelper } from "../types/sales";
 
 const SalesHistoryPage: React.FC = () => {
@@ -75,12 +78,14 @@ const SalesHistoryPage: React.FC = () => {
         <span className="text-sm text-gray-900">
           {sale.originalTotal ? (
             <div>
-              <span className="line-through text-gray-400">₺{sale.originalTotal.toFixed(2)}</span>
+              <span className="line-through text-gray-400">
+                ₺{sale.originalTotal.toFixed(2)}
+              </span>
               <span className="ml-1 font-medium">₺{sale.total.toFixed(2)}</span>
               {sale.discount && (
                 <div className="text-xs text-green-600 font-medium mt-1">
-                  {sale.discount.type === 'percentage' 
-                    ? `%${sale.discount.value} indirim` 
+                  {sale.discount.type === "percentage"
+                    ? `%${sale.discount.value} indirim`
                     : `₺${sale.discount.value.toFixed(2)} indirim`}
                 </div>
               )}
@@ -116,9 +121,15 @@ const SalesHistoryPage: React.FC = () => {
         <div>
           <span
             className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-              ${sale.status === "completed" ? "bg-green-100 text-green-800" : ""}
+              ${
+                sale.status === "completed" ? "bg-green-100 text-green-800" : ""
+              }
               ${sale.status === "cancelled" ? "bg-red-100 text-red-800" : ""}
-              ${sale.status === "refunded" ? "bg-orange-100 text-orange-800" : ""}`}
+              ${
+                sale.status === "refunded"
+                  ? "bg-orange-100 text-orange-800"
+                  : ""
+              }`}
           >
             {sale.status === "completed" && "Tamamlandı"}
             {sale.status === "cancelled" && "İptal Edildi"}
@@ -234,7 +245,9 @@ const SalesHistoryPage: React.FC = () => {
 
     // Ödeme Yöntemi
     if (filter.paymentMethod) {
-      result = result.filter((sale) => sale.paymentMethod === filter.paymentMethod);
+      result = result.filter(
+        (sale) => sale.paymentMethod === filter.paymentMethod
+      );
     }
 
     // İndirim filtresi
@@ -275,49 +288,62 @@ const SalesHistoryPage: React.FC = () => {
       // İndirimli tutarları topluyoruz (mevcut total değerleri)
       totalAmount: filteredSales.reduce((sum, sale) => sum + sale.total, 0),
       // Toplam indirim tutarı (tüm satışların indirim miktarı)
-      totalDiscount: filteredSales.reduce((sum, sale) => 
-        sum + SalesHelper.calculateDiscountAmount(sale), 0),
+      totalDiscount: filteredSales.reduce(
+        (sum, sale) => sum + SalesHelper.calculateDiscountAmount(sale),
+        0
+      ),
       // Orijinal toplam tutar (indirimsiz)
-      originalAmount: filteredSales.reduce((sum, sale) => 
-        sum + (sale.originalTotal || sale.total), 0),
+      originalAmount: filteredSales.reduce(
+        (sum, sale) => sum + (sale.originalTotal || sale.total),
+        0
+      ),
       // İndirimli satış sayısı
-      discountedSalesCount: filteredSales.filter(s => s.discount).length,
-      cancelledCount: filteredSales.filter((s) => s.status === "cancelled").length,
-      refundedCount: filteredSales.filter((s) => s.status === "refunded").length,
-      cashSales: filteredSales.filter((s) => s.paymentMethod === "nakit").length,
+      discountedSalesCount: filteredSales.filter((s) => s.discount).length,
+      cancelledCount: filteredSales.filter((s) => s.status === "cancelled")
+        .length,
+      refundedCount: filteredSales.filter((s) => s.status === "refunded")
+        .length,
+      cashSales: filteredSales.filter((s) => s.paymentMethod === "nakit")
+        .length,
       cardSales: filteredSales.filter((s) => s.paymentMethod === "kart").length,
       averageAmount: filteredSales.length
-        ? filteredSales.reduce((sum, s) => sum + s.total, 0) / filteredSales.length
+        ? filteredSales.reduce((sum, s) => sum + s.total, 0) /
+          filteredSales.length
         : 0,
-      vatBreakdown: filteredSales.reduce((breakdown, sale) => {
-        sale.items.forEach((item) => {
-          const vatRate = item.vatRate as VatRate;
-          const itemBaseAmount = item.salePrice * item.quantity;
-          const itemVatAmount =
-            (item.priceWithVat - item.salePrice) * item.quantity;
+      vatBreakdown: filteredSales.reduce(
+        (breakdown, sale) => {
+          sale.items.forEach((item) => {
+            const vatRate = item.vatRate as VatRate;
+            const itemBaseAmount = item.salePrice * item.quantity;
+            const itemVatAmount =
+              (item.priceWithVat - item.salePrice) * item.quantity;
 
-          const vatRateEntry = breakdown.find((entry) => entry.rate === vatRate);
+            const vatRateEntry = breakdown.find(
+              (entry) => entry.rate === vatRate
+            );
 
-          if (vatRateEntry) {
-            vatRateEntry.baseAmount += itemBaseAmount;
-            vatRateEntry.vatAmount += itemVatAmount;
-            vatRateEntry.totalAmount += itemBaseAmount + itemVatAmount;
-          } else {
-            breakdown.push({
-              rate: vatRate,
-              baseAmount: itemBaseAmount,
-              vatAmount: itemVatAmount,
-              totalAmount: itemBaseAmount + itemVatAmount,
-            });
-          }
-        });
-        return breakdown;
-      }, [] as {
-        rate: VatRate;
-        baseAmount: number;
-        vatAmount: number;
-        totalAmount: number;
-      }[]),
+            if (vatRateEntry) {
+              vatRateEntry.baseAmount += itemBaseAmount;
+              vatRateEntry.vatAmount += itemVatAmount;
+              vatRateEntry.totalAmount += itemBaseAmount + itemVatAmount;
+            } else {
+              breakdown.push({
+                rate: vatRate,
+                baseAmount: itemBaseAmount,
+                vatAmount: itemVatAmount,
+                totalAmount: itemBaseAmount + itemVatAmount,
+              });
+            }
+          });
+          return breakdown;
+        },
+        [] as {
+          rate: VatRate;
+          baseAmount: number;
+          vatAmount: number;
+          totalAmount: number;
+        }[]
+      ),
     };
     setSummary(newSummary);
   }, [filteredSales]);
@@ -342,19 +368,22 @@ const SalesHistoryPage: React.FC = () => {
         showError("İptal edilecek satış bulunamadı!");
         return;
       }
-  
+
       const updatedSale = await salesDB.cancelSale(selectedSaleId, reason);
       if (updatedSale) {
         setSales((prev) =>
           prev.map((sale) => (sale.id === selectedSaleId ? updatedSale : sale))
         );
-        
+
         // YENİ: Kasa entegrasyonu - Nakit satışsa kasadan çıkış yap
         try {
           // Aktif kasa dönemi kontrolü
           const activeSession = await cashRegisterService.getActiveSession();
           if (activeSession) {
-            if (saleToCancel.paymentMethod === "nakit" || saleToCancel.paymentMethod === "nakitpos") {
+            if (
+              saleToCancel.paymentMethod === "nakit" ||
+              saleToCancel.paymentMethod === "nakitpos"
+            ) {
               // Nakit satış iptali - kasadan para çıkışı
               await cashRegisterService.addCashTransaction(
                 activeSession.id,
@@ -365,13 +394,15 @@ const SalesHistoryPage: React.FC = () => {
             }
             // Diğer ödeme tipleri kasada nakit hareketi yapmaz
           } else {
-            console.warn("Satış iptal edildi ancak açık kasa dönemi bulunamadı. Kasa kayıtları güncellenmedi.");
+            console.warn(
+              "Satış iptal edildi ancak açık kasa dönemi bulunamadı. Kasa kayıtları güncellenmedi."
+            );
           }
         } catch (cashError) {
           console.error("Kasa kaydı güncellenirken hata:", cashError);
           // Ana iptal işlemi tamamlandı, kasa hatası gösterilmeyebilir
         }
-        
+
         showSuccess("Satış başarıyla iptal edildi.");
       } else {
         showError("Satış iptal edilirken bir hata oluştu!");
@@ -383,7 +414,7 @@ const SalesHistoryPage: React.FC = () => {
       setShowCancelModal(false);
       setSelectedSaleId(null);
     }
-  }; 
+  };
 
   const handleRefundConfirm = async (reason: string) => {
     if (!selectedSaleId) return;
@@ -394,19 +425,22 @@ const SalesHistoryPage: React.FC = () => {
         showError("İade edilecek satış bulunamadı!");
         return;
       }
-      
+
       const updatedSale = await salesDB.refundSale(selectedSaleId, reason);
       if (updatedSale) {
         setSales((prev) =>
           prev.map((sale) => (sale.id === selectedSaleId ? updatedSale : sale))
         );
-        
+
         // YENİ: Kasa entegrasyonu - Nakit satışsa kasadan çıkış yap
         try {
           // Aktif kasa dönemi kontrolü
           const activeSession = await cashRegisterService.getActiveSession();
           if (activeSession) {
-            if (saleToRefund.paymentMethod === "nakit" || saleToRefund.paymentMethod === "nakitpos") {
+            if (
+              saleToRefund.paymentMethod === "nakit" ||
+              saleToRefund.paymentMethod === "nakitpos"
+            ) {
               // Nakit satış iadesi - kasadan para çıkışı
               await cashRegisterService.addCashTransaction(
                 activeSession.id,
@@ -417,13 +451,15 @@ const SalesHistoryPage: React.FC = () => {
             }
             // Diğer ödeme tipleri kasada nakit hareketi yapmaz
           } else {
-            console.warn("Satış iade edildi ancak açık kasa dönemi bulunamadı. Kasa kayıtları güncellenmedi.");
+            console.warn(
+              "Satış iade edildi ancak açık kasa dönemi bulunamadı. Kasa kayıtları güncellenmedi."
+            );
           }
         } catch (cashError) {
           console.error("Kasa kaydı güncellenirken hata:", cashError);
           // Ana iade işlemi tamamlandı, kasa hatası gösterilmeyebilir
         }
-        
+
         showSuccess("İade işlemi başarıyla tamamlandı.");
       } else {
         showError("İade işlemi sırasında bir hata oluştu!");
@@ -471,7 +507,9 @@ const SalesHistoryPage: React.FC = () => {
                 onChange={(e) =>
                   setFilter((prev) => ({
                     ...prev,
-                    startDate: e.target.value ? new Date(e.target.value) : undefined,
+                    startDate: e.target.value
+                      ? new Date(e.target.value)
+                      : undefined,
                   }))
                 }
               />
@@ -487,7 +525,9 @@ const SalesHistoryPage: React.FC = () => {
                 onChange={(e) =>
                   setFilter((prev) => ({
                     ...prev,
-                    endDate: e.target.value ? new Date(e.target.value) : undefined,
+                    endDate: e.target.value
+                      ? new Date(e.target.value)
+                      : undefined,
                   }))
                 }
               />
@@ -525,6 +565,7 @@ const SalesHistoryPage: React.FC = () => {
                 type="number"
                 className="w-full p-2 border rounded-lg"
                 placeholder="0.00"
+                onWheel={(e) => e.currentTarget.blur()}
                 onChange={(e) =>
                   setFilter((prev) => ({
                     ...prev,
@@ -544,6 +585,7 @@ const SalesHistoryPage: React.FC = () => {
                 type="number"
                 className="w-full p-2 border rounded-lg"
                 placeholder="0.00"
+                onWheel={(e) => e.currentTarget.blur()}
                 onChange={(e) =>
                   setFilter((prev) => ({
                     ...prev,
@@ -593,10 +635,11 @@ const SalesHistoryPage: React.FC = () => {
                   const value = e.target.value;
                   setFilter((prev) => ({
                     ...prev,
-                    hasDiscount: value === "" 
-                      ? undefined 
-                      : value === "true" 
-                        ? true 
+                    hasDiscount:
+                      value === ""
+                        ? undefined
+                        : value === "true"
+                        ? true
                         : false,
                   }));
                 }}
@@ -639,7 +682,7 @@ const SalesHistoryPage: React.FC = () => {
                 </span>
               </div>
             </div>
-            
+
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span>Nakit / Kart:</span>
@@ -668,35 +711,64 @@ const SalesHistoryPage: React.FC = () => {
                 </div>
               )}
             </div>
-            
-            {(summary.originalAmount || 0) > 0 && (summary.totalDiscount || 0) > 0 && (
-              <div className="space-y-2 text-sm col-span-2">
-                <div className="flex justify-between">
-                  <span>İndirimsiz Toplam:</span>
-                  <span className="font-medium text-gray-500">
-                    ₺{(summary.originalAmount || 0).toFixed(2)}
-                  </span>
+
+            {(summary.originalAmount || 0) > 0 &&
+              (summary.totalDiscount || 0) > 0 && (
+                <div className="space-y-2 text-sm col-span-2">
+                  <div className="flex justify-between">
+                    <span>İndirimsiz Toplam:</span>
+                    <span className="font-medium text-gray-500">
+                      ₺{(summary.originalAmount || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>İndirimli Toplam:</span>
+                    <span className="font-medium text-green-600">
+                      ₺{summary.totalAmount.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>İndirim Oranı:</span>
+                    <span className="font-medium text-green-600">
+                      %
+                      {(
+                        ((summary.totalDiscount || 0) /
+                          (summary.originalAmount || 1)) *
+                        100
+                      ).toFixed(1)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span>İndirimli Toplam:</span>
-                  <span className="font-medium text-green-600">
-                    ₺{summary.totalAmount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>İndirim Oranı:</span>
-                  <span className="font-medium text-green-600">
-                    %{((summary.totalDiscount || 0) / (summary.originalAmount || 1) * 100).toFixed(1)}
-                  </span>
-                </div>
-              </div>
-            )}
+              )}
           </div>
         </div>
       </div>
 
-      {/* Satış Listesi */}
+      {/* Satış Listesi - Güncellenmiş Excel Benzeri Tablo */}
       <div className="bg-white border rounded-lg overflow-hidden">
+        <div className="p-4 border-b w-full">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              {filteredSales.length > 0
+                ? `Gösterilen: ${indexOfFirstItem + 1} - ${Math.min(
+                    indexOfLastItem,
+                    filteredSales.length
+                  )} / Toplam: ${filteredSales.length} satış`
+                : "Satış kaydı bulunmuyor"}
+            </div>
+            {(searchTerm || Object.keys(filter).length > 0) && (
+              <div className="text-sm text-gray-500">
+                {searchTerm && (
+                  <span className="mr-2">Arama: "{searchTerm}"</span>
+                )}
+                {Object.keys(filter).length > 0 && (
+                  <span>Filtreler uygulandı</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
         <Table<Sale, string>
           data={currentSales}
           columns={columns}
@@ -707,7 +779,16 @@ const SalesHistoryPage: React.FC = () => {
               : "Henüz satış kaydı bulunmuyor."
           }
           idField="id"
+          enableSorting={true}
+          defaultSortKey="date"
+          defaultSortDirection="desc"
+          className="border-none rounded-none"
+          showTotals={true}
+          totalColumns={{total:"sum"}}
+          totalData={filteredSales}
+          onRowClick={(sale) => navigate(`/sales/${sale.id}`)}
         />
+
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}

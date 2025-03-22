@@ -165,14 +165,14 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
         <div className="flex gap-2">
           <button
             onClick={() => handleTemplateDownload("excel")}
-            className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+            className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
           >
             <FileDown size={16} />
             Excel Şablonu
           </button>
           <button
             onClick={() => handleTemplateDownload("csv")}
-            className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+            className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
           >
             <FileDown size={16} />
             CSV Şablonu

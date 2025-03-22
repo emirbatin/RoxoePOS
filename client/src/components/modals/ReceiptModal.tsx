@@ -73,7 +73,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({
             <button
               onClick={handlePrint}
               disabled={isPrinting}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed shadow-sm"
             >
               <Printer size={18} />
               <span>{isPrinting ? "Yazdırılıyor..." : "Yazdır"}</span>

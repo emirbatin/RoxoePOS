@@ -532,7 +532,7 @@ const SaleDetailPage: React.FC = () => {
             <h2 className="text-lg font-semibold mb-4">İşlem Geçmişi</h2>
             <div className="space-y-4">
               <div className="flex gap-3">
-                <div className="text-primary-600">
+                <div className="text-indigo-600">
                   <Clock size={20} />
                 </div>
                 <div>

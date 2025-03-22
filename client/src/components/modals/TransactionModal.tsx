@@ -127,8 +127,9 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                   step="0.01"
                   min="0"
                   value={amount}
+                  onWheel={(e) => e.currentTarget.blur()}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="0.00"
                 />
                 <DollarSign 
@@ -147,7 +148,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="İşlem açıklaması..."
               />
             </div>
@@ -164,7 +165,7 @@ const TransactionModal: React.FC<TransactionModalProps> = ({
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
                     min={new Date().toISOString().split('T')[0]}
-                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                   <Calendar 
                     className="absolute left-3 top-2.5 text-gray-400" 

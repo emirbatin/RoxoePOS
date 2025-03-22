@@ -36,7 +36,7 @@ const DashboardFilters: React.FC<DashboardFiltersProps> = ({
             className={`
               px-4 py-2 rounded-lg font-medium transition-all duration-200
               ${period === item.value
-                ? "bg-primary-100 text-primary-700 ring-2 ring-primary-500 ring-opacity-50"
+                ? "bg-indigo-100 text-indigo-700 ring-2 ring-indigo-500 ring-opacity-50"
                 : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }
             `}

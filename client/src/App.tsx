@@ -19,6 +19,7 @@ import { NotificationProvider } from "./contexts/NotificationContext";
 import LicenseActivation from "./components/LicenseActivation";
 import UpdateNotification from "./components/UpdateNotification";
 import KasaYonetimi from "./pages/CashRegisterPage";
+import DynamicWindowTitle from "./components/DynamicWindowTitle"; // İMPORT EDİLDİ
 
 function App() {
   const [isLicensed, setIsLicensed] = useState(false);
@@ -68,9 +69,19 @@ function App() {
                   <Route path="/credit" element={<CreditPage />} />
                   <Route path="/history" element={<SalesHistoryPage />} />
                   <Route path="/cash" element={<KasaYonetimi />} />
-                  <Route path="/reports" element={<DashboardPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/sales/:id" element={<SaleDetailPage />} />
+                  {/* Dashboard ana rotası - overview'a yönlendir */}
+                  <Route
+                    path="/dashboard"
+                    element={<Navigate to="/dashboard/overview" replace />}
+                  />
+
+                  {/* Dashboard alt rotaları */}
+                  <Route
+                    path="/dashboard/:tabKey"
+                    element={<DashboardPage />}
+                  />
                 </Routes>
               </AlertProvider>
             </MainLayout>
@@ -78,6 +89,7 @@ function App() {
         </NotificationProvider>
       </Router>
       <UpdateNotification />
+      <DynamicWindowTitle /> {/* EKLENDİ - Animasyonlu pencere başlığı */}
     </>
   );
 }

@@ -1,7 +1,13 @@
 // pages/CreditPage.tsx
 
 import React, { useState, useEffect } from "react";
-import { DollarSign, Users, AlertTriangle, CreditCard, UserPlus } from "lucide-react";
+import {
+  DollarSign,
+  Users,
+  AlertTriangle,
+  CreditCard,
+  UserPlus,
+} from "lucide-react";
 import { Customer, CreditTransaction } from "../types/credit";
 import CustomerList from "../components/ui/CustomerList";
 import CustomerModal from "../components/modals/CustomerModal";
@@ -13,9 +19,13 @@ import PageLayout from "../components/layout/PageLayout";
 import SearchFilterPanel from "../components/SearchFilterPanel";
 import { useAlert } from "../components/AlertProvider";
 import { useCustomers } from "../hooks/useCustomers";
-import { creditService } from "../services/creditServices"; 
+import { creditService } from "../services/creditServices";
 import { CustomerSummary } from "../types/credit";
-import { cashRegisterService, CashTransactionType } from "../services/cashRegisterDB"; // Kasa entegrasyonu için
+import {
+  cashRegisterService,
+  CashTransactionType,
+} from "../services/cashRegisterDB"; // Kasa entegrasyonu için
+import Card from "../components/ui/Card";
 
 const CreditPage: React.FC = () => {
   const { showSuccess, showError, confirm } = useAlert();
@@ -31,23 +41,31 @@ const CreditPage: React.FC = () => {
   } = useCustomers();
 
   // Müşterinin Transaction özetlerini hâlâ sayfa içinde tutabiliriz (ya da custom hook yapabilirsiniz)
-  const [summaries, setSummaries] = useState<Record<number, CustomerSummary>>({});
+  const [summaries, setSummaries] = useState<Record<number, CustomerSummary>>(
+    {}
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  
+
   // Müşteri işlemleri için yeni state
-  const [customerTransactions, setCustomerTransactions] = useState<CreditTransaction[]>([]);
+  const [customerTransactions, setCustomerTransactions] = useState<
+    CreditTransaction[]
+  >([]);
 
   // Modallar
   const [showCustomerModal, setShowCustomerModal] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>();
+  const [selectedCustomer, setSelectedCustomer] = useState<
+    Customer | undefined
+  >();
   const [showTransactionModal, setShowTransactionModal] = useState(false);
-  const [transactionType, setTransactionType] = useState<"debt" | "payment">("debt");
-  const [selectedTransactionCustomer, setSelectedTransactionCustomer] = useState<Customer | null>(
-    null
+  const [transactionType, setTransactionType] = useState<"debt" | "payment">(
+    "debt"
   );
+  const [selectedTransactionCustomer, setSelectedTransactionCustomer] =
+    useState<Customer | null>(null);
   const [showCustomerDetail, setShowCustomerDetail] = useState(false);
-  const [selectedDetailCustomer, setSelectedDetailCustomer] = useState<Customer | null>(null);
+  const [selectedDetailCustomer, setSelectedDetailCustomer] =
+    useState<Customer | null>(null);
 
   // Sayfalama
   const [currentPage, setCurrentPage] = useState(1);
@@ -75,7 +93,9 @@ const CreditPage: React.FC = () => {
         // customers state hook'tan geliyor
         const summaryData: Record<number, CustomerSummary> = {};
         for (const cust of customers) {
-          summaryData[cust.id] = await creditService.getCustomerSummary(cust.id);
+          summaryData[cust.id] = await creditService.getCustomerSummary(
+            cust.id
+          );
         }
         setSummaries(summaryData);
 
@@ -127,9 +147,7 @@ const CreditPage: React.FC = () => {
       result = result.filter((c) => c.currentDebt > 0);
     }
     if (filters.nearLimit) {
-      result = result.filter(
-        (c) => c.currentDebt / c.creditLimit > 0.8
-      );
+      result = result.filter((c) => c.currentDebt / c.creditLimit > 0.8);
     }
 
     setFilteredCustomers(result);
@@ -139,7 +157,10 @@ const CreditPage: React.FC = () => {
   // Sayfalama
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentCustomers = filteredCustomers.slice(indexOfFirstItem, indexOfLastItem);
+  const currentCustomers = filteredCustomers.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
   const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
 
   // Modal işlemleri
@@ -210,7 +231,7 @@ const CreditPage: React.FC = () => {
         dueDate: data.dueDate,
         description: data.description,
       });
-      
+
       // 2. Eğer ödeme işlemi ise, kasaya kaydet
       if (transactionType === "payment") {
         try {
@@ -227,16 +248,20 @@ const CreditPage: React.FC = () => {
             showSuccess("Tahsilat başarıyla kaydedildi ve kasaya işlendi");
           } else {
             // Kasa kapalı uyarısı
-            showSuccess("Tahsilat başarıyla kaydedildi, ancak açık kasa dönemli olmadığı için kasaya işlenemedi");
+            showSuccess(
+              "Tahsilat başarıyla kaydedildi, ancak açık kasa dönemli olmadığı için kasaya işlenemedi"
+            );
           }
         } catch (cashError) {
           console.error("Kasa kayıt hatası:", cashError);
-          showSuccess("Tahsilat başarıyla kaydedildi, ancak kasaya işlenirken bir hata oluştu");
+          showSuccess(
+            "Tahsilat başarıyla kaydedildi, ancak kasaya işlenirken bir hata oluştu"
+          );
         }
       } else {
         showSuccess("Veresiye borç başarıyla kaydedildi");
       }
-      
+
       // 3. Verileri yenile
       loadCustomers();
       setShowTransactionModal(false);
@@ -250,9 +275,11 @@ const CreditPage: React.FC = () => {
   const handleViewCustomerDetail = async (customer: Customer) => {
     try {
       // Müşterinin işlemlerini yükle
-      const transactions = await creditService.getTransactionsByCustomerId(customer.id);
+      const transactions = await creditService.getTransactionsByCustomerId(
+        customer.id
+      );
       setCustomerTransactions(transactions);
-      
+
       // Modalı aç
       setSelectedDetailCustomer(customer);
       setShowCustomerDetail(true);
@@ -273,58 +300,55 @@ const CreditPage: React.FC = () => {
     <PageLayout>
       {/* İstatistik Kartları */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-        <div className="bg-white rounded-lg border p-4">
-          <div className="flex items-center gap-2 text-gray-600 mb-2">
-            <Users size={20} />
-            <span>Toplam Müşteri</span>
-          </div>
-          <div className="text-2xl font-semibold">{stats.totalCustomers}</div>
-        </div>
+        <Card
+          variant="summary"
+          title="Toplam Müşteri"
+          value={stats.totalCustomers}
+          description="Kayıtlı müşteri sayısı"
+          color="gray"
+          icon={<Users size={20} />}
+        />
 
-        <div className="bg-white rounded-lg border p-4">
-          <div className="flex items-center gap-2 text-blue-600 mb-2">
-            <DollarSign size={20} />
-            <span>Toplam Borç</span>
-          </div>
-          <div className="text-2xl font-semibold text-blue-600">
-            {new Intl.NumberFormat("tr-TR", {
-              style: "currency",
-              currency: "TRY",
-            }).format(stats.totalDebt)}
-          </div>
-        </div>
+        <Card
+          variant="summary"
+          title="Toplam Borç"
+          value={new Intl.NumberFormat("tr-TR", {
+            style: "currency",
+            currency: "TRY",
+          }).format(stats.totalDebt)}
+          description="Toplam müşteri borcu"
+          color="blue"
+          icon={<DollarSign size={20} />}
+        />
 
-        <div className="bg-white rounded-lg border p-4">
-          <div className="flex items-center gap-2 text-red-600 mb-2">
-            <AlertTriangle size={20} />
-            <span>Vadesi Geçen Borç</span>
-          </div>
-          <div className="text-2xl font-semibold text-red-600">
-            {new Intl.NumberFormat("tr-TR", {
-              style: "currency",
-              currency: "TRY",
-            }).format(stats.totalOverdue)}
-          </div>
-          <div className="text-sm text-gray-500">
-            {stats.customersWithOverdue} müşteride
-          </div>
-        </div>
+        <Card
+          variant="summary"
+          title="Vadesi Geçen Borç"
+          value={new Intl.NumberFormat("tr-TR", {
+            style: "currency",
+            currency: "TRY",
+          }).format(stats.totalOverdue)}
+          description={`${stats.customersWithOverdue} müşteride`}
+          color="red"
+          icon={<AlertTriangle size={20} />}
+        />
 
-        <div className="bg-white rounded-lg border p-4">
-          <div className="flex items-center gap-2 text-orange-600 mb-2">
-            <CreditCard size={20} />
-            <span>Ortalama Limit Kullanımı</span>
-          </div>
-          <div className="text-2xl font-semibold text-orange-600">
-            {stats.totalCustomers
+        <Card
+          variant="summary"
+          title="Ortalama Limit Kullanımı"
+          value={
+            stats.totalCustomers
               ? `%${(
                   (stats.totalDebt /
                     customers.reduce((sum, c) => sum + c.creditLimit, 0)) *
                   100
                 ).toFixed(0)}`
-              : "%0"}
-          </div>
-        </div>
+              : "%0"
+          }
+          description="Borç / Limit oranı"
+          color="orange"
+          icon={<CreditCard size={20} />}
+        />
       </div>
 
       {/* Arama Barı ve Müşteri Ekleme */}
@@ -364,7 +388,7 @@ const CreditPage: React.FC = () => {
                     hasOverdue: e.target.checked,
                   }))
                 }
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
               />
               <span className="text-sm text-gray-700">Vadesi Geçenler</span>
             </label>
@@ -375,7 +399,7 @@ const CreditPage: React.FC = () => {
                 onChange={(e) =>
                   setFilters((prev) => ({ ...prev, hasDebt: e.target.checked }))
                 }
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
               />
               <span className="text-sm text-gray-700">Borcu Olanlar</span>
             </label>
@@ -389,7 +413,7 @@ const CreditPage: React.FC = () => {
                     nearLimit: e.target.checked,
                   }))
                 }
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
               />
               <span className="text-sm text-gray-700">Limiti Dolmak Üzere</span>
             </label>
@@ -400,7 +424,7 @@ const CreditPage: React.FC = () => {
       {/* Müşteri Listesi */}
       {customersLoading ? (
         <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
           <div className="mt-4 text-gray-500">Yükleniyor...</div>
         </div>
       ) : (

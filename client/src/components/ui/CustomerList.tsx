@@ -8,7 +8,7 @@ import {
   Clock,
   AlertCircle,
   Eye,
-  Tag
+  Tag,
 } from "lucide-react";
 import { Customer, CustomerSummary } from "../../types/credit";
 import { Column } from "../../types/table"; // Import the Column type
@@ -117,24 +117,25 @@ const CustomerList: React.FC<CustomerListProps> = ({
       title: "Mevcut Borç",
       render: (customer) => {
         const summary = summaries[customer.id];
-        
+
         // İndirim varsa hesapla
         const hasDiscount = summary?.discountedSalesCount > 0;
-        
+
         return (
           <div>
             <div className="font-medium text-gray-900">
               {formatCurrency(customer.currentDebt)}
             </div>
-            
+
             {/* İndirim bilgisi */}
             {hasDiscount && (
               <div className="flex items-center text-xs text-green-600 my-1">
                 <Tag size={12} className="mr-1" />
-                {summary.discountedSalesCount} işlemde {formatCurrency(summary.totalDiscount || 0)} indirim
+                {summary.discountedSalesCount} işlemde{" "}
+                {formatCurrency(summary.totalDiscount || 0)} indirim
               </div>
             )}
-            
+
             <div className="text-xs text-gray-500">
               {summary?.activeTransactions} aktif işlem
             </div>
@@ -186,7 +187,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
           <div className="flex gap-1">
             <button
               onClick={() => onViewDetail(customer)}
-              className="p-1 hover:bg-gray-100 rounded text-primary-600"
+              className="p-1 hover:bg-gray-100 rounded text-indigo-600"
               title="Detay"
             >
               <Eye size={16} />
@@ -234,6 +235,9 @@ const CustomerList: React.FC<CustomerListProps> = ({
         columns={columns}
         idField="id"
         emptyMessage="Henüz müşteri kaydı bulunmuyor."
+        totalColumns={{currentDebt: "sum", creditLimit: "sum"}} // Toplamları gösterilecek numeric alanlar
+        totalData={customers}
+        showTotals={true} // <-- Bunu ekle
       />
     </div>
   );

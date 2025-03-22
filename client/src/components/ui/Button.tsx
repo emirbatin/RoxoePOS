@@ -5,7 +5,7 @@ interface ButtonProps {
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void | Promise<void>;
   disabled?: boolean;
   children?: ReactNode;
-  variant?: "primary" | "secondary" | "danger" | "save" | "outline";
+  variant?: "primary" | "secondary" | "danger" | "save" | "outline" ;
   icon?: React.ElementType;
   className?: string;
   type?: "button" | "submit" | "reset";
@@ -35,7 +35,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   const variants = {
     primary:
-      "bg-primary-600 text-white hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed",
+      "bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed",
     secondary:
       "bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed",
     danger:

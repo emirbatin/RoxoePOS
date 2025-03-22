@@ -49,6 +49,14 @@ let win: BrowserWindow | null;
 
 new LicenseManager();
 
+// YENİ: Pencere başlığını güncellemek için IPC dinleyicisi
+ipcMain.on('update-window-title', (_, newTitle) => {
+  if (win && !win.isDestroyed()) {
+    win.setTitle(newTitle);
+    log.info(`Pencere başlığı güncellendi: ${newTitle}`);
+  }
+});
+
 // Güncelleme yükleme ekranını oluştur
 function createUpdateSplash() {
   // Yeni bir pencere oluştur, sadece güncelleme durumu için

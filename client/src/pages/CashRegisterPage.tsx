@@ -16,6 +16,10 @@ import { formatCurrency } from "../utils/vatUtils";
 import { CashRegisterStatus, CashTransactionType } from "../types/cashRegister";
 import { cashRegisterService } from "../services/cashRegisterDB";
 import { creditService } from "../services/creditServices";
+import eventBus from "../utils/eventBus";
+
+//Kasa bakiyesine toplam eklenecek.
+//stoklarda toplam stok gözüksün
 
 const CashRegisterPage: React.FC = () => {
   const { showSuccess, showError, confirm } = useAlert();
@@ -58,9 +62,13 @@ const CashRegisterPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   // Veresiye tahsilatı için yeni state'ler
-  const [showCreditCollectionModal, setShowCreditCollectionModal] = useState<boolean>(false);
+  const [showCreditCollectionModal, setShowCreditCollectionModal] =
+    useState<boolean>(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [customers, setCustomers] = useState<any[]>([]);
+
+  const [dailyProfit, setDailyProfit] = useState<number>(0); // Günlük kâr
+  const [isProfitable, setIsProfitable] = useState<boolean>(true); // Kârlı mı?
 
   // Load active cash register session on page load
   useEffect(() => {
@@ -115,7 +123,7 @@ const CashRegisterPage: React.FC = () => {
         showError("Müşteri listesi yüklenirken bir hata oluştu!");
       }
     };
-    
+
     loadCustomers();
   }, [showError]);
 
@@ -140,6 +148,12 @@ const CashRegisterPage: React.FC = () => {
       const session = await cashRegisterService.openRegister(
         parseFloat(newOpeningBalance)
       );
+
+      // YENİ: EventBus ile kasa açılış olayını yayınla
+      eventBus.emit("cashRegisterOpened", {
+        openingBalance: session.openingBalance,
+        sessionId: session.id,
+      });
 
       // UI güncelleme
       setRegisterStatus(CashRegisterStatus.OPEN);
@@ -262,7 +276,7 @@ const CashRegisterPage: React.FC = () => {
       showError("Lütfen bir müşteri seçin");
       return;
     }
-    
+
     if (
       !transactionAmount ||
       isNaN(parseFloat(transactionAmount)) ||
@@ -274,7 +288,7 @@ const CashRegisterPage: React.FC = () => {
 
     try {
       const amount = parseFloat(transactionAmount);
-      
+
       // 1. Kasa nakit girişi ekle
       await cashRegisterService.addCashTransaction(
         sessionId,
@@ -282,25 +296,27 @@ const CashRegisterPage: React.FC = () => {
         amount,
         `Veresiye Tahsilatı - ${selectedCustomer.name}`
       );
-      
+
       // 2. Müşteri borcunu azalt
       await creditService.addTransaction({
         customerId: selectedCustomer.id,
         type: "payment",
         amount: amount,
         date: new Date(),
-        description: `Kasa Tahsilatı - ${new Date().toLocaleString('tr-TR')}`
+        description: `Kasa Tahsilatı - ${new Date().toLocaleString("tr-TR")}`,
       });
 
       // 3. UI güncelleme
       setCashDeposits((prev) => prev + amount);
-      
+
       // İşlem geçmişini yenile
-      const sessionDetails = await cashRegisterService.getSessionDetails(sessionId);
+      const sessionDetails = await cashRegisterService.getSessionDetails(
+        sessionId
+      );
       setTransactions(sessionDetails.transactions);
 
       showSuccess(`${formatCurrency(amount)} veresiye tahsilatı kaydedildi`);
-      
+
       // Modal kapatma ve form temizleme
       setShowCreditCollectionModal(false);
       setTransactionAmount("");
@@ -361,6 +377,41 @@ const CashRegisterPage: React.FC = () => {
     try {
       // Günü kapat
       await cashRegisterService.closeRegister(sessionId);
+
+      // YENI: Kasa verilerine göre yüksek satış olup olmadığını belirle
+      // Örnek olarak 1000 TL üzeri satışı yüksek sayalım, bunu kendi işletmenize göre ayarlayabilirsiniz
+      const highSalesThreshold = 1000; // TL
+      const isHighSales = dailyTotalSales > highSalesThreshold;
+
+      // YENI: Zarar durumunu tespit etme mantığı
+      // Zarar durumunu belirlemek için şu kriterleri kullanabiliriz:
+
+      // 1. Negatif sayım farkı büyükse (kasadan para eksilmişse)
+      const hasSignificantNegativeDifference = countingDifference < -50; // 50 TL'den fazla eksikse
+
+      // 2. Hiç satış yoksa veya çok düşükse
+      const lowSalesThreshold = 100; // TL
+      const hasNoOrLowSales = dailyTotalSales < lowSalesThreshold;
+
+      // 3. Toplam nakit çıkış, nakit girişten fazlaysa (net nakit kaybı)
+      const netCashFlow = dailyCashSales + cashDeposits - cashWithdrawals;
+      const hasNegativeCashFlow = netCashFlow < 0;
+
+      // Bu koşullardan en az biri doğruysa "zarar" durumu olarak kabul edelim
+      const isLossMaking =
+        hasSignificantNegativeDifference ||
+        (hasNoOrLowSales && hasNegativeCashFlow);
+
+      // YENI: EventBus ile kasa kapanış verisini gönder
+      eventBus.emit("cashRegisterClosed", {
+        totalSales: dailyTotalSales,
+        cashSales: dailyCashSales,
+        cardSales: dailyCardSales,
+        countingDifference: countingDifference,
+        theoreticalBalance: theoreticalBalance,
+        isHighSales: isHighSales,
+        isLossMaking: isLossMaking, // Zarar durumunu da gönder
+      });
 
       // UI güncelleme
       showSuccess("Gün başarıyla kapatıldı. Kasa raporu oluşturuldu.");
@@ -428,6 +479,7 @@ const CashRegisterPage: React.FC = () => {
               type="number"
               className="w-full p-2 border rounded-lg"
               placeholder="0.00"
+              onWheel={(e) => e.currentTarget.blur()}
               value={transactionAmount}
               onChange={(e) => setTransactionAmount(e.target.value)}
             />
@@ -440,6 +492,7 @@ const CashRegisterPage: React.FC = () => {
               type="text"
               className="w-full p-2 border rounded-lg"
               placeholder="Açıklama girin"
+              onWheel={(e) => e.currentTarget.blur()}
               value={transactionDescription}
               onChange={(e) => setTransactionDescription(e.target.value)}
             />
@@ -453,7 +506,7 @@ const CashRegisterPage: React.FC = () => {
             </button>
             <button
               onClick={handleCashDeposit}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
             >
               Ekle
             </button>
@@ -480,6 +533,7 @@ const CashRegisterPage: React.FC = () => {
               type="number"
               className="w-full p-2 border rounded-lg"
               placeholder="0.00"
+              onWheel={(e) => e.currentTarget.blur()}
               value={transactionAmount}
               onChange={(e) => setTransactionAmount(e.target.value)}
             />
@@ -505,7 +559,7 @@ const CashRegisterPage: React.FC = () => {
             </button>
             <button
               onClick={handleCashWithdrawal}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
             >
               Ekle
             </button>
@@ -534,7 +588,9 @@ const CashRegisterPage: React.FC = () => {
               value={selectedCustomer?.id || ""}
               onChange={(e) => {
                 const customerId = e.target.value;
-                const customer = customers.find(c => c.id.toString() === customerId);
+                const customer = customers.find(
+                  (c) => c.id.toString() === customerId
+                );
                 setSelectedCustomer(customer || null);
               }}
             >
@@ -554,6 +610,7 @@ const CashRegisterPage: React.FC = () => {
               type="number"
               className="w-full p-2 border rounded-lg"
               placeholder="0.00"
+              onWheel={(e) => e.currentTarget.blur()}
               value={transactionAmount}
               onChange={(e) => setTransactionAmount(e.target.value)}
             />
@@ -579,7 +636,7 @@ const CashRegisterPage: React.FC = () => {
             </button>
             <button
               onClick={handleCreditCollection}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
             >
               Tahsilat Yap
             </button>
@@ -607,6 +664,7 @@ const CashRegisterPage: React.FC = () => {
               className="w-full p-2 border rounded-lg"
               placeholder="0.00"
               value={countingInputAmount}
+              onWheel={(e) => e.currentTarget.blur()}
               onChange={(e) => setCountingInputAmount(e.target.value)}
             />
           </div>
@@ -623,7 +681,7 @@ const CashRegisterPage: React.FC = () => {
             </button>
             <button
               onClick={handleCounting}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
             >
               Kaydet
             </button>
@@ -638,7 +696,7 @@ const CashRegisterPage: React.FC = () => {
     return (
       <PageLayout>
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
         </div>
       </PageLayout>
     );
@@ -679,11 +737,12 @@ const CashRegisterPage: React.FC = () => {
                     className="w-full p-2 border rounded-lg"
                     value={newOpeningBalance}
                     onChange={(e) => setNewOpeningBalance(e.target.value)}
+                    onWheel={(e) => e.currentTarget.blur()}
                   />
                 </div>
                 <button
                   onClick={handleOpenRegister}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                 >
                   Kasa Aç
                 </button>
@@ -854,7 +913,9 @@ const CashRegisterPage: React.FC = () => {
                     <div
                       key={index}
                       className={`flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg border-b ${
-                        transaction.description?.includes("Veresiye Tahsilatı") ? "bg-purple-50" : ""
+                        transaction.description?.includes("Veresiye Tahsilatı")
+                          ? "bg-purple-50"
+                          : ""
                       }`}
                     >
                       <div>
@@ -884,8 +945,12 @@ const CashRegisterPage: React.FC = () => {
                           {formatCurrency(transaction.amount)}
                         </div>
                         {/* Veresiye işlemlerine özel ek bilgi */}
-                        {transaction.description?.includes("Veresiye Tahsilatı") && (
-                          <div className="text-xs text-purple-600">Veresiye Tahsilatı</div>
+                        {transaction.description?.includes(
+                          "Veresiye Tahsilatı"
+                        ) && (
+                          <div className="text-xs text-purple-600">
+                            Veresiye Tahsilatı
+                          </div>
                         )}
                       </div>
                     </div>

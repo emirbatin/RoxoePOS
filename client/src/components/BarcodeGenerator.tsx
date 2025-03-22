@@ -139,7 +139,8 @@ const BarcodeGenerator: React.FC<BarcodeGeneratorProps> = ({ product, onClose })
                 min="1"
                 value={quantity}
                 onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                onWheel={(e) => e.currentTarget.blur()}
               />
             </div>
 
@@ -152,7 +153,7 @@ const BarcodeGenerator: React.FC<BarcodeGeneratorProps> = ({ product, onClose })
                 <button
                   onClick={() => setBarcodeSize('small')}
                   className={`flex-1 py-2 px-4 rounded-lg border ${
-                    barcodeSize === 'small' ? 'bg-primary-50 border-primary-500 text-primary-700' : ''
+                    barcodeSize === 'small' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : ''
                   }`}
                 >
                   Küçük
@@ -160,7 +161,7 @@ const BarcodeGenerator: React.FC<BarcodeGeneratorProps> = ({ product, onClose })
                 <button
                   onClick={() => setBarcodeSize('medium')}
                   className={`flex-1 py-2 px-4 rounded-lg border ${
-                    barcodeSize === 'medium' ? 'bg-primary-50 border-primary-500 text-primary-700' : ''
+                    barcodeSize === 'medium' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : ''
                   }`}
                 >
                   Orta
@@ -168,7 +169,7 @@ const BarcodeGenerator: React.FC<BarcodeGeneratorProps> = ({ product, onClose })
                 <button
                   onClick={() => setBarcodeSize('large')}
                   className={`flex-1 py-2 px-4 rounded-lg border ${
-                    barcodeSize === 'large' ? 'bg-primary-50 border-primary-500 text-primary-700' : ''
+                    barcodeSize === 'large' ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : ''
                   }`}
                 >
                   Büyük
@@ -183,7 +184,8 @@ const BarcodeGenerator: React.FC<BarcodeGeneratorProps> = ({ product, onClose })
                 id="showPrice"
                 checked={showPriceOnBarcode}
                 onChange={(e) => setShowPriceOnBarcode(e.target.checked)}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                onWheel={(e) => e.currentTarget.blur()}
               />
               <label htmlFor="showPrice" className="text-sm text-gray-700">
                 Barkodda fiyat göster
@@ -202,7 +204,7 @@ const BarcodeGenerator: React.FC<BarcodeGeneratorProps> = ({ product, onClose })
             </button>
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
             >
               <Printer size={20} />
               Yazdır

@@ -365,7 +365,7 @@ const SettingsPage: React.FC = () => {
                     }}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                 </label>
               </div>
             </div>
@@ -392,7 +392,7 @@ const SettingsPage: React.FC = () => {
                         setPosConfig({ ...posConfig, type: e.target.value });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                   <div>
@@ -408,7 +408,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="9600">9600</option>
                       <option value="19200">19200</option>
@@ -429,7 +429,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="7">7</option>
                       <option value="8">8</option>
@@ -450,7 +450,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="1">1</option>
                       <option value="2">2</option>
@@ -469,7 +469,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="none">None</option>
                       <option value="even">Even</option>
@@ -489,7 +489,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="none">None</option>
                       <option value="hardware">Hardware</option>
@@ -500,7 +500,7 @@ const SettingsPage: React.FC = () => {
                 <div className="mt-6">
                   <button
                     onClick={testConnection}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                   >
                     <Printer size={18} />
                     Bağlantıyı Test Et
@@ -546,7 +546,7 @@ const SettingsPage: React.FC = () => {
                     }}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                 </label>
               </div>
 
@@ -569,7 +569,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="USB HID">USB (HID)</option>
                       <option value="USB COM">USB (COM Port)</option>
@@ -591,7 +591,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Opsiyonel"
                     />
                   </div>
@@ -610,7 +610,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Varsayılan: \n (Enter)"
                     />
                   </div>
@@ -654,7 +654,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Örn: MARKET XYZ"
                     />
                   </div>
@@ -673,7 +673,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Örn: XYZ GIDA SAN. VE TİC. LTD. ŞTİ."
                     />
                   </div>
@@ -692,7 +692,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Örn: Fatih Mah. Kurtuluş Cad."
                     />
                   </div>
@@ -711,7 +711,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Örn: No:123 Merkez/İstanbul"
                     />
                   </div>
@@ -730,7 +730,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Örn: (212) 123 45 67"
                     />
                   </div>
@@ -756,7 +756,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Örn: Fatih VD."
                     />
                   </div>
@@ -775,7 +775,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Örn: 1234567890"
                     />
                   </div>
@@ -794,7 +794,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Örn: 0123456789"
                     />
                   </div>
@@ -816,7 +816,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Örn: Bizi tercih ettiğiniz için teşekkür ederiz"
                     />
                   </div>
@@ -838,7 +838,7 @@ const SettingsPage: React.FC = () => {
                         });
                         saveSettings();
                       }}
-                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       placeholder="Örn: Ürün iade ve değişimlerinde bu fiş ve ambalaj gereklidir"
                     />
                   </div>
@@ -913,7 +913,7 @@ const SettingsPage: React.FC = () => {
                         setNewLicenseKey(e.target.value.toUpperCase())
                       }
                       placeholder="Lisans anahtarınızı girin"
-                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                       disabled={licenseStatus.loading}
                     />
                     {licenseStatus.error && (
@@ -923,7 +923,7 @@ const SettingsPage: React.FC = () => {
                     )}
                     <button
                       onClick={renewLicense}
-                      className="flex items-center gap-2 w-full justify-center px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-gray-300"
+                      className="flex items-center gap-2 w-full justify-center px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300"
                       disabled={licenseStatus.loading}
                     >
                       {licenseStatus.loading ? (
@@ -997,7 +997,7 @@ const SettingsPage: React.FC = () => {
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left ${
                       activeTab === tab.id
-                        ? "bg-primary-50 text-primary-700 font-medium"
+                        ? "bg-indigo-50 text-indigo-700 font-medium"
                         : "text-gray-600 hover:bg-gray-50"
                     }`}
                   >

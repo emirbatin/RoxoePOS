@@ -1,51 +1,26 @@
 import React, { useState, useMemo, useEffect } from "react";
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
-import {
-  TrendingUp,
-  ShoppingCart,
-  DollarSign,
-  ArrowUpRight,
-  ArrowDown,
-  ArrowUp,
-  CreditCard,
-  Calendar,
-  ChevronDown,
-  Download,
-  RefreshCw,
-  FileText,
-} from "lucide-react";
+import { useParams, useNavigate } from "react-router-dom";
+import { Calendar, ChevronDown, Download, RefreshCw } from "lucide-react";
 
-import PageLayout from "../components/layout/PageLayout";
-import DashboardFilters from "../components/DashboardFilters";
-import Card from "../components/ui/Card";
-import { Table } from "../components/ui/Table";
-import { Pagination } from "../components/ui/Pagination";
+// Dashboard Bileşenleri
+import OverviewTab from "../components/dashboard/OverviewTab";
+import CashTab from "../components/dashboard/CashTab";
+import SalesTab from "../components/dashboard/SalesTab";
+import ProductsTab from "../components/dashboard/ProductsTab";
 
+// Hooks ve Servisler
 import { useSales } from "../hooks/useSales";
 import { calculateStatsForDashboard } from "../utils/dashboardStats";
 import {
   cashRegisterService,
-  CashTransactionType,
   CashRegisterSession,
   CashRegisterStatus,
 } from "../services/cashRegisterDB";
 import { exportService } from "../services/exportSevices";
+import ExportButton from "../components/ExportButton";
 
-import { ProductStats } from "../types/product";
+// Dashboard sekme tipleri
+type DashboardTabKey = "overview" | "cash" | "sales" | "products";
 
 // Hook: Kasa verilerini ve kapanmış oturumları getirir
 function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
@@ -84,19 +59,16 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
       setLoading(true);
 
       try {
-        // 1) Tüm oturumları getir
+        // Veri yükleme işlemleri (değişmedi)
         const all = await cashRegisterService.getAllSessions();
 
-        // 2) Tarih aralığındaki oturumları filtrele
         const sessionsInRange = all.filter((s) => {
           const d = new Date(s.openingDate);
           return d >= startDate && d <= endDate;
         });
 
-        // 3) Aktif oturumu bul
         const activeSession = await cashRegisterService.getActiveSession();
 
-        // 4) Veri toplaması için değişkenler
         let totalDeposits = 0;
         let totalWithdrawals = 0;
         let veresiyeCollections = 0;
@@ -104,28 +76,25 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
         let totalCardSales = 0;
         let totalOpeningBalance = 0;
 
-        const dailyTransactions: Record<
-          string,
-          {
+        const dailyTransactions: {
+          [key: string]: {
             date: string;
             deposits: number;
             withdrawals: number;
             veresiye: number;
             total: number;
-          }
-        > = {};
+          };
+        } = {};
 
-        // 5) Oturumları döngüyle işle
+        // Oturumları işleme (değişmedi)
         for (const sess of sessionsInRange) {
           const details = await cashRegisterService.getSessionDetails(sess.id);
 
           if (sess.status === CashRegisterStatus.OPEN) {
-            // Aktif oturum verileri
             totalOpeningBalance += sess.openingBalance;
-            totalCashSales += sess.cashSalesTotal;
-            totalCardSales += sess.cardSalesTotal;
+            totalCashSales += sess.cashSalesTotal || 0;
+            totalCardSales += sess.cardSalesTotal || 0;
 
-            // İşlemleri günlük olarak topla
             if (details.transactions) {
               for (const tx of details.transactions) {
                 const dt = new Date(tx.date);
@@ -141,15 +110,15 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
                   };
                 }
 
-                if (tx.type === CashTransactionType.DEPOSIT) {
+                if (tx.type === "GİRİŞ") {
                   totalDeposits += tx.amount;
                   dailyTransactions[dateStr].deposits += tx.amount;
                   dailyTransactions[dateStr].total += tx.amount;
-                } else if (tx.type === CashTransactionType.WITHDRAWAL) {
+                } else if (tx.type === "ÇIKIŞ") {
                   totalWithdrawals += tx.amount;
                   dailyTransactions[dateStr].withdrawals += tx.amount;
                   dailyTransactions[dateStr].total -= tx.amount;
-                } else if (tx.type === CashTransactionType.CREDIT_COLLECTION) {
+                } else if (tx.type === "VERESIYE_TAHSILAT") {
                   totalDeposits += tx.amount;
                   veresiyeCollections += tx.amount;
                   dailyTransactions[dateStr].veresiye += tx.amount;
@@ -161,11 +130,10 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
           }
         }
 
-        // 6) Kapalı oturumları ayarla
+        // Kapalı oturumları ayarla
         const closed = sessionsInRange
           .filter((s) => s.status === CashRegisterStatus.CLOSED)
           .sort((a, b) => {
-            // En yakın tarihli olanları başa getir
             return (
               new Date(b.closingDate || b.openingDate).getTime() -
               new Date(a.closingDate || a.openingDate).getTime()
@@ -174,14 +142,13 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
 
         setClosedSessions(closed);
 
-        // En son kapatılan oturumu ayarla
         if (closed.length > 0) {
           setLastClosedSession(closed[0]);
         } else {
           setLastClosedSession(null);
         }
 
-        // 7) Aktif oturum bakiyesini hesapla
+        // Aktif oturum bakiyesini hesapla
         let currBalance = 0;
         let isActive = false;
 
@@ -189,12 +156,12 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
           isActive = true;
           currBalance =
             activeSession.openingBalance +
-            activeSession.cashSalesTotal +
-            activeSession.cashDepositTotal -
-            activeSession.cashWithdrawalTotal;
+            (activeSession.cashSalesTotal || 0) +
+            (activeSession.cashDepositTotal || 0) -
+            (activeSession.cashWithdrawalTotal || 0);
         }
 
-        // 8) Kasa verilerini güncelle
+        // Kasa verilerini güncelle
         setCashData({
           currentBalance: currBalance,
           totalDeposits,
@@ -204,9 +171,17 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
           openingBalance: totalOpeningBalance,
           cashSalesTotal: totalCashSales,
           cardSalesTotal: totalCardSales,
-          dailyData: Object.values(dailyTransactions).sort((a, b) =>
-            a.date.localeCompare(b.date)
-          ),
+          dailyData: Object.values(
+            dailyTransactions as {
+              [key: string]: {
+                date: string;
+                deposits: number;
+                withdrawals: number;
+                veresiye: number;
+                total: number;
+              };
+            }
+          ).sort((a, b) => a.date.localeCompare(b.date)),
         });
       } catch (err) {
         console.error("Kasa verileri yüklenirken hata:", err);
@@ -221,34 +196,31 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
   return { cashData, closedSessions, lastClosedSession, loading };
 }
 
-// Dashboard sekme tipleri
-type DashboardTabKey = "overview" | "cash" | "sales" | "products";
-
 const DashboardPage: React.FC = () => {
+  // URL parametrelerini al
+  const { tabKey = "overview" } = useParams<{ tabKey?: DashboardTabKey }>();
+  const navigate = useNavigate();
+
   // Tarih filtresi state'leri
   const [period, setPeriod] = useState<
     "day" | "week" | "month" | "year" | "custom"
-  >("week");
+  >("day");
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
-
-  // Sekme state'i
-  const [currentTab, setCurrentTab] = useState<DashboardTabKey>("overview");
+  const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
 
   // Satış verileri
   const { sales, loading: salesLoading } = useSales(30000);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
-  // Son kapatılan kasanın gününe ait satışların gerçek kârını hesaplama
-  const [lastClosedSessionProfit, setLastClosedSessionProfit] = useState<{
-    revenue: number;
-    cost: number;
-    profit: number;
+  // Sıralama state'i
+  const [cashSortConfig, setCashSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
   }>({
-    revenue: 0,
-    cost: 0,
-    profit: 0,
+    key: "openingDate",
+    direction: "desc",
   });
 
   // Seçili tarih aralığındaki satışlar
@@ -269,97 +241,22 @@ const DashboardPage: React.FC = () => {
     loading: cashLoading,
   } = useCashDataWithClosedSessions(startDate, endDate);
 
-  const [sortConfig, setSortConfig] = useState<{
-    key: keyof ProductStats;
-    direction: "asc" | "desc";
-  }>({ key: "quantity", direction: "desc" });
-
-  // Başlık tıklama işlevi:
-  const handleSort = (key: keyof ProductStats) => {
-    let direction: "asc" | "desc" = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
-    }
-    setSortConfig({ key, direction });
-  };
-
-  // Dashboard istatistikleri
-  const {
-    totalSales,
-    totalRevenue,
-    netProfit,
-    profitMargin,
-    averageBasket,
-    cancelRate,
-    refundRate,
-    dailySalesData,
-    categoryData,
-    productStats,
-  } = useMemo(() => {
-    return calculateStatsForDashboard(filteredSales, period === "day");
-  }, [filteredSales, period]);
-
-  // Ürün tablosu ayarları
-  // Ürün verisini sıralamak için useMemo kullanımı:
-  const sortedProducts = useMemo(() => {
-    let sortableProducts = [...productStats];
-    if (sortConfig !== null) {
-      sortableProducts.sort((a, b) => {
-        const key = sortConfig.key;
-        let aVal = a[key];
-        let bVal = b[key];
-
-        // Eğer değerler sayısal ise karşılaştırmayı buna göre yap
-        if (typeof aVal === "number" && typeof bVal === "number") {
-          return sortConfig.direction === "asc" ? aVal - bVal : bVal - aVal;
-        }
-
-        // Değerler string ise:
-        aVal = String(aVal).toLowerCase();
-        bVal = String(bVal).toLowerCase();
-        if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
-        return 0;
-      });
-    }
-    return sortableProducts;
-  }, [productStats, sortConfig]);
-
-  // Sıralama için kullanılacak anahtarların tanımı (hesaplanan "totalSales" da dahil)
-  type CashSortKey =
-    | "openingDate"
-    | "closingDate"
-    | "cashSalesTotal"
-    | "cardSalesTotal"
-    | "totalSales"
-    | "countingDifference";
-
-  // Sıralama state’i
-  const [cashSortConfig, setCashSortConfig] = useState<{
-    key: CashSortKey;
-    direction: "asc" | "desc";
-  }>({
-    key: "openingDate",
-    direction: "desc",
-  });
-
   // Kapanmış oturumları sıralayan useMemo
   const sortedClosedSessions = useMemo(() => {
     let sessions = [...closedSessions];
     if (cashSortConfig) {
       sessions.sort((a, b) => {
         const key = cashSortConfig.key;
-        let aVal: any, bVal: any;
+        let aVal, bVal;
         if (key === "totalSales") {
-          // Toplam satış hesaplanıyor: nakit satış + kart satış
           aVal = (a.cashSalesTotal || 0) + (a.cardSalesTotal || 0);
           bVal = (b.cashSalesTotal || 0) + (b.cardSalesTotal || 0);
         } else {
-          aVal = a[key];
-          bVal = b[key];
+          aVal = a[key as keyof CashRegisterSession];
+          bVal = b[key as keyof CashRegisterSession];
           if (key === "openingDate" || key === "closingDate") {
-            aVal = new Date(aVal);
-            bVal = new Date(bVal);
+            aVal = new Date(aVal || 0);
+            bVal = new Date(bVal || 0);
           }
         }
         if (typeof aVal === "number" && typeof bVal === "number") {
@@ -381,7 +278,7 @@ const DashboardPage: React.FC = () => {
   }, [closedSessions, cashSortConfig]);
 
   // Sütun başlığına tıklanınca sıralama yönünü değiştiren fonksiyon
-  const handleCashSort = (key: CashSortKey) => {
+  const handleCashSort = (key: string) => {
     let direction: "asc" | "desc" = "asc";
     if (cashSortConfig.key === key && cashSortConfig.direction === "asc") {
       direction = "desc";
@@ -389,12 +286,21 @@ const DashboardPage: React.FC = () => {
     setCashSortConfig({ key, direction });
   };
 
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage = 10;
-  const idxLast = currentPage * itemsPerPage;
-  const idxFirst = idxLast - itemsPerPage;
-  const currentProducts = sortedProducts.slice(idxFirst, idxLast);
-  const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
+  // Dashboard istatistikleri
+  const {
+    totalSales,
+    totalRevenue,
+    netProfit,
+    profitMargin,
+    averageBasket,
+    cancelRate,
+    refundRate,
+    dailySalesData,
+    categoryData,
+    productStats,
+  } = useMemo(() => {
+    return calculateStatsForDashboard(filteredSales, period === "day");
+  }, [filteredSales, period]);
 
   // Yükleniyor durumu
   const isLoading = salesLoading || cashLoading;
@@ -409,6 +315,7 @@ const DashboardPage: React.FC = () => {
     fileType: "excel" | "pdf",
     reportType: "sale" | "product" | "cash"
   ) => {
+    setShowExportMenu(false);
     const dateRangeString = exportService.formatDateRange(startDate, endDate);
     try {
       if (fileType === "excel") {
@@ -472,1787 +379,264 @@ const DashboardPage: React.FC = () => {
     return new Date(date).toLocaleDateString("tr-TR", options);
   };
 
-  // Ürün tablosu kolonları
-  const productColumns = [
-    {
-      key: "name",
-      title: "Ürün",
-      render: (p: ProductStats) => (
-        <div className="text-sm font-medium text-gray-900">{p.name}</div>
-      ),
-    },
-    {
-      key: "category",
-      title: "Kategori",
-      render: (p: ProductStats) => (
-        <div className="text-sm text-gray-500">{p.category}</div>
-      ),
-    },
-    {
-      key: "quantity",
-      title: "Adet",
-      className: "text-right",
-      render: (p: ProductStats) => <div>{p.quantity}</div>,
-    },
-    {
-      key: "revenue",
-      title: "Ciro (₺)",
-      className: "text-right",
-      render: (p: ProductStats) => <div>{p.revenue.toFixed(2)}</div>,
-    },
-    {
-      key: "profit",
-      title: "Kâr (₺)",
-      className: "text-right",
-      render: (p: ProductStats) => (
-        <div className="text-green-600 font-medium">{p.profit.toFixed(2)}</div>
-      ),
-    },
-  ];
-
-  // Kapalı kasa oturumları tablosu kolonları
-  const closedColumns = [
-    {
-      key: "openingDate",
-      title: "Açılış Tarihi",
-      render: (sess: CashRegisterSession) => (
-        <span className="text-sm">
-          {new Date(sess.openingDate).toLocaleString("tr-TR")}
-        </span>
-      ),
-    },
-    {
-      key: "closingDate",
-      title: "Kapanış Tarihi",
-      render: (sess: CashRegisterSession) =>
-        sess.closingDate ? (
-          <span className="text-sm">
-            {new Date(sess.closingDate).toLocaleString("tr-TR")}
-          </span>
-        ) : (
-          <span className="text-xs text-gray-500">-</span>
-        ),
-    },
-    {
-      key: "openingBalance",
-      title: "Açılış Bakiye",
-      render: (sess: CashRegisterSession) => (
-        <span className="text-sm text-blue-600 font-medium">
-          ₺{sess.openingBalance.toFixed(2)}
-        </span>
-      ),
-    },
-    {
-      key: "cashSalesTotal",
-      title: "Nakit Satış",
-      render: (sess: CashRegisterSession) => (
-        <span className="text-sm">
-          ₺{sess.cashSalesTotal?.toFixed(2) || "0.00"}
-        </span>
-      ),
-    },
-    {
-      key: "cardSalesTotal",
-      title: "Kart Satış",
-      render: (sess: CashRegisterSession) => (
-        <span className="text-sm">
-          ₺{sess.cardSalesTotal?.toFixed(2) || "0.00"}
-        </span>
-      ),
-    },
-    {
-      key: "cashDepositTotal",
-      title: "Nakit Giriş",
-      render: (sess: CashRegisterSession) => (
-        <span className="text-sm">
-          +{sess.cashDepositTotal?.toFixed(2) || "0.00"}
-        </span>
-      ),
-    },
-    {
-      key: "cashWithdrawalTotal",
-      title: "Nakit Çıkış",
-      render: (sess: CashRegisterSession) => (
-        <span className="text-sm text-red-500">
-          -{sess.cashWithdrawalTotal?.toFixed(2) || "0.00"}
-        </span>
-      ),
-    },
-    {
-      key: "countingAmount",
-      title: "Sayım",
-      render: (sess: CashRegisterSession) =>
-        sess.countingAmount != null ? (
-          <span className="text-sm text-gray-600">
-            ₺{sess.countingAmount.toFixed(2)}
-          </span>
-        ) : (
-          <span className="text-xs text-gray-500">-</span>
-        ),
-    },
-    {
-      key: "countingDifference",
-      title: "Fark",
-      render: (sess: CashRegisterSession) =>
-        sess.countingDifference != null ? (
-          <span
-            className={`text-sm ${
-              sess.countingDifference < 0
-                ? "text-red-600"
-                : sess.countingDifference > 0
-                ? "text-green-600"
-                : "text-gray-600"
-            }`}
-          >
-            {sess.countingDifference > 0 && "+"}
-            {sess.countingDifference.toFixed(2)}
-          </span>
-        ) : (
-          <span className="text-xs text-gray-500">-</span>
-        ),
-    },
-  ];
-
   // Tarih filtreleme bileşeni
-  /** Modern Tarih Filtreleme Bileşeni */
   const renderDateFilter = () => (
-    <div className="mb-6 bg-white rounded-lg shadow-sm">
-      <div className="p-4 md:p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div className="flex items-center">
+    <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className="p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        {/* Sol Taraf - Hızlı Filtreler */}
+        <div className="flex items-center gap-3">
+          <div className="flex bg-gray-50 rounded-lg p-1 shadow-sm">
+            <button
+              onClick={() => {
+                setPeriod("day");
+                setShowDatePicker(false);
+              }}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                period === "day"
+                  ? "bg-white text-indigo-600 shadow-sm"
+                  : "text-gray-600 hover:text-indigo-600 hover:bg-gray-100"
+              }`}
+            >
+              Bugün
+            </button>
+            <button
+              onClick={() => {
+                setPeriod("week");
+                setShowDatePicker(false);
+              }}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                period === "week"
+                  ? "bg-white text-indigo-600 shadow-sm"
+                  : "text-gray-600 hover:text-indigo-600 hover:bg-gray-100"
+              }`}
+            >
+              Bu Hafta
+            </button>
+            <button
+              onClick={() => {
+                setPeriod("month");
+                setShowDatePicker(false);
+              }}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                period === "month"
+                  ? "bg-white text-indigo-600 shadow-sm"
+                  : "text-gray-600 hover:text-indigo-600 hover:bg-gray-100"
+              }`}
+            >
+              Bu Ay
+            </button>
+            <button
+              onClick={() => {
+                setPeriod("year");
+                setShowDatePicker(false);
+              }}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                period === "year"
+                  ? "bg-white text-indigo-600 shadow-sm"
+                  : "text-gray-600 hover:text-indigo-600 hover:bg-gray-100"
+              }`}
+            >
+              Bu Yıl
+            </button>
+          </div>
+        </div>
+  
+        {/* Sağ Taraf - Butonlar */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Özel Tarih Seçici */}
           <div className="relative">
             <button
               onClick={() => setShowDatePicker(!showDatePicker)}
-              className="flex items-center gap-2 py-2 px-4 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
+              className={`flex items-center gap-2 py-2 px-3 rounded-md border transition-all ${
+                showDatePicker || period === "custom"
+                  ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-indigo-200 hover:bg-indigo-50/50"
+              }`}
             >
-              <Calendar size={18} className="text-indigo-600" />
-              <span className="text-gray-700 font-medium">
+              <Calendar
+                size={16}
+                className={
+                  period === "custom" ? "text-indigo-600" : "text-gray-500"
+                }
+              />
+              <span className="font-medium text-sm">
                 {formatDate(startDate)} - {formatDate(endDate)}
               </span>
-              <ChevronDown size={16} className="text-gray-400" />
+              <ChevronDown
+                size={14}
+                className={
+                  period === "custom" ? "text-indigo-600" : "text-gray-400"
+                }
+              />
             </button>
-
+  
+            {/* Tarih Seçici Popup */}
             {showDatePicker && (
-              <div className="absolute top-full left-0 mt-2 p-5 bg-white rounded-lg shadow-lg z-10 w-80 border border-gray-200">
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
+              <div className="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-xl z-20 border border-gray-100 animate-in fade-in slide-in-from-top-5 duration-200">
+                <div className="p-4 w-80">
+                  <div className="text-sm font-semibold text-gray-800 mb-3">
+                    Özel Tarih Aralığı
+                  </div>
+  
+                  {/* Başlangıç Tarihi */}
+                  <div className="mb-3">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Başlangıç
+                      Başlangıç Tarihi
                     </label>
                     <input
                       type="date"
-                      className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       value={startDate.toISOString().split("T")[0]}
-                      onChange={(e) => setStartDate(new Date(e.target.value))}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setStartDate(new Date(e.target.value));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
-                  <div>
+  
+                  {/* Bitiş Tarihi */}
+                  <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Bitiş
+                      Bitiş Tarihi
                     </label>
                     <input
                       type="date"
-                      className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       value={endDate.toISOString().split("T")[0]}
-                      onChange={(e) => setEndDate(new Date(e.target.value))}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setEndDate(new Date(e.target.value));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      min={startDate.toISOString().split("T")[0]}
                     />
                   </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <button
-                    onClick={() => {
-                      setPeriod("day");
-                      setShowDatePicker(false);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      period === "day"
-                        ? "bg-indigo-100 text-indigo-700"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    Bugün
-                  </button>
-                  <button
-                    onClick={() => {
-                      setPeriod("week");
-                      setShowDatePicker(false);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      period === "week"
-                        ? "bg-indigo-100 text-indigo-700"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    Bu Hafta
-                  </button>
-                  <button
-                    onClick={() => {
-                      setPeriod("month");
-                      setShowDatePicker(false);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      period === "month"
-                        ? "bg-indigo-100 text-indigo-700"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    Bu Ay
-                  </button>
-                  <button
-                    onClick={() => {
-                      setPeriod("year");
-                      setShowDatePicker(false);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      period === "year"
-                        ? "bg-indigo-100 text-indigo-700"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    Bu Yıl
-                  </button>
-                </div>
-
-                <div className="flex justify-end">
+  
                   <button
                     onClick={() => {
                       setPeriod("custom");
                       setShowDatePicker(false);
                     }}
-                    className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                    className="w-full py-2 mt-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
                   >
-                    Uygula
+                    Tarihleri Uygula
                   </button>
                 </div>
               </div>
             )}
           </div>
-        </div>
-
-        <div className="flex gap-3">
-          <div className="relative group">
-            <button className="flex items-center gap-2 py-2 px-4 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors">
-              <Download size={18} className="text-indigo-600" />
-              <span className="text-gray-700 font-medium">Dışa Aktar</span>
-              <ChevronDown size={16} className="text-gray-400" />
-            </button>
-
-            <div className="absolute top-full right-0 mt-2 p-2 hidden group-hover:block bg-white rounded-lg shadow-lg z-10 border border-gray-200 w-48">
-              <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase">
-                Excel
-              </div>
-              <button
-                onClick={() => handleExport("excel", "sale")}
-                className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-              >
-                Satış Raporu
-              </button>
-              <button
-                onClick={() => handleExport("excel", "product")}
-                className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-              >
-                Ürün Raporu
-              </button>
-              <button
-                onClick={() => handleExport("excel", "cash")}
-                className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-              >
-                Kasa Raporu
-              </button>
-
-              <div className="mt-1 pt-1 border-t border-gray-100"></div>
-              <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase">
-                PDF
-              </div>
-              <button
-                onClick={() => handleExport("pdf", "sale")}
-                className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-              >
-                Satış Raporu
-              </button>
-              <button
-                onClick={() => handleExport("pdf", "product")}
-                className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-              >
-                Ürün Raporu
-              </button>
-            </div>
-          </div>
-
+  
+          {/* YENİ: ExportButton Bileşeni - Dışa Aktarma Butonu yerine */}
+          <ExportButton 
+            currentTab={tabKey as 'overview' | 'cash' | 'sales' | 'products'}
+            startDate={startDate}
+            endDate={endDate}
+            isLoading={isLoading}
+            sales={filteredSales}
+            cashData={cashData}
+            productStats={productStats}
+            closedSessions={closedSessions}
+          />
+  
+          {/* Yenileme Butonu */}
           <button
             onClick={handleRefresh}
-            className={`flex items-center gap-2 py-2 px-4 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors ${
+            className={`flex items-center gap-2 py-2 px-3 rounded-md border border-gray-200 bg-white hover:border-indigo-300 transition-all ${
               isLoading ? "cursor-not-allowed opacity-75" : ""
             }`}
             disabled={isLoading}
           >
             <RefreshCw
-              size={18}
-              className={`text-indigo-600 ${isLoading ? "animate-spin" : ""}`}
+              size={16}
+              className={`text-gray-500 ${isLoading ? "animate-spin" : ""}`}
             />
-            <span className="text-gray-700 font-medium">
-              {isLoading ? "Yükleniyor..." : "Yenile"}
+            <span className="text-gray-700 font-medium text-sm">
+              {isLoading ? "Yükleniyor" : "Yenile"}
             </span>
           </button>
         </div>
       </div>
     </div>
   );
+  
 
-  // Sekme düğmeleri
-  /** Modern ve Şık Sekme Düğmeleri */
-  const renderTabButtons = () => {
-    const tabs: {
-      key: DashboardTabKey;
-      label: string;
-      icon: React.ReactNode;
-    }[] = [
-      { key: "overview", label: "Genel Özet", icon: <TrendingUp size={18} /> },
-      { key: "cash", label: "Kasa Raporu", icon: <DollarSign size={18} /> },
-      {
-        key: "sales",
-        label: "Satış Analizi",
-        icon: <ShoppingCart size={18} />,
-      },
-      {
-        key: "products",
-        label: "Ürün Performansı",
-        icon: <FileText size={18} />,
-      },
-    ];
-
-    return (
-      <div className="mb-6 bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="flex overflow-x-auto">
-          {tabs.map((tab) => {
-            const active = currentTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setCurrentTab(tab.key)}
-                className={`flex items-center gap-2 py-4 px-6 transition-colors relative ${
-                  active
-                    ? "text-indigo-600 font-medium"
-                    : "text-gray-600 hover:text-indigo-500 hover:bg-indigo-50/30"
-                }`}
-              >
-                <span
-                  className={`${active ? "text-indigo-600" : "text-gray-400"}`}
-                >
-                  {tab.icon}
-                </span>
-                {tab.label}
-                {active && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  /** 1) Genel Özet Sekmesi */
-  /** 1) Modern ve Şık Genel Özet Sekmesi */
-  const renderOverviewTab = () => {
-    return (
-      <div className="space-y-6">
-        {/* Üst özet kartları */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-blue-50">
-              <h3 className="text-sm font-medium text-blue-700">
-                Toplam Satış
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">
-                {totalSales}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Toplam satış adedi</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-indigo-50">
-              <h3 className="text-sm font-medium text-indigo-700">Brüt Ciro</h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">{`₺${totalRevenue.toFixed(
-                2
-              )}`}</div>
-              <p className="text-xs text-gray-500 mt-1">Toplam gelir</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-green-50">
-              <h3 className="text-sm font-medium text-green-700">Net Kâr</h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">{`₺${netProfit.toFixed(
-                2
-              )}`}</div>
-              <p className="text-xs text-gray-500 mt-1">Toplam kâr</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-purple-50">
-              <h3 className="text-sm font-medium text-purple-700">Kâr Marjı</h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">{`%${profitMargin.toFixed(
-                1
-              )}`}</div>
-              <p className="text-xs text-gray-500 mt-1">Ortalama kârlılık</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Grafik kartları */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Günlük Satış Trend Grafiği */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="text-lg font-medium text-gray-800">
-                Günlük Satış Trend
-              </h2>
-            </div>
-            <div className="p-4">
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dailySalesData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 12 }}
-                      stroke="#94a3b8"
-                      label={{
-                        value: period === "day" ? "Saat" : "Tarih",
-                        position: "insideBottom",
-                        offset: -5,
-                      }}
-                    />
-                    <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                    <Tooltip
-                      formatter={(value) =>
-                        typeof value === "number"
-                          ? `₺${value.toFixed(2)}`
-                          : `${value}`
-                      }
-                      contentStyle={{
-                        borderRadius: "6px",
-                        boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                        border: "none",
-                      }}
-                    />
-                    <Legend iconType="circle" iconSize={8} />
-                    <Line
-                      type="monotone"
-                      dataKey="total"
-                      stroke="#4f46e5"
-                      strokeWidth={2}
-                      name="Ciro"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="profit"
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      name="Kâr"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* Kategori Dağılımı Grafiği */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="text-lg font-medium text-gray-800">
-                Kategori Dağılımı
-              </h2>
-            </div>
-            <div className="p-4">
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={90}
-                      paddingAngle={3}
-                      dataKey="revenue"
-                      nameKey="name"
-                      label={({ name, percent }) =>
-                        `${name} (${(percent * 100).toFixed(0)}%)`
-                      }
-                    >
-                      {categoryData.map((_, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={
-                            [
-                              "#4f46e5",
-                              "#10b981",
-                              "#f97316",
-                              "#8b5cf6",
-                              "#06b6d4",
-                              "#ec4899",
-                            ][index % 6]
-                          }
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value) =>
-                        typeof value === "number"
-                          ? `₺${value.toFixed(2)}`
-                          : `${value}`
-                      }
-                      contentStyle={{
-                        borderRadius: "6px",
-                        boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                        border: "none",
-                      }}
-                    />
-                    <Legend iconType="circle" iconSize={8} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Son Kapanan Kasa */}
-        {lastClosedSession && (
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="text-lg font-medium text-gray-800">
-                Son Kapanan Kasa Özeti
-              </h2>
-              <span className="text-sm px-3 py-1 bg-gray-100 rounded-full text-gray-600">
-                {formatDate(
-                  lastClosedSession.closingDate || lastClosedSession.openingDate
-                )}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-0 p-1">
-              <div className="p-4 m-2 bg-blue-50 rounded-lg">
-                <div className="text-sm text-blue-700 mb-1">
-                  Açılış Bakiyesi
-                </div>
-                <div className="text-lg font-medium text-blue-900">
-                  ₺{lastClosedSession.openingBalance.toFixed(2)}
-                </div>
-              </div>
-              <div className="p-4 m-2 bg-green-50 rounded-lg">
-                <div className="text-sm text-green-700 mb-1">Toplam Satış</div>
-                <div className="text-lg font-medium text-green-900">
-                  ₺
-                  {(
-                    (lastClosedSession.cashSalesTotal || 0) +
-                    (lastClosedSession.cardSalesTotal || 0)
-                  ).toFixed(2)}
-                </div>
-              </div>
-              <div className="p-4 m-2 bg-indigo-50 rounded-lg">
-                <div className="text-sm text-indigo-700 mb-1">Sayım Sonucu</div>
-                <div className="text-lg font-medium text-indigo-900">
-                  {lastClosedSession.countingAmount
-                    ? `₺${lastClosedSession.countingAmount.toFixed(2)}`
-                    : "Sayım yapılmadı"}
-                </div>
-              </div>
-              <div className="p-4 m-2 bg-purple-50 rounded-lg">
-                <div className="text-sm text-purple-700 mb-1">Kasa Farkı</div>
-                <div
-                  className={`text-lg font-medium ${
-                    !lastClosedSession.countingDifference
-                      ? "text-gray-500"
-                      : lastClosedSession.countingDifference < 0
-                      ? "text-red-600"
-                      : lastClosedSession.countingDifference > 0
-                      ? "text-green-600"
-                      : "text-gray-800"
-                  }`}
-                >
-                  {lastClosedSession.countingDifference
-                    ? `${
-                        lastClosedSession.countingDifference > 0 ? "+" : ""
-                      }₺${lastClosedSession.countingDifference.toFixed(2)}`
-                    : "-"}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* En Çok Satan Ürünler Tablosu */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-            <h2 className="text-lg font-medium text-gray-800">
-              En Çok Satan Ürünler
-            </h2>
-            <button
-              onClick={() => setCurrentTab("products")}
-              className="text-sm font-medium text-blue-600 hover:text-blue-800"
-            >
-              Tümünü Gör
-            </button>
-          </div>
-          {!sortedProducts.length ? (
-            <div className="p-8 text-center text-gray-500">
-              <p>Bu dönemde satış verisi bulunmuyor.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table
-                data={sortedProducts.slice(0, 5)}
-                columns={productColumns}
-                enableSorting={true}
-                defaultSortKey="name"
-                defaultSortDirection="asc"
-                loading={isLoading}
-                emptyMessage="Bu dönemde satış verisi bulunmuyor."
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  /** 2) Modern ve Kullanıcı Dostu Kasa Raporu Sekmesi */
-  const renderCashTab = () => {
-    // Günlük nakit artışı: Gün sonu kasa - Başlangıç bakiyesi
-    const dailyCashIncrease = lastClosedSession
-      ? (lastClosedSession.countingAmount ??
-          lastClosedSession.openingBalance +
-            (lastClosedSession.cashSalesTotal || 0) +
-            (lastClosedSession.cashDepositTotal || 0) -
-            (lastClosedSession.cashWithdrawalTotal || 0)) -
-        lastClosedSession.openingBalance
-      : 0;
-
-    return (
-      <div className="space-y-6">
-        {/* Üst özet kartları */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-blue-50">
-              <h3 className="text-sm font-medium text-blue-700">
-                Kasa Bakiyesi
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">{`₺${cashData.currentBalance.toFixed(
-                2
-              )}`}</div>
-              <p className="text-xs text-gray-500 mt-1">Toplam bakiye</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-green-50">
-              <h3 className="text-sm font-medium text-green-700">
-                Nakit Satışlar
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">{`₺${cashData.cashSalesTotal.toFixed(
-                2
-              )}`}</div>
-              <p className="text-xs text-gray-500 mt-1">
-                Nakit ile yapılan satışlar
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-indigo-50">
-              <h3 className="text-sm font-medium text-indigo-700">
-                Kart Satışlar
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">{`₺${cashData.cardSalesTotal.toFixed(
-                2
-              )}`}</div>
-              <p className="text-xs text-gray-500 mt-1">
-                Kart ile yapılan satışlar
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-purple-50">
-              <h3 className="text-sm font-medium text-purple-700">
-                Toplam Satış
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">{`₺${(
-                cashData.cashSalesTotal + cashData.cardSalesTotal
-              ).toFixed(2)}`}</div>
-              <p className="text-xs text-gray-500 mt-1">
-                Tüm satışların toplamı
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Günün Gerçek Artışı - Ana Kart */}
-        {lastClosedSession && (
-          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg shadow-md overflow-hidden">
-            <div className="px-6 py-5 flex flex-col md:flex-row justify-between items-center">
-              <div className="text-white">
-                <h2 className="text-xl font-bold">Günün Gerçek Artışı</h2>
-                <p className="text-blue-100 mt-1">
-                  Açılış bakiyesi (₺
-                  {lastClosedSession.openingBalance.toFixed(2)}) hariç, gün
-                  sonunda kasada oluşan artış
-                </p>
-              </div>
-              <div className="bg-white px-6 py-3 rounded-lg shadow-inner mt-4 md:mt-0">
-                <span
-                  className={`text-2xl md:text-3xl font-bold ${
-                    dailyCashIncrease >= 0 ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {dailyCashIncrease >= 0 ? "+" : ""}₺
-                  {dailyCashIncrease.toFixed(2)}
-                </span>
-              </div>
-            </div>
-
-            {/* Detay kartları */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-0 bg-blue-600 px-2 py-2">
-              <div className="p-3 m-1 bg-white rounded-md flex flex-col">
-                <span className="text-xs font-medium text-gray-500">
-                  Açılış
-                </span>
-                <span className="text-base font-medium text-gray-800">
-                  ₺{lastClosedSession.openingBalance.toFixed(2)}
-                </span>
-              </div>
-              <div className="p-3 m-1 bg-white rounded-md flex flex-col">
-                <span className="text-xs font-medium text-gray-500">
-                  Nakit Satışlar
-                </span>
-                <span className="text-base font-medium text-green-600">
-                  +₺{(lastClosedSession.cashSalesTotal || 0).toFixed(2)}
-                </span>
-              </div>
-              <div className="p-3 m-1 bg-white rounded-md flex flex-col">
-                <span className="text-xs font-medium text-gray-500">
-                  Nakit Girişler
-                </span>
-                <span className="text-base font-medium text-green-600">
-                  +₺{(lastClosedSession.cashDepositTotal || 0).toFixed(2)}
-                </span>
-              </div>
-              <div className="p-3 m-1 bg-white rounded-md flex flex-col">
-                <span className="text-xs font-medium text-gray-500">
-                  Nakit Çıkışlar
-                </span>
-                <span className="text-base font-medium text-red-600">
-                  -₺{(lastClosedSession.cashWithdrawalTotal || 0).toFixed(2)}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Nakit Akışı ve Sayım */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Nakit akışı kartı */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="text-lg font-medium text-gray-800">Nakit Akışı</h2>
-            </div>
-
-            <div className="divide-y divide-gray-100">
-              <div className="px-6 py-4 flex justify-between items-center">
-                <div className="flex items-center">
-                  <div className="p-2 rounded-md bg-green-50 mr-3">
-                    <ArrowDown className="text-green-500 h-5 w-5" />
-                  </div>
-                  <div>
-                    <span className="block text-sm font-medium text-gray-700">
-                      Veresiye Tahsilatı
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      Alacak tahsilatları
-                    </span>
-                  </div>
-                </div>
-                <div className="text-base font-medium text-green-600">
-                  +₺{cashData.veresiyeCollections.toFixed(2)}
-                </div>
-              </div>
-
-              <div className="px-6 py-4 flex justify-between items-center">
-                <div className="flex items-center">
-                  <div className="p-2 rounded-md bg-green-50 mr-3">
-                    <ArrowDown className="text-green-500 h-5 w-5" />
-                  </div>
-                  <div>
-                    <span className="block text-sm font-medium text-gray-700">
-                      Diğer Nakit Girişler
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      Diğer tüm nakit girişleri
-                    </span>
-                  </div>
-                </div>
-                <div className="text-base font-medium text-green-600">
-                  +₺
-                  {(
-                    cashData.totalDeposits - cashData.veresiyeCollections
-                  ).toFixed(2)}
-                </div>
-              </div>
-
-              <div className="px-6 py-4 flex justify-between items-center">
-                <div className="flex items-center">
-                  <div className="p-2 rounded-md bg-red-50 mr-3">
-                    <ArrowUp className="text-red-500 h-5 w-5" />
-                  </div>
-                  <div>
-                    <span className="block text-sm font-medium text-gray-700">
-                      Nakit Çıkışlar
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      Ödemeler ve giderler
-                    </span>
-                  </div>
-                </div>
-                <div className="text-base font-medium text-red-600">
-                  -₺{cashData.totalWithdrawals.toFixed(2)}
-                </div>
-              </div>
-
-              <div className="px-6 py-4 flex justify-between items-center bg-gray-50">
-                <div className="flex items-center">
-                  <div className="p-2 rounded-md bg-blue-50 mr-3">
-                    <DollarSign className="text-blue-500 h-5 w-5" />
-                  </div>
-                  <div>
-                    <span className="block text-sm font-medium text-gray-700">
-                      Net Nakit Akışı
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      Toplam değişim
-                    </span>
-                  </div>
-                </div>
-                <div
-                  className={`text-lg font-semibold ${
-                    cashData.totalDeposits - cashData.totalWithdrawals >= 0
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {cashData.totalDeposits - cashData.totalWithdrawals >= 0
-                    ? "+"
-                    : ""}
-                  ₺
-                  {(cashData.totalDeposits - cashData.totalWithdrawals).toFixed(
-                    2
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Kasa sayımı kartı */}
-          {lastClosedSession && (
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100">
-                <h2 className="text-lg font-medium text-gray-800">
-                  Son Kasa Sayımı
-                </h2>
-              </div>
-
-              <div className="px-6 py-5">
-                <div className="flex justify-between items-center mb-5">
-                  <span className="text-sm font-medium text-gray-500">
-                    Tarih
-                  </span>
-                  <span className="text-sm font-medium text-gray-800">
-                    {new Date(
-                      lastClosedSession.closingDate ||
-                        lastClosedSession.openingDate
-                    ).toLocaleDateString("tr-TR")}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center mb-5">
-                  <span className="text-sm font-medium text-gray-500">
-                    Teorik Kasa
-                  </span>
-                  <span className="text-sm font-medium text-gray-800">
-                    ₺
-                    {(
-                      lastClosedSession.openingBalance +
-                      (lastClosedSession.cashSalesTotal || 0) +
-                      (lastClosedSession.cashDepositTotal || 0) -
-                      (lastClosedSession.cashWithdrawalTotal || 0)
-                    ).toFixed(2)}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center mb-5">
-                  <span className="text-sm font-medium text-gray-500">
-                    Sayım Sonucu
-                  </span>
-                  <span className="text-sm font-medium text-gray-800">
-                    {lastClosedSession.countingAmount
-                      ? `₺${lastClosedSession.countingAmount.toFixed(2)}`
-                      : "Sayım yapılmadı"}
-                  </span>
-                </div>
-
-                {lastClosedSession.countingDifference != null && (
-                  <div className="flex justify-between items-center mt-8">
-                    <span className="text-base font-medium text-gray-700">
-                      Sayım Farkı
-                    </span>
-                    <span
-                      className={`px-4 py-2 rounded-full text-sm font-medium ${
-                        lastClosedSession.countingDifference < 0
-                          ? "bg-red-100 text-red-800"
-                          : lastClosedSession.countingDifference > 0
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {lastClosedSession.countingDifference > 0 && "+"}₺
-                      {lastClosedSession.countingDifference.toFixed(2)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Günlük Hareketler Grafiği */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-lg font-medium text-gray-800">
-              Günlük Kasa Hareketleri
-            </h2>
-          </div>
-
-          <div className="p-4">
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={cashData.dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 12 }}
-                    stroke="#94a3b8"
-                  />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                  <Tooltip
-                    formatter={(value) =>
-                      typeof value === "number"
-                        ? `₺${value.toFixed(2)}`
-                        : `${value}`
-                    }
-                    contentStyle={{
-                      borderRadius: "6px",
-                      boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                      border: "none",
-                    }}
-                  />
-                  <Legend iconType="circle" iconSize={8} />
-                  <Line
-                    type="monotone"
-                    dataKey="deposits"
-                    stroke="#22c55e"
-                    strokeWidth={2}
-                    dot={{ stroke: "#22c55e", strokeWidth: 2, r: 4 }}
-                    activeDot={{ stroke: "#22c55e", strokeWidth: 2, r: 6 }}
-                    name="Nakit Girişler"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="withdrawals"
-                    stroke="#ef4444"
-                    strokeWidth={2}
-                    dot={{ stroke: "#ef4444", strokeWidth: 2, r: 4 }}
-                    activeDot={{ stroke: "#ef4444", strokeWidth: 2, r: 6 }}
-                    name="Nakit Çıkışlar"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="veresiye"
-                    stroke="#a855f7"
-                    strokeWidth={2}
-                    dot={{ stroke: "#a855f7", strokeWidth: 2, r: 4 }}
-                    activeDot={{ stroke: "#a855f7", strokeWidth: 2, r: 6 }}
-                    name="Veresiye"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="total"
-                    stroke="#3b82f6"
-                    strokeWidth={2}
-                    dot={{ stroke: "#3b82f6", strokeWidth: 2, r: 4 }}
-                    activeDot={{ stroke: "#3b82f6", strokeWidth: 2, r: 6 }}
-                    name="Net Değişim"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-
-        {/* Kapanmış Kasa Oturumları */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-            <h2 className="text-lg font-medium text-gray-800">
-              Son Kapatılan Kasalar
-            </h2>
-            <span className="text-sm text-blue-600 cursor-pointer">
-              Tümünü Gör
-            </span>
-          </div>
-          {!sortedClosedSessions.length ? (
-            <div className="p-8 text-center text-gray-500">
-              <p>Seçilen dönemde kapalı kasa oturumu bulunmuyor.</p>
-            </div>
-          ) : (
-            <Table
-              data={sortedClosedSessions.slice(0, 5)}
-              columns={closedColumns}
-              enableSorting={true}
-              defaultSortKey="openingDate"
-              defaultSortDirection="desc"
-              loading={isLoading}
-              emptyMessage="Seçilen dönemde kapalı kasa oturumu bulunmuyor."
-            />
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  /** 3) Modern ve Şık Satış Analizi Sekmesi */
-  const renderSalesAnalysisTab = () => {
-    return (
-      <div className="space-y-6">
-        {/* Üst özet kartları */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-indigo-50">
-              <h3 className="text-sm font-medium text-indigo-700">
-                Toplam Satış Adedi
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">
-                {totalSales}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Seçili dönem</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-blue-50">
-              <h3 className="text-sm font-medium text-blue-700">
-                Günlük Ortalama
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">
-                {dailySalesData.length > 0
-                  ? (totalSales / dailySalesData.length).toFixed(1)
-                  : "0"}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Satış / Gün</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-green-50">
-              <h3 className="text-sm font-medium text-green-700">
-                Ortalama Sepet
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">
-                ₺
-                {totalSales > 0
-                  ? (totalRevenue / totalSales).toFixed(2)
-                  : "0,00"}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Tutar / Satış</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-purple-50">
-              <h3 className="text-sm font-medium text-purple-700">
-                Kârlılık Oranı
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">
-                %{profitMargin.toFixed(1)}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Kâr / Ciro</p>
-            </div>
-          </div>
-
-          {/* YENİ - İptal Oranı Kartı */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-red-50">
-              <h3 className="text-sm font-medium text-red-700">İptal Oranı</h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">
-                %{cancelRate.toFixed(1)}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">İptal / Toplam</p>
-            </div>
-          </div>
-
-          {/* YENİ - İade Oranı Kartı */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-orange-50">
-              <h3 className="text-sm font-medium text-orange-700">
-                İade Oranı
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">
-                %{refundRate.toFixed(1)}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">İade / Toplam</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Günlük Satışlar Grafiği */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-lg font-medium text-gray-800">
-              Günlük Satışlar
-            </h2>
-          </div>
-          <div className="p-4">
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={dailySalesData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 12 }}
-                    stroke="#94a3b8"
-                  />
-                  <YAxis
-                    yAxisId="left"
-                    tick={{ fontSize: 12 }}
-                    stroke="#94a3b8"
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    tick={{ fontSize: 12 }}
-                    stroke="#94a3b8"
-                  />
-                  <Tooltip
-                    formatter={(value) =>
-                      typeof value === "number"
-                        ? value % 1 === 0
-                          ? value
-                          : `₺${value.toFixed(2)}`
-                        : `${value}`
-                    }
-                    contentStyle={{
-                      borderRadius: "6px",
-                      boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                      border: "none",
-                    }}
-                  />
-                  <Legend iconType="circle" iconSize={8} />
-                  <Line
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="total"
-                    stroke="#4f46e5"
-                    strokeWidth={2}
-                    dot={{ stroke: "#4f46e5", strokeWidth: 2, r: 4 }}
-                    activeDot={{ stroke: "#4f46e5", strokeWidth: 2, r: 6 }}
-                    name="Brüt Ciro"
-                  />
-                  <Line
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="profit"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    dot={{ stroke: "#10b981", strokeWidth: 2, r: 4 }}
-                    activeDot={{ stroke: "#10b981", strokeWidth: 2, r: 6 }}
-                    name="Net Kâr"
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="count"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                    dot={{ stroke: "#f97316", strokeWidth: 2, r: 4 }}
-                    activeDot={{ stroke: "#f97316", strokeWidth: 2, r: 6 }}
-                    name="Satış Adedi"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-
-        {/* YENİ - İptal ve İade Analizi */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-lg font-medium text-gray-800">
-              İptal ve İade Analizi
-            </h2>
-          </div>
-          <div className="p-4">
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={[
-                    {
-                      name: "İptal",
-                      oran: cancelRate,
-                      adet: Math.round((totalSales * cancelRate) / 100),
-                    },
-                    {
-                      name: "İade",
-                      oran: refundRate,
-                      adet: Math.round((totalSales * refundRate) / 100),
-                    },
-                  ]}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 12 }}
-                    stroke="#94a3b8"
-                  />
-                  <YAxis
-                    yAxisId="left"
-                    label={{
-                      value: "Oran (%)",
-                      angle: -90,
-                      position: "insideLeft",
-                    }}
-                    tick={{ fontSize: 12 }}
-                    stroke="#94a3b8"
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    label={{
-                      value: "Adet",
-                      angle: 90,
-                      position: "insideRight",
-                    }}
-                    tick={{ fontSize: 12 }}
-                    stroke="#94a3b8"
-                  />
-                  <Tooltip
-                    formatter={(value, name) => [
-                      name === "oran"
-                        ? typeof value === "number"
-                          ? `%${value.toFixed(1)}`
-                          : value
-                        : value,
-                      name === "oran" ? "Oran (%)" : "Adet",
-                    ]}
-                    contentStyle={{
-                      borderRadius: "6px",
-                      boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                      border: "none",
-                    }}
-                  />
-                  <Legend />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="oran"
-                    name="Oran (%)"
-                    fill="#ef4444"
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    yAxisId="right"
-                    dataKey="adet"
-                    name="Adet"
-                    fill="#f97316"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-
-        {/* Kategori Grafikleri */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Kategori Dağılımı */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="text-lg font-medium text-gray-800">
-                Kategori Dağılımı
-              </h2>
-            </div>
-            <div className="p-4">
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={90}
-                      innerRadius={45}
-                      paddingAngle={3}
-                      dataKey="profit"
-                      nameKey="name"
-                      label={({ name, percent }) =>
-                        `${name} (${(percent * 100).toFixed(0)}%)`
-                      }
-                    >
-                      {categoryData.map((_, idx) => (
-                        <Cell
-                          key={`cell-${idx}`}
-                          fill={
-                            [
-                              "#4f46e5",
-                              "#10b981",
-                              "#f97316",
-                              "#8b5cf6",
-                              "#06b6d4",
-                              "#ec4899",
-                            ][idx % 6]
-                          }
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value) =>
-                        typeof value === "number"
-                          ? `₺${value.toFixed(2)}`
-                          : `${value}`
-                      }
-                      contentStyle={{
-                        borderRadius: "6px",
-                        boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                        border: "none",
-                      }}
-                    />
-                    <Legend iconType="circle" iconSize={8} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* Kategori Bazlı Kârlılık */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="text-lg font-medium text-gray-800">
-                Kategori Bazlı Kârlılık
-              </h2>
-            </div>
-            <div className="p-4">
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={categoryData} layout="vertical">
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#f1f5f9"
-                      horizontal={false}
-                    />
-                    <XAxis
-                      type="number"
-                      tick={{ fontSize: 12 }}
-                      stroke="#94a3b8"
-                    />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      width={75}
-                      tick={{ fontSize: 12 }}
-                      stroke="#94a3b8"
-                    />
-                    <Tooltip
-                      formatter={(value) =>
-                        typeof value === "number"
-                          ? `₺${value.toFixed(2)}`
-                          : `${value}`
-                      }
-                      contentStyle={{
-                        borderRadius: "6px",
-                        boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                        border: "none",
-                      }}
-                    />
-                    <Legend iconType="circle" iconSize={8} />
-                    <Bar
-                      dataKey="revenue"
-                      name="Ciro"
-                      fill="#4f46e5"
-                      radius={[0, 4, 4, 0]}
-                    />
-                    <Bar
-                      dataKey="profit"
-                      name="Kâr"
-                      fill="#10b981"
-                      radius={[0, 4, 4, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Aylık Satış Trendi - İlerleme çubuğu tarzında */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-lg font-medium text-gray-800">
-              Satış Performansı
-            </h2>
-          </div>
-          <div className="p-6">
-            <div className="space-y-6">
-              {/* Kategori başlıkları ve ilerleme çubukları */}
-              {categoryData.slice(0, 5).map((category, index) => (
-                <div key={index}>
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="text-sm font-medium text-gray-800">
-                      {category.name}
-                    </div>
-                    <div className="text-sm font-medium text-gray-800">
-                      ₺{category.revenue.toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${
-                          (category.revenue /
-                            Math.max(...categoryData.map((c) => c.revenue))) *
-                          100
-                        }%`,
-                        backgroundColor: [
-                          "#4f46e5",
-                          "#10b981",
-                          "#f97316",
-                          "#8b5cf6",
-                          "#06b6d4",
-                          "#ec4899",
-                        ][index % 6],
-                      }}
-                    ></div>
-                  </div>
-                  <div className="flex justify-between items-center mt-1">
-                    <div className="text-xs text-gray-500">
-                      Satış: {category.quantity}
-                    </div>
-                    <div className="text-xs text-green-600">
-                      Kâr: ₺{category.profit.toFixed(2)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  /** 4) Modern ve Şık Ürün Performansı Sekmesi */
-  const renderProductsTab = () => {
-    return (
-      <div className="space-y-6">
-        {/* Üst Özet Kartları */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-indigo-50">
-              <h3 className="text-sm font-medium text-indigo-700">
-                Toplam Ürün
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">
-                {sortedProducts.length}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Satılan farklı ürün</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-blue-50">
-              <h3 className="text-sm font-medium text-blue-700">
-                En Çok Satan
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-lg font-semibold text-gray-800 truncate">
-                {sortedProducts.length > 0 ? sortedProducts[0].name : "-"}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {sortedProducts.length > 0
-                  ? `${sortedProducts[0].quantity} adet`
-                  : "Veri yok"}
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-green-50">
-              <h3 className="text-sm font-medium text-green-700">
-                En Kârlı Ürün
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-lg font-semibold text-gray-800 truncate">
-                {sortedProducts.length > 0
-                  ? [...sortedProducts].sort((a, b) => b.profit - a.profit)[0]
-                      .name
-                  : "-"}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {sortedProducts.length > 0
-                  ? `₺${[...sortedProducts]
-                      .sort((a, b) => b.profit - a.profit)[0]
-                      .profit.toFixed(2)}`
-                  : "Veri yok"}
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-5 py-3 bg-purple-50">
-              <h3 className="text-sm font-medium text-purple-700">
-                Ortalama Fiyat
-              </h3>
-            </div>
-            <div className="px-5 py-4">
-              <div className="text-2xl font-semibold text-gray-800">
-                ₺
-                {sortedProducts.length > 0
-                  ? (
-                      sortedProducts.reduce(
-                        (sum, item) => sum + item.revenue,
-                        0
-                      ) /
-                      sortedProducts.reduce(
-                        (sum, item) => sum + item.quantity,
-                        0
-                      )
-                    ).toFixed(2)
-                  : "0,00"}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Ortalama birim fiyat</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Ürün Performans Tablosu */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-            <h2 className="text-lg font-medium text-gray-800">
-              Ürün Satış Performansı
-            </h2>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">
-                Toplam {sortedProducts.length} ürün
-              </span>
-              <button
-                onClick={() => handleExport("excel", "product")}
-                className="text-sm font-medium flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors"
-              >
-                <Download size={14} />
-                Excel'e Aktar
-              </button>
-            </div>
-          </div>
-          {/* Ürün Tablosu */}
-          <Table
-            data={currentProducts}
-            columns={productColumns}
-            enableSorting={true} // Sıralamayı aktif et
-            defaultSortKey="name" // İlk başta "name" sütunu üzerinden sıralasın
-            defaultSortDirection="asc"
-            loading={isLoading}
-            emptyMessage="Seçilen dönemde satış verisi bulunmuyor."
+  // Seçili sekmeye göre içerik gösterme
+  const renderTabContent = () => {
+    switch (tabKey) {
+      case "overview":
+        return (
+          <OverviewTab
+            totalSales={totalSales}
+            totalRevenue={totalRevenue}
+            netProfit={netProfit}
+            profitMargin={profitMargin}
+            dailySalesData={dailySalesData}
+            categoryData={categoryData}
+            productStats={productStats}
+            lastClosedSession={lastClosedSession}
+            isLoading={isLoading}
+            formatDate={formatDate}
+            setCurrentTab={(tab) => navigate(`/dashboard/${tab}`)}
+            period={period}
           />
-          <div className="px-6 py-4 border-t border-gray-100">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-              className="flex justify-center"
-            />
+        );
+      case "cash":
+        return (
+          <CashTab
+            cashData={cashData}
+            closedSessions={closedSessions}
+            lastClosedSession={lastClosedSession}
+            sortedClosedSessions={sortedClosedSessions}
+            isLoading={isLoading}
+            formatDate={formatDate}
+            handleCashSort={handleCashSort}
+            cashSortConfig={cashSortConfig}
+          />
+        );
+      case "sales":
+        return (
+          <SalesTab
+            totalSales={totalSales}
+            totalRevenue={totalRevenue}
+            netProfit={netProfit}
+            profitMargin={profitMargin}
+            averageBasket={averageBasket}
+            cancelRate={cancelRate}
+            refundRate={refundRate}
+            dailySalesData={dailySalesData}
+            categoryData={categoryData}
+            period={period}
+          />
+        );
+      case "products":
+        return (
+          <ProductsTab
+            productStats={productStats}
+            isLoading={isLoading}
+            handleExport={handleExport}
+          />
+        );
+      default:
+        return (
+          <div className="flex flex-col items-center justify-center p-8 text-gray-500">
+            <div className="text-lg font-medium">Sekme bulunamadı</div>
+            <p className="mt-2">Lütfen geçerli bir sekme seçin</p>
           </div>
-        </div>
-
-        {/* Performans Grafikleri */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Top 5 Ürün Barchart */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="text-lg font-medium text-gray-800">
-                En Çok Satan 5 Ürün
-              </h2>
-            </div>
-            <div className="p-4">
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={sortedProducts.slice(0, 5)}
-                    layout="vertical"
-                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#f1f5f9"
-                      horizontal={false}
-                    />
-                    <XAxis
-                      type="number"
-                      tick={{ fontSize: 12 }}
-                      stroke="#94a3b8"
-                    />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      tick={{ fontSize: 12 }}
-                      stroke="#94a3b8"
-                      width={150}
-                    />
-                    <Tooltip
-                      formatter={(value) =>
-                        typeof value === "number"
-                          ? value % 1 === 0
-                            ? value
-                            : `₺${value.toFixed(2)}`
-                          : `${value}`
-                      }
-                      contentStyle={{
-                        borderRadius: "6px",
-                        boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                        border: "none",
-                      }}
-                    />
-                    <Legend iconType="circle" iconSize={8} />
-                    <Bar
-                      dataKey="quantity"
-                      name="Adet"
-                      fill="#4f46e5"
-                      radius={[0, 4, 4, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* Top 5 Kârlı Ürün */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="text-lg font-medium text-gray-800">
-                En Kârlı 5 Ürün
-              </h2>
-            </div>
-            <div className="p-4">
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={[...sortedProducts]
-                      .sort((a, b) => b.profit - a.profit)
-                      .slice(0, 5)}
-                    layout="vertical"
-                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#f1f5f9"
-                      horizontal={false}
-                    />
-                    <XAxis
-                      type="number"
-                      tick={{ fontSize: 12 }}
-                      stroke="#94a3b8"
-                    />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      tick={{ fontSize: 12 }}
-                      stroke="#94a3b8"
-                      width={150}
-                    />
-                    <Tooltip
-                      formatter={(value) =>
-                        typeof value === "number"
-                          ? `₺${value.toFixed(2)}`
-                          : `${value}`
-                      }
-                      contentStyle={{
-                        borderRadius: "6px",
-                        boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                        border: "none",
-                      }}
-                    />
-                    <Legend iconType="circle" iconSize={8} />
-                    <Bar
-                      dataKey="profit"
-                      name="Kâr"
-                      fill="#10b981"
-                      radius={[0, 4, 4, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+        );
+    }
   };
 
   return (
-    <PageLayout>
+    <div className="dashboard-container">
       {/* Tarih Filtreleme */}
       {renderDateFilter()}
 
-      {/* Sekme Düğmeleri */}
-      {renderTabButtons()}
-
       {/* Seçilen Sekmenin İçeriği */}
-      {currentTab === "overview" && renderOverviewTab()}
-      {currentTab === "cash" && renderCashTab()}
-      {currentTab === "sales" && renderSalesAnalysisTab()}
-      {currentTab === "products" && renderProductsTab()}
-    </PageLayout>
+      <div className="transition-all duration-300 ease-in-out">
+        {renderTabContent()}
+      </div>
+    </div>
   );
 };
 

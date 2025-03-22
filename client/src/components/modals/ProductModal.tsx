@@ -141,7 +141,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                       onChange={(e) =>
                         setForm((prev) => ({ ...prev, name: e.target.value }))
                       }
-                      className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       placeholder="Ürün adı girin"
                       required
                     />
@@ -156,7 +156,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                         onChange={(e) =>
                           setForm((prev) => ({ ...prev, category: e.target.value }))
                         }
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         required
                       >
                         {categories.map((category) => (
@@ -176,7 +176,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                         onChange={(e) =>
                           setForm((prev) => ({ ...prev, barcode: e.target.value }))
                         }
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         placeholder="Barkod girin"
                         required
                       />
@@ -199,10 +199,11 @@ const ProductModal: React.FC<ProductModalProps> = ({
                           type="number"
                           step="0.01"
                           value={form.purchasePrice}
+                          onWheel={(e) => e.currentTarget.blur()}
                           onChange={(e) =>
                             setForm((prev) => ({ ...prev, purchasePrice: e.target.value }))
                           }
-                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           placeholder="0.00"
                           required
                         />
@@ -223,7 +224,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                             vatRate: parseInt(e.target.value) as VatRate,
                           }))
                         }
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         required
                       >
                         {VAT_RATES.map((rate) => (
@@ -244,10 +245,11 @@ const ProductModal: React.FC<ProductModalProps> = ({
                         type="number"
                         step="0.01"
                         value={form.priceWithVat}
+                        onWheel={(e) => e.currentTarget.blur()}
                         onChange={(e) =>
                           setForm((prev) => ({ ...prev, priceWithVat: e.target.value }))
                         }
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         placeholder="0.00"
                         required
                       />
@@ -269,10 +271,11 @@ const ProductModal: React.FC<ProductModalProps> = ({
                   <input
                     type="number"
                     value={form.stock}
+                    onWheel={(e) => e.currentTarget.blur()}
                     onChange={(e) =>
                       setForm((prev) => ({ ...prev, stock: e.target.value }))
                     }
-                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     placeholder="0"
                     min="0"
                     required
@@ -306,7 +309,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                         onChange={(e) =>
                           setForm((prev) => ({ ...prev, imageUrl: e.target.value }))
                         }
-                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         placeholder="URL girin veya dosya seçin"
                       />
                     </div>
@@ -344,7 +347,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
             </button>
             <button
               onClick={handleSubmit}
-              className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
             >
               {product ? "Güncelle" : "Kaydet"}
             </button>

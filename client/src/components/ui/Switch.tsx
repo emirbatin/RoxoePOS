@@ -31,9 +31,9 @@ const Switch: React.FC<SwitchProps> = ({
         transition-colors 
         focus:outline-none 
         focus:ring-2 
-        focus:ring-primary-500 
+        focus:ring-indigo-500 
         focus:ring-offset-2 
-        ${checked ? 'bg-primary-600' : 'bg-gray-200'} 
+        ${checked ? 'bg-indigo-600' : 'bg-gray-200'} 
         ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`
       }
     >

@@ -27,7 +27,7 @@ const NotificationPopup: React.FC<NotificationPopupProps> = ({ isOpen, onClose }
           </div>
           <div>
             <button 
-              className="text-sm text-gray-500 hover:text-primary-600"
+              className="text-sm text-gray-500 hover:text-indigo-600"
               onClick={onClose}
             >
               <X size={18} />
@@ -61,7 +61,7 @@ const NotificationPopup: React.FC<NotificationPopupProps> = ({ isOpen, onClose }
                     })}
                   </p>
                 </div>
-                <div className={`shrink-0 p-1 rounded ${notification.isRead ? 'bg-gray-300' : 'bg-primary-500'} w-2 h-2`}></div>
+                <div className={`shrink-0 p-1 rounded ${notification.isRead ? 'bg-gray-300' : 'bg-indigo-500'} w-2 h-2`}></div>
               </div>
             </div>
           ))}

@@ -105,7 +105,7 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
           onDoubleClick={() => !group.isDefault && handleDoubleClick(group)}
           className={`relative group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all
             ${activeGroupId === group.id
-              ? 'bg-primary-50 text-primary-600'
+              ? 'bg-indigo-50 text-indigo-600'
               : 'hover:bg-gray-50 text-gray-700'
             }
             ${shakingGroupId === group.id ? 'animate-shake' : ''}
@@ -151,7 +151,7 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
       ))}
       <button
         onClick={handleAddGroupClick}
-        className="p-2 rounded-lg hover:bg-gray-50 text-primary-600"
+        className="p-2 rounded-lg hover:bg-gray-50 text-indigo-600"
         title="Yeni Grup"
         id="addGroupButton" // ID ekleyerek DOM'da kolay erişim sağlıyoruz
       >

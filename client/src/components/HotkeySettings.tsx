@@ -316,7 +316,7 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
       <div className="flex items-center gap-2 mb-6">
-        <Keyboard className="text-primary-600" size={24} />
+        <Keyboard className="text-indigo-600" size={24} />
         <h2 className="text-lg font-semibold">Klavye Kısayolları</h2>
       </div>
 
@@ -364,7 +364,7 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
                 </div>
                 <button
                   onClick={() => startEditing(hotkey.id)}
-                  className="px-3 py-1.5 text-sm text-primary-600 hover:text-primary-700 transition-colors"
+                  className="px-3 py-1.5 text-sm text-indigo-600 hover:text-indigo-700 transition-colors"
                 >
                   Değiştir
                 </button>
@@ -422,7 +422,7 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
                 {hotkey.isEditable && (
                   <button
                     onClick={() => startEditingSpecial(hotkey.id)}
-                    className="px-3 py-1.5 text-sm text-primary-600 hover:text-primary-700 transition-colors"
+                    className="px-3 py-1.5 text-sm text-indigo-600 hover:text-indigo-700 transition-colors"
                   >
                     Değiştir
                   </button>
@@ -450,7 +450,7 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
         </button>
         <button
           onClick={saveChanges}
-          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
         >
           Değişiklikleri Kaydet
         </button>

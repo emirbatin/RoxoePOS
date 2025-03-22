@@ -48,7 +48,7 @@ interface PaginationProps {
                   onClick={() => onPageChange(number)}
                   className={`px-3 py-1 rounded-lg text-sm ${
                     currentPage === number
-                      ? "bg-primary-100 text-primary-600 font-medium"
+                      ? "bg-indigo-100 text-indigo-600 font-medium"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                   }`}
                 >

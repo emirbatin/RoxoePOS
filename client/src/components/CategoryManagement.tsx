@@ -175,7 +175,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
               {!showForm && (
                 <button
                   onClick={() => setShowForm(true)}
-                  className="mt-4 flex items-center gap-2 px-3 py-2 text-sm bg-primary-50 text-primary-600 rounded-lg hover:bg-primary-100 w-full justify-center"
+                  className="mt-4 flex items-center gap-2 px-3 py-2 text-sm bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 w-full justify-center"
                 >
                   <Plus size={16} />
                   Yeni Kategori
@@ -194,7 +194,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                       onChange={(e) =>
                         setNewCategory({ ...newCategory, name: e.target.value })
                       }
-                      className="mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="mt-1 block w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       placeholder="Kategori adı girin..."
                     />
                   </div>
@@ -214,7 +214,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                           className={`w-10 h-10 flex items-center justify-center border rounded-lg text-xl
                             ${
                               newCategory.icon === emoji
-                                ? "border-primary-500 bg-primary-50"
+                                ? "border-indigo-500 bg-indigo-50"
                                 : "hover:bg-gray-50"
                             }`}
                         >
@@ -245,7 +245,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                     >
                       {editingCategory ? "Güncelle" : "Ekle"}
                     </button>

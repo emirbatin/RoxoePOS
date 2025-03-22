@@ -143,8 +143,9 @@ const StockManagement: React.FC<StockManagementProps> = ({
                 min="1"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Miktar giriniz"
+                onWheel={(e) => e.currentTarget.blur()}
               />
             </div>
 
@@ -161,7 +162,7 @@ const StockManagement: React.FC<StockManagementProps> = ({
                     onClick={() => setReason(commonReason)}
                     className={`px-3 py-1 rounded-full text-sm
                       ${reason === commonReason
-                        ? 'bg-primary-50 text-primary-600 border-primary-200 border'
+                        ? 'bg-indigo-50 text-indigo-600 border-indigo-200 border'
                         : 'border hover:bg-gray-50'
                       }`}
                   >
@@ -180,7 +181,7 @@ const StockManagement: React.FC<StockManagementProps> = ({
                 type="text"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Stok hareketi açıklaması giriniz"
               />
             </div>
@@ -204,7 +205,7 @@ const StockManagement: React.FC<StockManagementProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
               >
                 Kaydet
               </button>

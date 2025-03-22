@@ -394,7 +394,7 @@ const ProductsPage: React.FC = () => {
               onClick={() => setSelectedCategory("Tümü")}
               className={`px-3 py-1.5 rounded-lg ${
                 selectedCategory === "Tümü"
-                  ? "bg-primary-50 text-primary-600"
+                  ? "bg-indigo-50 text-indigo-600"
                   : "text-gray-600 hover:bg-gray-50"
               }`}
             >
@@ -406,7 +406,7 @@ const ProductsPage: React.FC = () => {
                 onClick={() => setSelectedCategory(category.name)}
                 className={`px-3 py-1.5 rounded-lg ${
                   selectedCategory === category.name
-                    ? "bg-primary-50 text-primary-600"
+                    ? "bg-indigo-50 text-indigo-600"
                     : "text-gray-600 hover:bg-gray-50"
                 }`}
               >
@@ -417,7 +417,7 @@ const ProductsPage: React.FC = () => {
             {/* Kategori Ekle Butonu */}
             <button
               onClick={() => setShowCategoryManagement(true)}
-              className="px-3 py-1.5 rounded-lg bg-primary-50 text-primary-600 hover:bg-primary-100"
+              className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
               title="Kategori Ekle"
             >
               <Plus size={18} />
@@ -485,9 +485,9 @@ const ProductsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Ürün Tablosu */}
-      <div className="bg-white rounded-lg shadow-sm">
-        <div className="p-4 border-b">
+      {/* Ürün Tablosu - Düzeltilmiş versiyon */}
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="p-4 border-b w-full">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {filteredProducts.length > 0 && (
@@ -504,7 +504,7 @@ const ProductsPage: React.FC = () => {
                         filteredProducts.length && (
                         <button
                           onClick={() => handleSelectAll(true)}
-                          className="text-primary-600 hover:text-primary-700"
+                          className="text-indigo-600 hover:text-indigo-700"
                         >
                           Tümünü Seç ({filteredProducts.length})
                         </button>
@@ -531,18 +531,27 @@ const ProductsPage: React.FC = () => {
           </div>
         </div>
 
-        <Table<Product, number>
-          data={currentProducts}
-          columns={columns}
-          selectable
-          selected={selectedProductIds}
-          onSelectAll={handleSelectAll}
-          allSelected={selectedProductIds.length === filteredProducts.length}
-          onSelect={(id, checked) => handleSelectProduct(id, checked)}
-          idField="id"
-          loading={loading}
-          emptyMessage="Ürün bulunamadı"
-        />
+        <div className="overflow-hidden w-full">
+          <Table<Product, number>
+            data={currentProducts}
+            columns={columns}
+            selectable
+            selected={selectedProductIds}
+            onSelectAll={handleSelectAll}
+            allSelected={selectedProductIds.length === filteredProducts.length}
+            onSelect={(id, checked) => handleSelectProduct(id, checked)}
+            idField="id"
+            loading={loading}
+            emptyMessage="Ürün bulunamadı"
+            className="border-none rounded-none"
+            showTotals={true}
+            totalColumns={{name:"count",stock: "sum", purchasePrice: "sum", salePrice: "sum", priceWithVat: "sum"}}
+            totalData={filteredProducts}
+            enableSorting={true}    
+            defaultSortKey="name"        
+            defaultSortDirection="asc"
+          />
+        </div>
 
         <Pagination
           currentPage={currentPage}
