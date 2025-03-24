@@ -429,6 +429,52 @@ const CreditPage: React.FC = () => {
         </div>
       ) : (
         <div className="bg-white rounded-lg shadow-sm">
+          {/* Toplam müşteri sayısı ve filtreleme bilgisini gösteren başlık */}
+          <div className="p-4 border-b w-full">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {filteredCustomers.length > 0 && (
+                  <div className="text-sm text-gray-600">
+                    {`Toplam ${filteredCustomers.length} müşteri`}
+                  </div>
+                )}
+              </div>
+              {/* Filtre bilgilerinin gösterilmesi */}
+              {(searchQuery ||
+                filters.hasOverdue ||
+                filters.hasDebt ||
+                filters.nearLimit) && (
+                <div className="text-sm text-gray-500">
+                  Filtreleniyor:{" "}
+                  {searchQuery && (
+                    <>
+                      <span className="text-gray-700">"{searchQuery}"</span>
+                      {(filters.hasOverdue ||
+                        filters.hasDebt ||
+                        filters.nearLimit) &&
+                        " + "}
+                    </>
+                  )}
+                  {filters.hasOverdue && (
+                    <span className="text-gray-700">
+                      Vadesi Geçenler
+                      {(filters.hasDebt || filters.nearLimit) && ", "}
+                    </span>
+                  )}
+                  {filters.hasDebt && (
+                    <span className="text-gray-700">
+                      Borcu Olanlar
+                      {filters.nearLimit && ", "}
+                    </span>
+                  )}
+                  {filters.nearLimit && (
+                    <span className="text-gray-700">Limiti Dolmak Üzere</span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           <CustomerList
             customers={currentCustomers}
             summaries={summaries}

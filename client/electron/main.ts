@@ -1,13 +1,15 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-import LicenseManager from './license';
-import { autoUpdater } from 'electron-updater';
-import log from 'electron-log';
+import { app, BrowserWindow, Menu, dialog, ipcMain } from "electron";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import LicenseManager from "./license";
+import { autoUpdater } from "electron-updater";
+import log from "electron-log";
+import { backupManager, FileUtils } from "../src/backup";
+import fs from 'fs';
 
 // Log ayarları
-log.transports.file.level = 'info';
+log.transports.file.level = "info";
 autoUpdater.logger = log;
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
@@ -20,37 +22,38 @@ autoUpdater.allowPrerelease = false;
 let isUpdating = false;
 let updateSplashWindow: BrowserWindow | null = null;
 
-// GitHub token ayarları - private repo veya API rate limit aşımı durumlarında gerekli
-// Bu token'ı bir ortam değişkeni olarak (process.env.GH_TOKEN) ayarlamanız güvenlik için önemlidir
+// GitHub token ayarları
 const githubToken = process.env.GH_TOKEN;
 
 if (githubToken) {
   autoUpdater.setFeedURL({
-    provider: 'github',
-    owner: 'emirbatin',
-    repo: 'RoxoePOS',
-    token: githubToken
+    provider: "github",
+    owner: "emirbatin",
+    repo: "RoxoePOS",
+    token: githubToken,
   });
-  log.info('GitHub token ile güncelleme ayarları yapılandırıldı');
+  log.info("GitHub token ile güncelleme ayarları yapılandırıldı");
 } else {
-  log.info('GitHub token bulunamadı, varsayılan güncelleme ayarları kullanılıyor');
+  log.info(
+    "GitHub token bulunamadı, varsayılan güncelleme ayarları kullanılıyor"
+  );
 }
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-process.env.APP_ROOT = path.join(__dirname, '..');
-export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'];
-export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron');
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist');
+process.env.APP_ROOT = path.join(__dirname, "..");
+export const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
+export const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
+export const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
-  ? path.join(process.env.APP_ROOT, 'public')
+  ? path.join(process.env.APP_ROOT, "public")
   : RENDERER_DIST;
 let win: BrowserWindow | null;
 
 new LicenseManager();
 
-// YENİ: Pencere başlığını güncellemek için IPC dinleyicisi
-ipcMain.on('update-window-title', (_, newTitle) => {
+// Pencere başlığını güncellemek için IPC dinleyicisi
+ipcMain.on("update-window-title", (_, newTitle) => {
   if (win && !win.isDestroyed()) {
     win.setTitle(newTitle);
     log.info(`Pencere başlığı güncellendi: ${newTitle}`);
@@ -59,7 +62,6 @@ ipcMain.on('update-window-title', (_, newTitle) => {
 
 // Güncelleme yükleme ekranını oluştur
 function createUpdateSplash() {
-  // Yeni bir pencere oluştur, sadece güncelleme durumu için
   updateSplashWindow = new BrowserWindow({
     width: 400,
     height: 200,
@@ -73,7 +75,6 @@ function createUpdateSplash() {
     },
   });
 
-  // HTML içeriği oluştur
   const htmlContent = `
   <!DOCTYPE html>
   <html>
@@ -128,12 +129,12 @@ function createUpdateSplash() {
   </html>
   `;
 
-  // HTML içeriğini yükle
   if (updateSplashWindow) {
-    updateSplashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
-    
-    // Pencereyi göster
-    updateSplashWindow.once('ready-to-show', () => {
+    updateSplashWindow.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`
+    );
+
+    updateSplashWindow.once("ready-to-show", () => {
       if (updateSplashWindow) {
         updateSplashWindow.show();
       }
@@ -146,61 +147,70 @@ function createWindow() {
     width: 1280,
     height: 720,
     fullscreen: false,
-    icon: path.join(process.env.VITE_PUBLIC, process.platform === 'darwin' ? 'icon.icns' : 'icon.ico'),
+    icon: path.join(
+      process.env.VITE_PUBLIC,
+      process.platform === "darwin" ? "icon.icns" : "icon.ico"
+    ),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.mjs'),
-      devTools: !app.isPackaged, // Sadece geliştirme modunda devTools'u etkinleştir
+      preload: path.join(__dirname, "preload.mjs"),
+      devTools: !app.isPackaged,
     },
   });
 
-  win.webContents.on('did-finish-load', () => {
-    win?.webContents.send('main-process-message', new Date().toLocaleString());
-    
-    // Uygulamanın yüklenmesi tamamlandığında güncelleme kontrolü yap
+  win.webContents.on("did-finish-load", () => {
+    win?.webContents.send("main-process-message", new Date().toLocaleString());
+
     if (app.isPackaged) {
       autoUpdater.checkForUpdatesAndNotify();
-      log.info('Güncelleme kontrolü başlatıldı...');
+      log.info("Güncelleme kontrolü başlatıldı...");
     }
   });
 
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL);
   } else {
-    win.loadFile(path.join(RENDERER_DIST, 'index.html'));
+    win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
 
-  // DevTools'u sadece geliştirme modunda aç
   if (!app.isPackaged) {
-    win.webContents.once('did-finish-load', () => {
+    win.webContents.once("did-finish-load", () => {
       win?.webContents.openDevTools();
     });
   }
 
-  // Menüyü sadece geliştirme modunda göster
   if (!app.isPackaged) {
     const menu = Menu.buildFromTemplate([
       {
-        label: 'Developer',
+        label: "Developer",
         submenu: [
           {
-            label: 'Toggle DevTools',
-            accelerator: 'Ctrl+Shift+I',
+            label: "Toggle DevTools",
+            accelerator: "Ctrl+Shift+I",
             click: () => {
               win?.webContents.toggleDevTools();
             },
           },
           {
-            label: 'Check for Updates',
+            label: "Check for Updates",
             click: () => {
               autoUpdater.checkForUpdatesAndNotify();
-            }
-          }
+            },
+          },
+          {
+            label: "Create Backup",
+            click: () => {
+              if (win) {
+                win.webContents.send("trigger-backup", {
+                  description: "Manuel Geliştirici Yedeklemesi",
+                });
+              }
+            },
+          },
         ],
       },
     ]);
     Menu.setApplicationMenu(menu);
   } else {
-    // Üretim modunda menüyü gizle
     Menu.setApplicationMenu(null);
   }
 }
@@ -209,183 +219,401 @@ let lastProgressTime = Date.now();
 let lastProgressBytes = 0;
 let downloadSpeed = 0;
 
-
-autoUpdater.on('checking-for-update', () => {
-  log.info('Güncellemeler kontrol ediliyor...');
+// Güncelleme olayları
+autoUpdater.on("checking-for-update", () => {
+  log.info("Güncellemeler kontrol ediliyor...");
   if (win) {
-    win.webContents.send('update-status', { status: 'checking' });
+    win.webContents.send("update-status", { status: "checking" });
   }
 });
 
-autoUpdater.on('update-available', (info) => {
-  log.info('Güncelleme mevcut:', info);
+autoUpdater.on("update-available", (info) => {
+  log.info("Güncelleme mevcut:", info);
   if (win) {
-    win.webContents.send('update-available', info);
-    win.webContents.send('update-status', { 
-      status: 'available', 
-      version: info.version 
+    win.webContents.send("update-available", info);
+    win.webContents.send("update-status", {
+      status: "available",
+      version: info.version,
     });
-    
+
     dialog.showMessageBox({
-      type: 'info',
-      title: 'Güncelleme Mevcut',
+      type: "info",
+      title: "Güncelleme Mevcut",
       message: `Yeni sürüm (${info.version}) mevcut. İndiriliyor...`,
-      buttons: ['Tamam']
+      buttons: ["Tamam"],
     });
   }
-  
-  // İlerleme takibi için değişkenleri sıfırlayalım
+
   lastProgressTime = Date.now();
   lastProgressBytes = 0;
   downloadSpeed = 0;
 });
 
-autoUpdater.on('download-progress', (progressObj) => {
+autoUpdater.on("download-progress", (progressObj) => {
   const currentTime = Date.now();
-  const elapsedTime = (currentTime - lastProgressTime) / 1000; // saniye cinsinden
-  
-  // Eğer yeterli zaman geçtiyse indirme hızını hesapla (titreşimi önlemek için)
+  const elapsedTime = (currentTime - lastProgressTime) / 1000;
+
   if (elapsedTime > 0.5) {
-    const bytesPerSecond = (progressObj.transferred - lastProgressBytes) / elapsedTime;
-    downloadSpeed = bytesPerSecond / (1024 * 1024); // MB/s cinsinden
-    
+    const bytesPerSecond =
+      (progressObj.transferred - lastProgressBytes) / elapsedTime;
+    downloadSpeed = bytesPerSecond / (1024 * 1024);
+
     lastProgressTime = currentTime;
     lastProgressBytes = progressObj.transferred;
   }
-  
-  // İlerleme detaylarını gönder
+
   const progressDetails = {
     percent: progressObj.percent || 0,
     transferred: progressObj.transferred || 0,
     total: progressObj.total || 0,
-    speed: downloadSpeed.toFixed(2), // MB/s
-    remaining: (progressObj.total - progressObj.transferred) || 0
+    speed: downloadSpeed.toFixed(2),
+    remaining: progressObj.total - progressObj.transferred || 0,
   };
-  
-  log.info(`İndirme ilerlemesi: ${progressDetails.percent.toFixed(1)}%, ${progressDetails.speed} MB/s`);
-  
+
+  log.info(
+    `İndirme ilerlemesi: ${progressDetails.percent.toFixed(1)}%, ${
+      progressDetails.speed
+    } MB/s`
+  );
+
   if (win) {
-    win.webContents.send('update-progress', progressDetails);
-    win.webContents.send('update-status', { 
-      status: 'downloading', 
-      progress: progressDetails 
+    win.webContents.send("update-progress", progressDetails);
+    win.webContents.send("update-status", {
+      status: "downloading",
+      progress: progressDetails,
     });
   }
 });
 
-autoUpdater.on('update-downloaded', (info) => {
-  log.info('Güncelleme indirildi:', info);
+autoUpdater.on("update-downloaded", (info) => {
+  log.info("Güncelleme indirildi:", info);
   if (win) {
-    win.webContents.send('update-downloaded', info);
-    win.webContents.send('update-status', { 
-      status: 'downloaded', 
-      version: info.version 
+    win.webContents.send("update-downloaded", info);
+    win.webContents.send("update-status", {
+      status: "downloaded",
+      version: info.version,
     });
-    
-    dialog.showMessageBox({
-      type: 'info',
-      title: 'Güncelleme Hazır',
-      message: `Yeni sürüm (${info.version}) indirildi. Uygulamayı yeniden başlatarak güncellemeleri yükleyebilirsiniz.`,
-      buttons: ['Şimdi Güncelle', 'Daha Sonra'],
-      defaultId: 0
-    }).then((returnValue) => {
-      if (returnValue.response === 0) {
-        // Güncelleme durumunu işaretle
-        isUpdating = true;
-        
-        // Güncelleme splash ekranı göster
-        createUpdateSplash();
-        
-        // Ana pencereyi gizle
-        if (win) {
-          win.hide();
+
+    dialog
+      .showMessageBox({
+        type: "info",
+        title: "Güncelleme Hazır",
+        message: `Yeni sürüm (${info.version}) indirildi. Uygulamayı yeniden başlatarak güncellemeleri yükleyebilirsiniz.`,
+        buttons: ["Şimdi Güncelle", "Daha Sonra"],
+        defaultId: 0,
+      })
+      .then((returnValue) => {
+        if (returnValue.response === 0) {
+          isUpdating = true;
+          createUpdateSplash();
+
+          if (win) {
+            win.hide();
+          }
+
+          setTimeout(() => {
+            autoUpdater.quitAndInstall(false, true);
+          }, 1000);
         }
-        
-        // Kısa bir gecikme sonra güncelleme işlemini başlat
-        setTimeout(() => {
-          // Sessiz modda güncelleme başlat (yeniden başlatır, sessiz mod)
-          autoUpdater.quitAndInstall(false, true);
-        }, 1000);
-      }
-    });
+      });
   }
 });
 
-autoUpdater.on('error', (err) => {
-  log.error('Güncelleme hatası:', err);
+autoUpdater.on("error", (err) => {
+  log.error("Güncelleme hatası:", err);
   if (win) {
-    win.webContents.send('update-error', err);
-    win.webContents.send('update-status', { 
-      status: 'error', 
-      error: err.message 
+    win.webContents.send("update-error", err);
+    win.webContents.send("update-status", {
+      status: "error",
+      error: err.message,
     });
   }
 });
 
 // Manuel güncelleme kontrolü için IPC
-ipcMain.on('check-for-updates', () => {
+ipcMain.on("check-for-updates", () => {
   if (app.isPackaged) {
     autoUpdater.checkForUpdatesAndNotify();
   } else {
-    log.info('Geliştirme modunda güncelleme kontrolü atlandı.');
-    win?.webContents.send('update-message', 'Geliştirme modunda güncelleme kontrolü atlandı.');
+    log.info("Geliştirme modunda güncelleme kontrolü atlandı.");
+    win?.webContents.send(
+      "update-message",
+      "Geliştirme modunda güncelleme kontrolü atlandı."
+    );
   }
 });
 
 // Güncellemeyi uygulama ve yeniden başlatma
-ipcMain.on('quit-and-install', () => {
-  log.info('Kullanıcı güncelleme ve yeniden başlatma talep etti');
-  
-  // Güncelleme durumunu işaretle
+ipcMain.on("quit-and-install", () => {
+  log.info("Kullanıcı güncelleme ve yeniden başlatma talep etti");
+
   isUpdating = true;
-  
-  // Güncelleme splash ekranı göster
   createUpdateSplash();
-  
-  // Ana pencereyi gizle
+
   if (win) {
     win.hide();
   }
-  
-  // Kısa bir gecikme sonra güncelleme işlemini başlat
+
   setTimeout(() => {
     autoUpdater.quitAndInstall(false, true);
   }, 1000);
+});
+
+// YEDEKLEME SİSTEMİ IPC İŞLEYİCİLERİ - GÜNCELLENMİŞ KISIM
+// Yedekleme oluşturma fonksiyonu
+async function handleBackupCreation(
+  event: Electron.IpcMainInvokeEvent,
+  options: any
+) {
+  try {
+    log.info("Renderer üzerinden yedekleme isteği alındı:", options);
+
+    const window = BrowserWindow.fromWebContents(event.sender);
+
+    // Progress callback'i main süreçte tanımla
+    const onProgress = (stage: string, progress: number) => {
+      if (window && !window.isDestroyed()) {
+        window.webContents.send("backup-progress", { stage, progress });
+      }
+    };
+
+    // Renderer process'ten IndexedDB verisi al
+    log.info("Main: Veritabanı dışa aktarma isteği gönderiliyor...");
+
+    // Renderer'a mesaj gönderip cevabını bekle
+    return new Promise((resolve, reject) => {
+      // Dışa aktarma sonucu için bir kerelik dinleyici
+      ipcMain.once("db-export-response", async (_event, response) => {
+        try {
+          if (!response.success) {
+            reject(new Error(response.error || "Dışa aktarma başarısız"));
+            return;
+          }
+
+          log.info("Main: Veritabanı başarıyla dışa aktarıldı");
+
+          // BackupManager'ı kullanarak yedeği oluştur
+          const cleanOptions = {
+            description: options?.description || "Manuel Yedekleme",
+            backupType: options?.backupType || "full",
+            onProgress,
+          };
+
+          log.info("Yedekleme başlatılıyor:", cleanOptions);
+
+          const result = await backupManager.createBackupWithData(
+            response.data,
+            cleanOptions
+          );
+
+          log.info(
+            "Yedekleme sonucu:",
+            result.success ? "Başarılı" : "Başarısız"
+          );
+          resolve(result);
+        } catch (error: any) {
+          log.error("Yedekleme işlemi hatası:", error);
+          reject(error);
+        }
+      });
+
+      // Renderer'a dışa aktarma isteği gönder
+      event.sender.send("db-export-request");
+    });
+  } catch (error: any) {
+    log.error("Main: Yedekleme bridge hatası:", error);
+    return {
+      success: false,
+      backupId: "",
+      metadata: {},
+      error: error.message || "Bilinmeyen hata",
+    };
+  }
+}
+
+// Geri yükleme fonksiyonu
+async function handleBackupRestoration(event: Electron.IpcMainInvokeEvent, content: string, options: any) {
+  try {
+    log.info('Renderer üzerinden geri yükleme isteği alındı');
+    
+    const window = BrowserWindow.fromWebContents(event.sender);
+    
+    // Progress callback'i main süreçte tanımla
+    const onProgress = (stage: string, progress: number) => {
+      if (window && !window.isDestroyed()) {
+        window.webContents.send('backup-progress', { stage, progress });
+      }
+    };
+    
+    // Yedek içeriğini deserialize et ve verileri al
+    const deserializedData = await backupManager.deserializeBackup(content);
+    
+    if (!deserializedData.isValid || !deserializedData.data) {
+      throw new Error(deserializedData.error || 'Geçersiz yedek dosyası');
+    }
+    
+    // JSON verisini string'e dönüştür
+    const jsonString = JSON.stringify(deserializedData.data);
+    
+    // Base64'e kodla (daha güvenli aktarım için)
+    const base64Data = Buffer.from(jsonString).toString('base64');
+    
+    log.info('Main: Veritabanı içe aktarma isteği gönderiliyor...');
+    
+    // Renderer'a mesaj gönderip cevabını bekle
+    return new Promise((resolve, reject) => {
+      // İçe aktarma sonucu için bir kerelik dinleyici
+      ipcMain.once('db-import-response', async (_event, response) => {
+        try {
+          if (!response.success) {
+            reject(new Error(response.error || 'İçe aktarma başarısız'));
+            return;
+          }
+          
+          log.info('Main: Veritabanı başarıyla içe aktarıldı');
+          
+          resolve({
+            success: true,
+            metadata: deserializedData.metadata
+          });
+        } catch (error: any) {
+          log.error('Geri yükleme işlemi hatası:', error);
+          reject(error);
+        }
+      });
+      
+      try {
+        // Base64 kodlanmış veriyi gönder
+        event.sender.send('db-import-base64', base64Data);
+      } catch (error: any) {
+        log.error('Veri gönderme hatası:', error);
+        reject(new Error(`Veri gönderme hatası: ${error.message}`));
+      }
+    });
+  } catch (error: any) {
+    log.error('Main: Geri yükleme bridge hatası:', error);
+    return {
+      success: false,
+      error: error.message || 'Bilinmeyen hata'
+    };
+  }
+}
+
+// Yeni IPC handler'ları kaydet
+ipcMain.handle("create-backup-bridge", handleBackupCreation);
+ipcMain.handle("restore-backup-bridge", handleBackupRestoration);
+
+// Yedek oluşturma işleyicisi - ESKİ, KULLANIM DIŞI
+ipcMain.handle("create-backup", async (event, options) => {
+  try {
+    log.warn(
+      "Eski create-backup API'si kullanılıyor. create-backup-bridge kullanın."
+    );
+    return await handleBackupCreation(event, options);
+  } catch (error: any) {
+    log.error("Yedekleme hatası (eski API):", error);
+    return {
+      success: false,
+      backupId: "",
+      metadata: {},
+      error: error.message,
+    };
+  }
+});
+
+// Yedekten geri yükleme işleyicisi - ESKİ, KULLANIM DIŞI
+ipcMain.handle("restore-backup", async (event, content, options) => {
+  try {
+    log.warn(
+      "Eski restore-backup API'si kullanılıyor. restore-backup-bridge kullanın."
+    );
+    return await handleBackupRestoration(event, content, options);
+  } catch (error: any) {
+    log.error("Geri yükleme hatası (eski API):", error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+});
+
+// Yedek geçmişini getir
+ipcMain.handle("get-backup-history", async () => {
+  try {
+    const history = backupManager.listBackups();
+    return history;
+  } catch (error: any) {
+    log.error("Yedek geçmişi alma hatası:", error);
+    return [];
+  }
+});
+
+// Yedek dosyası okuma işleyicisi
+ipcMain.handle("read-backup-file", async () => {
+  try {
+    return await FileUtils.readFile();
+  } catch (error) {
+    log.error("Dosya okuma hatası:", error);
+    throw error;
+  }
+});
+
+// Otomatik yedekleme zamanlaması işleyicileri
+ipcMain.handle(
+  "schedule-backup",
+  async (event, frequency, hour = 3, minute = 0) => {
+    try {
+      return backupManager.scheduleBackup(frequency, hour, minute);
+    } catch (error: any) {
+      log.error("Zamanlama hatası:", error);
+      return false;
+    }
+  }
+);
+
+ipcMain.handle("disable-scheduled-backup", async () => {
+  try {
+    return backupManager.disableScheduledBackup();
+  } catch (error: any) {
+    log.error("Zamanlama iptal hatası:", error);
+    return false;
+  }
 });
 
 // Periyodik güncelleme kontrolü (her 4 saatte bir)
 setInterval(() => {
   if (app.isPackaged) {
     autoUpdater.checkForUpdatesAndNotify();
-    log.info('Periyodik güncelleme kontrolü yapılıyor...');
+    log.info("Periyodik güncelleme kontrolü yapılıyor...");
   }
 }, 4 * 60 * 60 * 1000);
 
 // Uygulama kapatılmadan önce kontrol et
-app.on('before-quit', (event) => {
-  // Eğer güncelleme sürecindeyse, normal kapanma işlemini engelle
+app.on("before-quit", (event) => {
   if (isUpdating && updateSplashWindow && !updateSplashWindow.isDestroyed()) {
     event.preventDefault();
   }
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
     app.quit();
     win = null;
   }
 });
 
-app.on('activate', () => {
+app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
 
 app.whenReady().then(() => {
-  // Debug portunu sadece geliştirme modunda aç
   if (!app.isPackaged) {
-    app.commandLine.appendSwitch('remote-debugging-port', '9222');
+    app.commandLine.appendSwitch("remote-debugging-port", "9222");
   }
   createWindow();
+
+  backupManager.startScheduler();
+  log.info("Yedekleme zamanlayıcısı başlatıldı");
 });

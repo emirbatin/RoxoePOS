@@ -23,6 +23,8 @@ interface TableProps<
   showTotals?: boolean;
   totalColumns?: Partial<Record<keyof T, "sum" | "count">>;
   totalData?: T[];
+  // Yeni eklenen alt bilgi desteği
+  totalFooters?: Partial<Record<keyof T, (data: T[]) => React.ReactNode>>;
 }
 
 export function Table<
@@ -47,6 +49,7 @@ export function Table<
   showTotals = false,
   totalColumns = {},
   totalData,
+  totalFooters = {},
 }: TableProps<T, K>) {
   // Sütunların genişlik durumlarını izlemek için state
   const [columnWidths, setColumnWidths] = useState<Record<string, string>>({});
@@ -88,33 +91,36 @@ export function Table<
   // Sıralanmış veri
   const sortedData = sortData(data);
 
-  // Toplam hesaplama
+  // Toplam hesaplama - iyileştirilmiş
   const totals = useMemo(() => {
     if (!showTotals || !totalColumns || Object.keys(totalColumns).length === 0)
       return null;
 
     const dataForTotals = totalData || data;
+    const result = {} as Record<string, any>; // Daha esnek bir tip kullan
 
-    return Object.entries(totalColumns).reduce((acc, [key, type]) => {
+    // Toplamları hesapla
+    Object.entries(totalColumns).forEach(([key, type]) => {
       const typedKey = key as keyof T;
 
       if (type === "sum") {
-        const sum = dataForTotals.reduce((sum, item) => {
-          const value = item[typedKey];
-          return sum + (typeof value === "number" ? value : 0);
-        }, 0);
-        acc[key] = sum;
+        const numericValues = dataForTotals
+          .map((item) => item[typedKey])
+          .filter((value) => typeof value === "number" && !isNaN(value));
+
+        const sum = numericValues.reduce((sum, value) => sum + value, 0);
+        result[key] = sum;
       }
 
       if (type === "count") {
         const count = dataForTotals.filter(
           (item) => item[typedKey] != null
         ).length;
-        acc[key] = count;
+        result[key] = count;
       }
+    });
 
-      return acc;
-    }, {} as Record<string, number>);
+    return result;
   }, [totalData, data, showTotals, totalColumns]);
 
   // Sütun genişliğini değiştirmeye başlama işlevi
@@ -391,39 +397,67 @@ export function Table<
               </tr>
             ))}
 
-            {/* Toplam satırı */}
+            {/* Toplam satırı - Alt bilgi desteği ile (tamamen düzeltilmiş) */}
             {showTotals && totals && (
-              <tr className="bg-gray-50 border-t-2 border-gray-200 font-medium">
+              <tr className="bg-gray-100 border-t-2 border-gray-300 font-medium text-gray-700">
                 {selectable && (
-                  <td className="w-12 px-6 py-4 sticky left-0 bg-gray-50 whitespace-nowrap"></td>
+                  <td className="w-12 px-6 py-4 sticky left-0 bg-gray-100 whitespace-nowrap font-bold">
+                    Toplam
+                  </td>
                 )}
                 {columns.map((column, index) => {
-                  const isTotal = totalColumns.hasOwnProperty(column.key as keyof T);
+                  const columnKey = column.key as keyof T;
+                  const isTotal = totalColumns.hasOwnProperty(columnKey);
                   const totalValue = isTotal
                     ? totals[column.key as string]
+                    : null;
+
+                  // İlk sütun ve seçilebilir değilse "Toplam" başlığını burada göster
+                  const isFirstColumn = index === 0 && !selectable;
+
+                  // Alt bilgi varsa hesapla
+                  const hasFooter = totalFooters.hasOwnProperty(columnKey);
+                  const footerContent = hasFooter
+                    ? totalFooters[columnKey]?.(totalData || data)
                     : null;
 
                   return (
                     <td
                       key={column.key}
                       data-column-key={column.key}
-                      className={`px-6 py-4 ${
-                        index === 0 ? "text-gray-800" : ""
+                      className={`px-6 py-3 ${
+                        isTotal || isFirstColumn ? "font-bold" : ""
                       } ${column.className || ""}`}
                       style={{
                         width: columnWidths[column.key as string] || "auto",
                         maxWidth: columnWidths[column.key as string] || "300px",
                       }}
                     >
-                      {isTotal
-                        ? column.render
-                          ? column.render({
-                              [column.key]: totalValue,
-                            } as unknown as T)
-                          : totalValue
-                        : index === 0
-                        ? "Toplam"
-                        : ""}
+                      <div className="flex flex-col">
+                        {/* Ana toplam değeri - İlk sütun veya toplam değeri olan sütunlar için */}
+                        {isFirstColumn && (
+                          <div className="font-bold">Toplam</div>
+                        )}
+                        
+                        {isTotal && !isFirstColumn && (
+                          <div>
+                            {column.render ? (
+                              column.render({
+                                [column.key]: totalValue,
+                              } as unknown as T)
+                            ) : (
+                              totalValue
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Alt bilgi (footer) */}
+                        {hasFooter && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            {footerContent}
+                          </div>
+                        )}
+                      </div>
                     </td>
                   );
                 })}

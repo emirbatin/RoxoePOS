@@ -8,6 +8,10 @@ import {
   Key,
   Check,
   RefreshCw,
+  Upload,
+  Download,
+  Clock,
+  Database,
 } from "lucide-react";
 import { POSConfig, SerialOptions } from "../types/pos";
 import { BarcodeConfig } from "../types/barcode";
@@ -32,6 +36,26 @@ interface SettingsTab {
   icon: React.ReactNode;
 }
 
+interface BackupHistoryItem {
+  id: string;
+  filename: string;
+  description: string;
+  createdAt: string;
+  databases: string[];
+  totalRecords: number;
+}
+
+interface BackupProgress {
+  stage: string;
+  percent: number;
+}
+
+interface BackupScheduleConfig {
+  enabled: boolean;
+  frequency: "daily" | "weekly" | "monthly";
+  lastBackup: string | null;
+}
+
 const SettingsPage: React.FC = () => {
   const { showSuccess, showError } = useAlert();
   const [activeTab, setActiveTab] = useState<string>("pos");
@@ -40,11 +64,26 @@ const SettingsPage: React.FC = () => {
     message: string;
   }>({ status: "idle", message: "" });
 
+  // Yedekleme ile ilgili stateler
+  const [backups, setBackups] = useState<BackupHistoryItem[]>([]);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [backupProgress, setBackupProgress] = useState<BackupProgress>({
+    stage: "",
+    percent: 0,
+  });
+  const [backupSchedule, setBackupSchedule] = useState<BackupScheduleConfig>({
+    enabled: false,
+    frequency: "daily",
+    lastBackup: null,
+  });
+
   // Settings tabs
   const tabs: SettingsTab[] = [
     { id: "pos", title: "POS Cihazı", icon: <Printer size={20} /> },
     { id: "barcode", title: "Barkod Okuyucu", icon: <Barcode size={20} /> },
     { id: "receipt", title: "Fiş ve İşletme", icon: <Building size={20} /> },
+    { id: "backup", title: "Yedekleme", icon: <Database size={20} /> },
     { id: "hotkeys", title: "Kısayollar", icon: <Key size={20} /> },
     { id: "license", title: "Lisans", icon: <Check size={20} /> },
   ];
@@ -125,6 +164,12 @@ const SettingsPage: React.FC = () => {
           setBarcodeConfig(JSON.parse(savedBarcodeConfig));
         if (savedReceiptConfig)
           setReceiptConfig(JSON.parse(savedReceiptConfig));
+
+        // Yedekleme zamanlamasını yükle
+        const savedBackupSchedule = localStorage.getItem("backup_schedule");
+        if (savedBackupSchedule) {
+          setBackupSchedule(JSON.parse(savedBackupSchedule));
+        }
       } catch (err) {
         console.error("Ayarlar yüklenirken hata:", err);
       }
@@ -133,7 +178,159 @@ const SettingsPage: React.FC = () => {
 
     // Burada lisansı da kontrol et
     checkLicense();
+
+    // Yedek geçmişini yükle
+    loadBackupHistory();
   }, []);
+
+  // Yedekleme işlemleri için dinleyici ve temizleyici
+  useEffect(() => {
+    // Yedekleme ilerleme bildirimleri için dinleyici
+    const handleBackupProgress = (data: { stage: string; percent: number }) => {
+      setBackupProgress(data);
+    };
+
+    // Dinleyiciyi ekle
+    window.backupAPI.onBackupProgress(handleBackupProgress);
+
+    // Temizleme fonksiyonu
+    return () => {
+      window.backupAPI.offBackupProgress(handleBackupProgress);
+    };
+  }, []);
+
+  // Yedek geçmişini yükle
+  const loadBackupHistory = async () => {
+    try {
+      const history = await window.backupAPI.getBackupHistory();
+      setBackups(history);
+    } catch (error) {
+      console.error("Yedek geçmişi yüklenemedi:", error);
+    }
+  };
+
+  // Yeni yedek oluştur
+  const handleCreateBackup = async () => {
+    setBackupLoading(true);
+    setBackupProgress({ stage: "Yedekleme başlatılıyor", percent: 0 });
+
+    try {
+      const result = await window.backupAPI.createBackup({
+        description: "Manuel Yedekleme",
+      });
+
+      if (result.success) {
+        showSuccess(`Yedekleme başarılı: ${result.filename}`);
+        loadBackupHistory(); // Geçmişi yenile
+      } else {
+        showError(`Yedekleme hatası: ${result.error}`);
+      }
+    } catch (error) {
+      showError(
+        `Beklenmeyen hata: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  // Yedeği geri yükle
+  const handleRestoreBackup = async () => {
+    try {
+      setRestoreLoading(true);
+      setBackupProgress({ stage: "Dosya seçiliyor", percent: 0 });
+
+      // Dosyayı oku
+      const { content } = await window.backupAPI.readBackupFile();
+
+      setBackupProgress({ stage: "Geri yükleme başlatılıyor", percent: 10 });
+
+      const result = await window.backupAPI.restoreBackup(content, {
+        clearExisting: true,
+      });
+
+      if (result.success) {
+        showSuccess("Geri yükleme başarılı! Sayfayı yenilemelisiniz.");
+      } else {
+        showError(`Geri yükleme hatası: ${result.error}`);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Dosya seçilmedi")) {
+        // Kullanıcı iptal ettiğinde hata gösterme
+        console.log("Kullanıcı dosya seçimini iptal etti");
+      } else {
+        showError(
+          `Geri yükleme hatası: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
+  // Otomatik yedeklemeyi ayarla
+  const setupAutoBackup = async (frequency: "daily" | "weekly" | "monthly") => {
+    try {
+      const result = await window.backupAPI.scheduleBackup(frequency);
+
+      if (result) {
+        setBackupSchedule({
+          enabled: true,
+          frequency,
+          lastBackup: null,
+        });
+        localStorage.setItem(
+          "backup_schedule",
+          JSON.stringify({
+            enabled: true,
+            frequency,
+            lastBackup: null,
+          })
+        );
+        showSuccess(`Otomatik yedekleme ayarlandı: ${frequency}`);
+      } else {
+        showError("Otomatik yedekleme ayarlanamadı");
+      }
+    } catch (error) {
+      showError(
+        `Hata: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  };
+
+  // Otomatik yedeklemeyi devre dışı bırak
+  const disableAutoBackup = async () => {
+    try {
+      const result = await window.backupAPI.disableScheduledBackup();
+
+      if (result) {
+        setBackupSchedule({
+          enabled: false,
+          frequency: backupSchedule.frequency,
+          lastBackup: backupSchedule.lastBackup,
+        });
+        localStorage.setItem(
+          "backup_schedule",
+          JSON.stringify({
+            enabled: false,
+            frequency: backupSchedule.frequency,
+            lastBackup: backupSchedule.lastBackup,
+          })
+        );
+        showSuccess("Otomatik yedekleme devre dışı bırakıldı");
+      } else {
+        showError("Otomatik yedekleme devre dışı bırakılamadı");
+      }
+    } catch (error) {
+      showError(
+        `Hata: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  };
 
   // Auto-save settings when changed
   const saveSettings = (
@@ -855,6 +1052,214 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
         );
+      case "backup":
+        return (
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold">
+              Veri Yedekleme ve Geri Yükleme
+            </h2>
+
+            {/* Yedekleme İşlemleri */}
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h3 className="font-medium text-gray-900 mb-4">
+                Manuel Yedekleme
+              </h3>
+
+              <div className="flex items-center gap-4 mb-5">
+                <button
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300"
+                  onClick={handleCreateBackup}
+                  disabled={backupLoading || restoreLoading}
+                >
+                  <Save size={18} />
+                  {backupLoading ? "Yedekleniyor..." : "Yeni Yedek Oluştur"}
+                </button>
+
+                <button
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-amber-300"
+                  onClick={handleRestoreBackup}
+                  disabled={backupLoading || restoreLoading}
+                >
+                  <Upload size={18} />
+                  {restoreLoading
+                    ? "Geri Yükleniyor..."
+                    : "Yedekten Geri Yükle"}
+                </button>
+              </div>
+
+              {/* İlerleme çubuğu - yedekleme/geri yükleme işlemi sürerken göster */}
+              {(backupLoading || restoreLoading) && (
+                <div className="mb-5">
+                  <p className="text-sm text-gray-700 mb-1">
+                    {backupProgress.stage} ({backupProgress.percent}%)
+                  </p>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div
+                      className="bg-indigo-600 h-2.5 rounded-full"
+                      style={{ width: `${backupProgress.percent}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-sm text-gray-500 bg-blue-50 p-4 rounded-lg">
+                <p>
+                  ℹ️ Manuel yedekleme ile verilerinizin anlık bir kopyasını
+                  oluşturabilirsiniz. Oluşturduğunuz yedekler, seçtiğiniz konuma
+                  kaydedilir ve herhangi bir zamanda geri yüklenebilir.
+                </p>
+              </div>
+            </div>
+
+            {/* Otomatik Yedekleme */}
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h3 className="font-medium text-gray-900 mb-4">
+                Otomatik Yedekleme
+              </h3>
+
+              <div className="flex flex-wrap gap-3 mb-5">
+                <button
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  onClick={() => setupAutoBackup("daily")}
+                >
+                  <Clock size={18} />
+                  Günlük
+                </button>
+
+                <button
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  onClick={() => setupAutoBackup("weekly")}
+                >
+                  <Clock size={18} />
+                  Haftalık
+                </button>
+
+                <button
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  onClick={() => setupAutoBackup("monthly")}
+                >
+                  <Clock size={18} />
+                  Aylık
+                </button>
+
+                <button
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  onClick={disableAutoBackup}
+                >
+                  <Clock size={18} />
+                  Devre Dışı Bırak
+                </button>
+              </div>
+
+              {/* Otomatik yedekleme durumu */}
+              <div
+                className={`p-4 rounded-lg ${
+                  backupSchedule.enabled
+                    ? "bg-green-50 border border-green-200"
+                    : "bg-gray-50 border border-gray-200"
+                }`}
+              >
+                <h4 className="font-medium text-gray-900 mb-2">
+                  Otomatik Yedekleme Durumu
+                </h4>
+
+                {backupSchedule.enabled ? (
+                  <div className="text-sm text-gray-700">
+                    <p className="flex items-center gap-2">
+                      <span className="w-3 h-3 bg-green-500 rounded-full"></span>
+                      <strong>Aktif</strong> -{" "}
+                      {backupSchedule.frequency === "daily"
+                        ? "Günlük"
+                        : backupSchedule.frequency === "weekly"
+                        ? "Haftalık"
+                        : "Aylık"}{" "}
+                      yedekleme zamanlanmış
+                    </p>
+                    {backupSchedule.lastBackup && (
+                      <p className="mt-1 ml-5">
+                        Son yedekleme:{" "}
+                        {new Date(backupSchedule.lastBackup).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-700 flex items-center gap-2">
+                    <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+                    <strong>Devre dışı</strong> - Otomatik yedekleme
+                    ayarlanmamış
+                  </p>
+                )}
+              </div>
+
+              <div className="text-sm text-gray-500 bg-blue-50 p-4 rounded-lg mt-5">
+                <p>
+                  ℹ️ Otomatik yedekleme, verilerinizin belirli aralıklarla
+                  yedeklenmesini sağlar. Böylece veri kaybı riskini en aza
+                  indirebilirsiniz. Yedekler, belirlenen konuma otomatik olarak
+                  kaydedilir.
+                </p>
+              </div>
+            </div>
+
+            {/* Yedek Geçmişi */}
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h3 className="font-medium text-gray-900 mb-4">Yedek Geçmişi</h3>
+
+              {backups.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Tarih
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Açıklama
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Veritabanları
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Kayıtlar
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {backups.map((backup) => (
+                        <tr key={backup.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {new Date(backup.createdAt).toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {backup.description}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {backup.databases?.join(", ")}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {backup.totalRecords}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-5 text-gray-500">
+                  Henüz yedekleme yapılmamış
+                </div>
+              )}
+
+              <div className="text-sm text-gray-500 bg-blue-50 p-4 rounded-lg mt-5">
+                <p>
+                  ℹ️ Bu liste, son 20 yedeğinizin geçmişini gösterir.
+                  Yedeklerinizi buradan takip edebilirsiniz. Geri yükleme işlemi
+                  için lütfen "Yedekten Geri Yükle" butonunu kullanın.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
       case "hotkeys":
         return (
           <div className="space-y-6">
@@ -928,7 +1333,7 @@ const SettingsPage: React.FC = () => {
                     >
                       {licenseStatus.loading ? (
                         <>
-                          <span className="rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                          <span className="rounded-full h-4 w-4 border-2 border-white border-t-transparent animate-spin" />
                           Aktifleştiriliyor...
                         </>
                       ) : (
@@ -975,7 +1380,7 @@ const SettingsPage: React.FC = () => {
             }`}
           >
             {saveStatus.status === "saving" && (
-              <div className="w-4 h-4 rounded-full border-2 border-blue-600 border-t-transparent"></div>
+              <div className="w-4 h-4 rounded-full border-2 border-blue-600 border-t-transparent animate-spin"></div>
             )}
             {saveStatus.status === "saved" && <Check size={16} />}
             {saveStatus.status === "error" && (

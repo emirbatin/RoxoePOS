@@ -19,7 +19,8 @@ import { NotificationProvider } from "./contexts/NotificationContext";
 import LicenseActivation from "./components/LicenseActivation";
 import UpdateNotification from "./components/UpdateNotification";
 import KasaYonetimi from "./pages/CashRegisterPage";
-import DynamicWindowTitle from "./components/DynamicWindowTitle"; // İMPORT EDİLDİ
+import DynamicWindowTitle from "./components/DynamicWindowTitle";
+import { initBackupBridge } from "./utils/backup-bridge";
 
 function App() {
   const [isLicensed, setIsLicensed] = useState(false);
@@ -27,6 +28,9 @@ function App() {
 
   useEffect(() => {
     checkLicense();
+    
+    // YENİ: Backup köprüsünü başlat
+    initBackupBridge();
   }, []);
 
   const checkLicense = async () => {
@@ -89,7 +93,7 @@ function App() {
         </NotificationProvider>
       </Router>
       <UpdateNotification />
-      <DynamicWindowTitle /> {/* EKLENDİ - Animasyonlu pencere başlığı */}
+      <DynamicWindowTitle />
     </>
   );
 }
