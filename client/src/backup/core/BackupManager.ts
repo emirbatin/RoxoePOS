@@ -127,7 +127,7 @@ export class BackupManager {
       const filename = `roxoe-backup-${dateStr}-${timeStr}.roxoe`;
       
       // Dosyayı indir
-      const filePath = await FileUtils.downloadFile(roxoeData, filename);
+      const filePath = await FileUtils.downloadFile(roxoeData, filename, options?.isAutoBackup === true);
       
       // Yedek geçmişine kaydet
       FileUtils.saveBackupToHistory(backupId, {

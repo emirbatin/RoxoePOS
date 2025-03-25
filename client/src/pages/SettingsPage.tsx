@@ -1066,6 +1066,33 @@ const SettingsPage: React.FC = () => {
               </h3>
 
               <div className="flex items-center gap-4 mb-5">
+                {/* TEST BUTONU
+                
+                <button
+                  onClick={async () => {
+                    try {
+                      const result = await window.ipcRenderer.invoke(
+                        "test-auto-backup"
+                      );
+                      if (result.success) {
+                        showSuccess("Otomatik yedekleme testi başarılı!");
+                        loadBackupHistory(); // Geçmişi yenile
+                      } else {
+                        showError(`Test başarısız: ${result.error}`);
+                      }
+                    } catch (error) {
+                      showError(
+                        `Test hatası: ${
+                          error instanceof Error ? error.message : String(error)
+                        }`
+                      );
+                    }
+                  }}
+                >
+                  Otomatik Yedeklemeyi Test Et
+                </button>
+                */}
+
                 <button
                   className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300"
                   onClick={handleCreateBackup}

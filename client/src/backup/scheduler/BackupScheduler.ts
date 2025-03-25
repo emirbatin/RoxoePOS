@@ -147,7 +147,7 @@ export class BackupScheduler {
   /**
    * Zamanlanmış yedekleme kontrolü
    */
-  private async checkScheduledBackup(): Promise<void> {
+  public async checkScheduledBackup(): Promise<void> {
     if (!this.schedule || !this.schedule.enabled) {
       return;
     }

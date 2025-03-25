@@ -580,6 +580,41 @@ ipcMain.handle("disable-scheduled-backup", async () => {
   }
 });
 
+ipcMain.handle("test-auto-backup", async () => {
+  try {
+    console.log("Otomatik yedekleme testi başlatılıyor...");
+    
+    // Gerekli verileri oluştur
+    const exportedData = {
+      exportInfo: {
+        databases: [
+          { name: "testDB", recordCounts: { testStore: 5 } }
+        ],
+        totalRecords: 5
+      },
+      databases: {
+        testDB: { testStore: [{ id: 1, data: "test" }] }
+      }
+    };
+    
+    console.log("Test verisi hazırlandı, yedekleme başlatılıyor...");
+    
+    // isAutoBackup bayrağını true olarak ayarlayarak yedekleme yap
+    const result = await backupManager.createBackupWithData(exportedData, {
+      description: "Test Otomatik Yedekleme",
+      backupType: "full",
+      isAutoBackup: true
+    });
+    
+    console.log("Yedekleme tamamlandı, sonuç:", result);
+    
+    return result;
+  } catch (error) {
+    console.error("Test yedekleme hatası:", error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
 // Periyodik güncelleme kontrolü (her 4 saatte bir)
 setInterval(() => {
   if (app.isPackaged) {
