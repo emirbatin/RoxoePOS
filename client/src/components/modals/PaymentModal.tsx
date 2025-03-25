@@ -95,11 +95,27 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
     { paymentMethod: PaymentMethod; received: string; customerId: string }[]
   >([]);
 
+  const [remainingTotal, setRemainingTotal] = useState(discountedTotal);
+
+  const getPersonShare = (): number => {
+    // Toplam tutarı kişi sayısına bölüyoruz - her kişinin eşit olarak ödemesi gereken miktar
+    return discountedTotal / friendCount;
+  };
+
   useEffect(() => {
     if (isOpen && receivedInputRef.current) {
       receivedInputRef.current.focus();
     }
   }, [isOpen]);
+
+  // Kişi ödeme yaptığında kalan tutarı güncelle
+  useEffect(() => {
+    const totalPaid = equalPayments.reduce(
+      (sum, p) => sum + (parseFloat(p.received) || 0),
+      0
+    );
+    setRemainingTotal(Math.max(0, discountedTotal - totalPaid));
+  }, [equalPayments, discountedTotal]);
 
   // İndirim hesaplama
   useEffect(() => {
@@ -383,6 +399,17 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
   /** ===================
    *   EŞİT BÖLÜŞÜM SPLIT
    *  =================== */
+  // Kişi için kalan tutarı hesapla
+  const calculateRemainingForPerson = (index: number): number => {
+    // Toplam ödenecek tutardan bu kişiye kadar olan kişilerin toplam ödediği tutarı çıkar
+    const paidByPrevious = equalPayments
+      .slice(0, index)
+      .reduce((sum, p) => sum + (parseFloat(p.received) || 0), 0);
+
+    // Kalan tutar, toplam tutardan önceki kişilerin ödediği miktarın çıkarılmasıyla bulunur
+    return Math.max(0, discountedTotal - paidByPrevious);
+  };
+
   const handleEqualChange = (
     index: number,
     updates: {
@@ -393,6 +420,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
   ) => {
     const arr = [...equalPayments];
     arr[index] = updates;
+
     setEqualPayments(arr);
   };
 
@@ -524,8 +552,10 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
         return remainingItems.length > 0;
       } else if (splitType === "equal") {
         // Tüm kişilerin ödemeleri girilmiş mi?
-        return !equalPayments.every((p) => parseFloat(p.received) > 0) || 
-               equalPayments.length < friendCount;
+        return (
+          !equalPayments.every((p) => parseFloat(p.received) > 0) ||
+          equalPayments.length < friendCount
+        );
       }
     }
     return false;
@@ -1188,6 +1218,9 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                       received: "",
                       customerId: "",
                     };
+                    
+                    // Her kişi için dinamik olarak doğru kalan tutarı hesapla
+                    const personRemaining = calculateRemainingForPerson(i);
 
                     return (
                       <div
@@ -1198,9 +1231,15 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                           <h4 className="text-sm font-medium text-gray-900">
                             Kişi {i + 1}
                           </h4>
-                          <span className="text-xs text-gray-600">
-                            Toplam: {formatCurrency(discountedTotal / friendCount)}
-                          </span>
+                          {i === 0 ? (
+                            <span className="text-xs text-gray-600">
+                              Toplam: {formatCurrency(discountedTotal)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-600">
+                              Kalan: {formatCurrency(personRemaining)}
+                            </span>
+                          )}
                         </div>
 
                         {/* Ödeme Yöntemi */}
@@ -1249,10 +1288,11 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                             }
                             className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                           />
-                          {/* Para üstü gösterimi */}
-                          {parseFloat(p.received) > (discountedTotal / friendCount) && (
+                          {/* Para üstü gösterimi - doğru hesaplama */}
+                          {parseFloat(p.received) > personRemaining && personRemaining > 0 && (
                             <div className="mt-1 text-green-600 font-medium text-xs">
-                              Para Üstü: {formatCurrency(parseFloat(p.received) - (discountedTotal / friendCount))}
+                              Para Üstü:{" "}
+                              {formatCurrency(parseFloat(p.received) - personRemaining)}
                             </div>
                           )}
                         </div>
@@ -1287,7 +1327,6 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                     );
                   })}
 
-                  {/* Ödeme Özeti */}
                   {equalPayments.some((p) => parseFloat(p.received) > 0) && (
                     <div className="bg-gray-50 rounded-xl p-5">
                       <h4 className="text-md font-medium text-gray-900 mb-3">
@@ -1309,6 +1348,24 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                           <span className="font-medium">Toplam Tutar:</span>
                           <span>{formatCurrency(discountedTotal)}</span>
                         </div>
+
+                        {/* Kalan ödeme miktarı */}
+                        {remainingTotal > 0 && (
+                          <div className="flex justify-between text-red-600 font-medium">
+                            <span>Kalan Ödeme:</span>
+                            <span>{formatCurrency(remainingTotal)}</span>
+                          </div>
+                        )}
+
+                        {/* Eğer fazla ödeme yapıldıysa */}
+                        {remainingTotal < 0 && (
+                          <div className="flex justify-between text-green-600 font-medium">
+                            <span>Fazla Ödeme:</span>
+                            <span>
+                              {formatCurrency(Math.abs(remainingTotal))}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

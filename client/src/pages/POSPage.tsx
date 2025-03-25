@@ -601,6 +601,13 @@ const POSPage: React.FC = () => {
       setSelectedCustomer(null);
       setShowPaymentModal(false);
 
+      products.forEach(product => {
+        const cartItem = activeTab.cart.find(item => item.id === product.id);
+        if (cartItem) {
+          product.stock -= cartItem.quantity;
+        }
+      });
+
       showSuccess(`Satış başarıyla tamamlandı! Fiş No: ${newSale.receiptNo}`);
 
       // (İsteğe bağlı) Kasa durumunu tekrar sorgulayabilirsiniz:

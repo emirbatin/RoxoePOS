@@ -319,32 +319,54 @@ const SaleDetailPage: React.FC = () => {
                         </>
                       )}
                     {/* Eşit bölüşüm ödeme */}
-                    {sale.splitDetails.equalPayments &&
+                    {/* Eşit bölüşüm ödeme */}
+                    {sale.splitDetails?.equalPayments &&
                       sale.splitDetails.equalPayments.length > 0 && (
                         <>
                           <h4 className="mt-4 text-sm font-medium mb-2">
                             Eşit Bölüşüm Split
                           </h4>
-                          <ul className="space-y-1 text-sm">
+                          <ul className="space-y-2 text-sm">
                             {sale.splitDetails.equalPayments.map((p, idx) => (
-                              <li key={idx} className="flex justify-between">
-                                <span>
-                                  Kişi {idx + 1} -
-                                  {p.paymentMethod === "veresiye"
-                                    ? "Veresiye"
-                                    : p.paymentMethod === "kart"
-                                    ? "Kredi Kartı"
-                                    : p.paymentMethod === "nakitpos"
-                                    ? "POS (Nakit)"
-                                    : "Nakit"}
-                                  {p.customer && ` (${p.customer.name})`}
-                                </span>
-                                <span className="font-medium text-gray-700">
-                                  {formatCurrency(p.received)}
-                                </span>
+                              <li key={idx}>
+                                <div className="flex justify-between">
+                                  <span>
+                                    Kişi {idx + 1} -
+                                    {p.paymentMethod === "veresiye"
+                                      ? "Veresiye"
+                                      : p.paymentMethod === "kart"
+                                      ? "Kredi Kartı"
+                                      : p.paymentMethod === "nakitpos"
+                                      ? "POS (Nakit)"
+                                      : "Nakit"}
+                                    {p.customer && ` (${p.customer.name})`}
+                                  </span>
+                                  <span className="font-medium text-gray-700">
+                                    {formatCurrency(p.received)}
+                                  </span>
+                                </div>
                               </li>
                             ))}
                           </ul>
+
+                          {/* Toplam para üstü gösterimi */}
+                          {(() => {
+                            // Tüm ödemelerin toplamını hesapla
+                            const totalReceived =
+                              sale.splitDetails.equalPayments.reduce(
+                                (sum, payment) => sum + payment.received,
+                                0
+                              );
+
+                            // Satış toplamından fazlaysa para üstü vardır
+                            const totalChange = totalReceived - sale.total;
+
+                            return totalChange > 0 ? (
+                              <div className="mt-3 text-right text-green-600 font-medium border-t pt-2">
+                                Toplam Para Üstü: {formatCurrency(totalChange)}
+                              </div>
+                            ) : null;
+                          })()}
                         </>
                       )}
                   </div>
