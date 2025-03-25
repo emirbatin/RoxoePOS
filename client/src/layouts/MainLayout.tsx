@@ -482,19 +482,6 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
             );
           })}
         </nav>
-
-        {/* Settings Link - Bottom of Sidebar */}
-        {expanded && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
-            <button
-              onClick={() => navigate("/settings")}
-              className="w-full flex items-center p-3 text-gray-600 hover:bg-gray-50 rounded-lg"
-            >
-              <Settings size={20} />
-              <span className="ml-3 text-sm font-medium">Ayarlar</span>
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
