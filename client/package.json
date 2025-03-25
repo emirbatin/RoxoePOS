@@ -1,7 +1,7 @@
 {
   "name": "roxoepos",
   "private": true,
-  "version": "0.2.5",
+  "version": "0.2.6",
   "type": "module",
   "description": "",
   "author": {
@@ -163,7 +163,6 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "differentialPackage": true,
-      "silentUpdate": true,
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
       "include": "installer.nsh",

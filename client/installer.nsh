@@ -1,5 +1,5 @@
 !macro customHeader
-  !define INSTALL_MODE_NORMAL
+  !include LogicLib.nsh
 !macroend
 
 !macro customInstall
@@ -15,6 +15,6 @@
 !macroend
 
 !macro customUnInstall
-  ; Kaldırma işlemi her zaman sorulsun
-  SetSilent false
+  ; Kaldırma işlemi her zaman normal modda
+  SetSilent normal
 !macroend
