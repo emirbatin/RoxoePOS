@@ -36,23 +36,42 @@ const UpdateNotification: React.FC = () => {
 
   useEffect(() => {
     if (window.updaterAPI) {
+      // Daha spesifik olay dinleyicileri kullanın
       window.updaterAPI.onUpdateStatus((status) => {
         console.log("Güncelleme durumu:", status);
-        setUpdateStatus(status);
+        
+        // Mevcut durumla yeni durum aynıysa, sadece ek bilgileri güncelle
+        if (updateStatus && updateStatus.status === status.status) {
+          // Önceki durumu koruyarak progress güncellemesi yap
+          setUpdateStatus(prevStatus => ({
+            ...prevStatus,
+            ...status
+          }));
+        } else {
+          // Tamamen yeni bir durum ise değiştir
+          setUpdateStatus(status);
+        }
+        
+        // Checking dışındaki durumlarda görünür yap
         if (status.status !== "checking") {
           setIsVisible(true);
         }
       });
-
-      // 60 saniye sonra otomatik olarak bildirimi kapat (sadece indirme tamamlandığında)
-      if (updateStatus?.status === "downloaded") {
-        const timer = setTimeout(() => {
-          setIsVisible(false);
-        }, 60000); // 1 dakika sonra bildirim otomatik kaybolur
-        return () => clearTimeout(timer);
-      }
+  
+      // İlerleme güncellemelerini ayrı bir dinleyici ile takip edin
+      window.updaterAPI.onUpdateProgress((progressObj) => {
+        setUpdateStatus(prevStatus => {
+          if (prevStatus && prevStatus.status === "downloading") {
+            return {
+              ...prevStatus,
+              progress: progressObj
+            };
+          }
+          return prevStatus;
+        });
+      });
     }
-  }, [updateStatus?.status]);
+  }, []); // Sadece bir kere çalıştır
 
   if (!isVisible || !updateStatus) return null;
 

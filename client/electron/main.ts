@@ -17,6 +17,7 @@ autoUpdater.autoInstallOnAppQuit = true;
 // Sessiz güncelleme yapılandırması
 autoUpdater.allowDowngrade = false;
 autoUpdater.allowPrerelease = false;
+autoUpdater.forceDevUpdateConfig = true;  // Geliştirme yapılandırması kullan
 
 // Güncelleme durumu takibi
 let isUpdating = false;
@@ -238,6 +239,21 @@ autoUpdater.on("update-available", (info) => {
 
     // Kullanıcıya sadece bildirim göster, dialog gösterme
     log.info(`Yeni sürüm (${info.version}) mevcut. İndiriliyor...`);
+    
+    // 1.5 saniye sonra indirme durumuna geçiş yap
+    setTimeout(() => {
+      win?.webContents.send("update-status", {
+        status: "downloading",
+        version: info.version,
+        progress: {
+          percent: 0,
+          transferred: 0,
+          total: 100,
+          speed: "0.00",
+          remaining: 100
+        }
+      });
+    }, 1500);
   }
 
   lastProgressTime = Date.now();
@@ -277,6 +293,7 @@ autoUpdater.on("download-progress", (progressObj) => {
     win.webContents.send("update-status", {
       status: "downloading",
       progress: progressDetails,
+      version: autoUpdater.currentVersion?.version
     });
   }
 });
@@ -292,15 +309,6 @@ autoUpdater.on("update-downloaded", (info) => {
     
     // Kullanıcıya dialog göstermek yerine sadece bildirim gönder
     log.info(`Yeni sürüm (${info.version}) indirildi. Kullanıcıya bildirim gönderildi.`);
-    
-    // Opsiyonel: 5 dakika sonra otomatik güncelleme
-    // setTimeout(() => {
-    //   log.info("Otomatik güncelleme başlatılıyor...");
-    //   isUpdating = true;
-    //   createUpdateSplash();
-    //   if (win) win.hide();
-    //   autoUpdater.quitAndInstall(false, true);
-    // }, 5 * 60 * 1000);
   }
 });
 
@@ -340,6 +348,7 @@ ipcMain.on("quit-and-install", () => {
   }
 
   setTimeout(() => {
+    // isSilent parametresini true olarak ayarla (sessiz yükleme)
     autoUpdater.quitAndInstall(false, true);
   }, 1000);
 });

@@ -1,12 +1,20 @@
+!macro customHeader
+  !define INSTALL_MODE_NORMAL
+!macroend
+
 !macro customInstall
-  ; Kurulum başladığında gösterilecek Windows bildirimlerini devre dışı bırak
-  SetSilent silent
-  
-  ; Güncelleme sırasında hata ayıklama çıktısı (isteğe bağlı)
-  ; DetailPrint "Güncelleme işlemi başlatılıyor..."
+  ; Sadece ilk kurulum için sihirbaz göster, güncelleme için değil
+  ${IfNot} ${FileExists} "$INSTDIR\resources\app-update.yml"
+    ; İlk kurulum - normal modda devam et
+    DetailPrint "İlk kurulum algılandı, sihirbaz gösteriliyor..."
+  ${Else}
+    ; Güncelleme - sessiz mod
+    DetailPrint "Güncelleme algılandı, sessiz kurulum yapılıyor..."
+    SetSilent silent
+  ${EndIf}
 !macroend
 
 !macro customUnInstall
-  ; Kaldırma işlemi için de sessiz mod
-  SetSilent silent
+  ; Kaldırma işlemi her zaman sorulsun
+  SetSilent false
 !macroend

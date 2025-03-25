@@ -162,12 +162,15 @@
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
+      "differentialPackage": true,
+      "silentUpdate": true,
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
       "include": "installer.nsh",
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
-      "differentialPackage": true
+      "artifactName": "RoxoePOS-Setup-${version}.${ext}",
+      "allowElevation": true
     },
     "portable": {
       "artifactName": "RoxoePOS-Portable-${version}.${ext}"
