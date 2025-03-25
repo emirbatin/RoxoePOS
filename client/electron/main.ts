@@ -307,8 +307,15 @@ autoUpdater.on("update-downloaded", (info) => {
       version: info.version,
     });
     
-    // Kullanıcıya dialog göstermek yerine sadece bildirim gönder
+    // Kullanıcıya bildirim gönder
     log.info(`Yeni sürüm (${info.version}) indirildi. Kullanıcıya bildirim gönderildi.`);
+    
+    // Opsiyonel: Otomatik güncelleme yapmak için aşağıdaki kodu etkinleştirin
+    // setTimeout(() => {
+    //   log.info("Otomatik güncelleme başlatılıyor...");
+    //   app.relaunch({ args: [] });
+    //   app.exit(0);
+    // }, 5 * 60 * 1000); // 5 dakika sonra
   }
 });
 
@@ -347,10 +354,8 @@ ipcMain.on("quit-and-install", () => {
     win.hide();
   }
 
-  setTimeout(() => {
-    // isSilent parametresini true olarak ayarla (sessiz yükleme)
-    autoUpdater.quitAndInstall(false, true);
-  }, 1000);
+  app.relaunch({ args: [] });
+  app.exit(0);
 });
 
 // YEDEKLEME SİSTEMİ IPC İŞLEYİCİLERİ
