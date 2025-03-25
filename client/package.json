@@ -1,7 +1,7 @@
 {
   "name": "roxoepos",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.2",
   "type": "module",
   "description": "",
   "author": {
@@ -101,7 +101,9 @@
         "provider": "github",
         "owner": "emirbatin",
         "repo": "RoxoePOS",
-        "releaseType": "release"
+        "releaseType": "release",
+        "private": true,
+        "token": "${env.GH_TOKEN}"
       }
     ],
     "electronDownload": {
