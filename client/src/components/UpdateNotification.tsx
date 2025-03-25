@@ -1,24 +1,5 @@
 import React, { useEffect, useState } from "react";
 
-// TypeScript için window interface'ini genişlet
-declare global {
-  interface Window {
-    updaterAPI: {
-      checkForUpdates: () => void;
-      onUpdateAvailable: (callback: (info: any) => void) => void;
-      onUpdateDownloaded: (callback: (info: any) => void) => void;
-      onUpdateError: (callback: (err: any) => void) => void;
-      onUpdateMessage: (callback: (message: string) => void) => void;
-      onUpdateProgress: (callback: (progressObj: any) => void) => void;
-      onUpdateStatus: (callback: (statusObj: any) => void) => void;
-      testUpdateAvailable?: () => void;
-      testUpdateDownloaded?: () => void;
-      testUpdateError?: () => void;
-    };
-    // Not redefining ipcRenderer since it's already defined in electron-env.d.ts
-  }
-}
-
 // İlerleme durumu tipi
 interface ProgressDetails {
   percent: number;
@@ -63,11 +44,11 @@ const UpdateNotification: React.FC = () => {
         }
       });
 
-      // 20 saniye sonra otomatik olarak bildirimi kapat (sadece indirme tamamlandığında)
+      // 60 saniye sonra otomatik olarak bildirimi kapat (sadece indirme tamamlandığında)
       if (updateStatus?.status === "downloaded") {
         const timer = setTimeout(() => {
           setIsVisible(false);
-        }, 20000);
+        }, 60000); // 1 dakika sonra bildirim otomatik kaybolur
         return () => clearTimeout(timer);
       }
     }
@@ -105,7 +86,7 @@ const UpdateNotification: React.FC = () => {
       )} (${speed} MB/s)`;
     }
     if (updateStatus.status === "downloaded") {
-      return "Güncelleme hazır, uygulamayı yeniden başlatarak yükleyebilirsiniz";
+      return "Güncelleme hazır, uygulamayı yeniden başlatarak yükleyebilirsiniz. Uygulama kapattığınızda otomatik olarak güncelleme yapılacaktır.";
     }
     if (updateStatus.status === "error") {
       return updateStatus.error || "Bilinmeyen hata";
@@ -238,13 +219,8 @@ const UpdateNotification: React.FC = () => {
             <button
               className={`w-full ${getButtonStyle()} px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-1`}
               onClick={() => {
-                // Using the global ipcRenderer from electron-env.d.ts
                 if (window.ipcRenderer) {
-                  // TypeScript needs to know the function exists
-                  // @ts-ignore
                   window.ipcRenderer.send("quit-and-install");
-                  
-                  // Bildirimi kapat
                   setIsVisible(false);
                 }
               }}

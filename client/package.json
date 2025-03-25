@@ -1,7 +1,7 @@
 {
   "name": "roxoepos",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "description": "",
   "author": {
@@ -157,15 +157,17 @@
       "category": "Office"
     },
     "nsis": {
-      "oneClick": true,
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "RoxoePOS-Setup-${version}.${ext}",
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "include": "installer.nsh",
       "deleteAppDataOnUninstall": false,
-      "differentialPackage": true,
-      "include": "installer.nsh"
+      "runAfterFinish": true,
+      "differentialPackage": true
     },
     "portable": {
       "artifactName": "RoxoePOS-Portable-${version}.${ext}"

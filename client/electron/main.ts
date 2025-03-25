@@ -236,12 +236,8 @@ autoUpdater.on("update-available", (info) => {
       version: info.version,
     });
 
-    dialog.showMessageBox({
-      type: "info",
-      title: "Güncelleme Mevcut",
-      message: `Yeni sürüm (${info.version}) mevcut. İndiriliyor...`,
-      buttons: ["Tamam"],
-    });
+    // Kullanıcıya sadece bildirim göster, dialog gösterme
+    log.info(`Yeni sürüm (${info.version}) mevcut. İndiriliyor...`);
   }
 
   lastProgressTime = Date.now();
@@ -293,29 +289,18 @@ autoUpdater.on("update-downloaded", (info) => {
       status: "downloaded",
       version: info.version,
     });
-
-    dialog
-      .showMessageBox({
-        type: "info",
-        title: "Güncelleme Hazır",
-        message: `Yeni sürüm (${info.version}) indirildi. Uygulamayı yeniden başlatarak güncellemeleri yükleyebilirsiniz.`,
-        buttons: ["Şimdi Güncelle", "Daha Sonra"],
-        defaultId: 0,
-      })
-      .then((returnValue) => {
-        if (returnValue.response === 0) {
-          isUpdating = true;
-          createUpdateSplash();
-
-          if (win) {
-            win.hide();
-          }
-
-          setTimeout(() => {
-            autoUpdater.quitAndInstall(false, true);
-          }, 1000);
-        }
-      });
+    
+    // Kullanıcıya dialog göstermek yerine sadece bildirim gönder
+    log.info(`Yeni sürüm (${info.version}) indirildi. Kullanıcıya bildirim gönderildi.`);
+    
+    // Opsiyonel: 5 dakika sonra otomatik güncelleme
+    // setTimeout(() => {
+    //   log.info("Otomatik güncelleme başlatılıyor...");
+    //   isUpdating = true;
+    //   createUpdateSplash();
+    //   if (win) win.hide();
+    //   autoUpdater.quitAndInstall(false, true);
+    // }, 5 * 60 * 1000);
   }
 });
 
@@ -359,8 +344,7 @@ ipcMain.on("quit-and-install", () => {
   }, 1000);
 });
 
-// YEDEKLEME SİSTEMİ IPC İŞLEYİCİLERİ - GÜNCELLENMİŞ KISIM
-// Yedekleme oluşturma fonksiyonu
+// YEDEKLEME SİSTEMİ IPC İŞLEYİCİLERİ
 async function handleBackupCreation(
   event: Electron.IpcMainInvokeEvent,
   options: any
@@ -397,6 +381,7 @@ async function handleBackupCreation(
             description: options?.description || "Manuel Yedekleme",
             backupType: options?.backupType || "full",
             onProgress,
+            isAutoBackup: options?.isAutoBackup === true
           };
 
           log.info("Yedekleme başlatılıyor:", cleanOptions);
