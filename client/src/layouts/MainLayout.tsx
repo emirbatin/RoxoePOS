@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useNotifications } from "../contexts/NotificationContext";
 import NotificationPopup from "../components/NotificationPopup";
-import icon from "../assets/icon.png"; 
+import Icon from "../assets/icon.png"; 
 
 // Sayfa başlıkları için arayüz
 interface PageTitle {
@@ -324,8 +324,8 @@ const Sidebar = ({ isOpen, toggleSidebar }: SidebarProps) => {
             expanded ? "" : "justify-center w-full"
           }`}
         >
-          <div className="flex items-center justify-center h-10 w-10 bg-indigo-600 text-white rounded-lg">
-          <img src={icon} alt="Logo" className="object-contain" />
+          <div className="flex items-center justify-center h-10 w-10 bg-white text-white rounded-lg">
+          <img src={Icon} alt="Logo" className="object-contain" />
           </div>
           {expanded && (
             <h1 className="font-bold text-lg ml-3 text-gray-800">Roxoe</h1>
