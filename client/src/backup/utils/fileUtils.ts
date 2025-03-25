@@ -14,8 +14,24 @@ export class FileUtils {
    * @param mimeType Dosya MIME türü
    * @returns Promise olarak kaydedilen dosya yolu
    */
-  static async downloadFile(content: string, filename: string): Promise<string> {
+  static async downloadFile(content: string, filename: string, isAutoBackup: boolean = false): Promise<string> {
     try {
+      // Otomatik yedekleme ise doğrudan Documents klasörüne kaydet
+      if (isAutoBackup) {
+        const documentsPath = app.getPath('documents');
+        const backupFolderPath = path.join(documentsPath, 'RoxoePOS Backups');
+        
+        // Backup klasörü yoksa oluştur
+        if (!fs.existsSync(backupFolderPath)) {
+          fs.mkdirSync(backupFolderPath, { recursive: true });
+        }
+        
+        const filePath = path.join(backupFolderPath, filename);
+        fs.writeFileSync(filePath, content);
+        return filePath;
+      }
+      
+      // Manuel yedekleme ise dialog göster
       const result = await dialog.showSaveDialog({
         title: 'Yedeği Kaydet',
         defaultPath: path.join(app.getPath('documents'), filename),

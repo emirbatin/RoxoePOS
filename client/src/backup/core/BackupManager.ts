@@ -12,6 +12,7 @@ export interface BackupOptions {
   description?: string;
   backupType?: 'full' | 'incremental';
   onProgress?: (stage: string, progress: number) => void;
+  isAutoBackup?: boolean; // Otomatik yedekleme mi?
 }
 
 export interface RestoreOptions {
@@ -74,7 +75,7 @@ export class BackupManager {
    * @param exportedData Dışa aktarılmış veritabanı verisi
    * @param options Yedekleme seçenekleri
    */
-  async createBackupWithData(exportedData: any, options?: BackupOptions): Promise<BackupResult> {
+  async createBackupWithData(exportedData: any, options?: BackupOptions & { isAutoBackup?: boolean }): Promise<BackupResult> {
     try {
       // İlerleme bildirimi
       const notifyProgress = (stage: string, progress: number) => {

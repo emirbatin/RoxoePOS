@@ -161,7 +161,8 @@ export class BackupScheduler {
         console.log('Otomatik yedekleme başlatılıyor...');
         await this.backupManager.createBackup({
           description: `Otomatik Yedekleme - ${this.schedule.frequency}`,
-          backupType: 'full'
+          backupType: 'full',
+          isAutoBackup: true
         });
         
         // Son yedek zamanını güncelle
