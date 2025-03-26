@@ -1,5 +1,5 @@
 // components/HotkeySettings.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Keyboard, RotateCcw } from "lucide-react";
 import { useAlert } from "../components/AlertProvider";
 
@@ -26,6 +26,7 @@ interface SpecialHotkeySettings {
 const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
 const modKey = isMac ? "⌘" : "Ctrl";
 
+// Default settings dışarı alındı
 const defaultHotkeys: CustomHotkeySettings[] = [
   {
     id: "new_sale",
@@ -35,78 +36,7 @@ const defaultHotkeys: CustomHotkeySettings[] = [
     currentKey: "N",
     currentModifier: true,
   },
-  {
-    id: "payment",
-    description: "Ödeme Yap",
-    defaultKey: "P",
-    defaultModifier: true,
-    currentKey: "P",
-    currentModifier: true,
-  },
-  {
-    id: "cancel",
-    description: "İptal/Kapat",
-    defaultKey: "Escape",
-    defaultModifier: false,
-    currentKey: "Escape",
-    currentModifier: false,
-  },
-  {
-    id: "search_focus",
-    description: "Ürün Ara",
-    defaultKey: "K",
-    defaultModifier: true,
-    currentKey: "K",
-    currentModifier: true,
-  },
-  {
-    id: "new_tab",
-    description: "Yeni Sekme",
-    defaultKey: "T",
-    defaultModifier: true,
-    currentKey: "T",
-    currentModifier: true,
-  },
-  {
-    id: "close_tab",
-    description: "Sekme Kapat",
-    defaultKey: "W",
-    defaultModifier: true,
-    currentKey: "W",
-    currentModifier: true,
-  },
-  {
-    id: "switch_tab",
-    description: "Sekme Değiştir",
-    defaultKey: "Tab",
-    defaultModifier: true,
-    currentKey: "Tab",
-    currentModifier: true,
-  },
-  {
-    id: "toggle_help",
-    description: "Yardımı Göster/Gizle",
-    defaultKey: "/",
-    defaultModifier: true,
-    currentKey: "/",
-    currentModifier: true,
-  },
-  {
-    id: "quick_cash_payment",
-    description: "Hızlı Nakit Ödeme",
-    defaultKey: "F7",
-    defaultModifier: false,
-    currentKey: "F7",
-    currentModifier: false,
-  },
-  {
-    id: "quick_card_payment",
-    description: "Hızlı Kredi Kartı Ödeme",
-    defaultKey: "F8",
-    defaultModifier: false,
-    currentKey: "F8",
-    currentModifier: false,
-  },
+  // Diğer kısayollar...
 ];
 
 const defaultSpecialHotkeys: SpecialHotkeySettings[] = [
@@ -120,14 +50,7 @@ const defaultSpecialHotkeys: SpecialHotkeySettings[] = [
     currentTerminator: "Enter",
     isEditable: true,
   },
-  {
-    id: "quick_quantity",
-    description: "Tek Tuşla Miktar",
-    type: "numpad",
-    defaultTrigger: "0-9",
-    currentTrigger: "0-9",
-    isEditable: false,
-  },
+  // Diğer özel kısayollar...
 ];
 
 interface Props {
@@ -140,11 +63,18 @@ interface Props {
 const HotkeySettings: React.FC<Props> = ({ onSave }) => {
   const { showError, showSuccess, confirm } = useAlert();
 
+  // State'lere referanslar ekle
+  const prevHotkeysRef = useRef<string>("");
+  const prevSpecialHotkeysRef = useRef<string>("");
+
   // Load saved settings or use defaults
   const [hotkeys, setHotkeys] = useState<CustomHotkeySettings[]>(() => {
     try {
       const saved = localStorage.getItem("hotkeySettings");
-      return saved ? JSON.parse(saved) : defaultHotkeys;
+      const parsed = saved ? JSON.parse(saved) : defaultHotkeys;
+      // İlk değeri referansa kaydet
+      prevHotkeysRef.current = JSON.stringify(parsed);
+      return parsed;
     } catch {
       return defaultHotkeys;
     }
@@ -154,7 +84,10 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
     () => {
       try {
         const saved = localStorage.getItem("specialHotkeySettings");
-        return saved ? JSON.parse(saved) : defaultSpecialHotkeys;
+        const parsed = saved ? JSON.parse(saved) : defaultSpecialHotkeys;
+        // İlk değeri referansa kaydet
+        prevSpecialHotkeysRef.current = JSON.stringify(parsed);
+        return parsed;
       } catch {
         return defaultSpecialHotkeys;
       }
@@ -164,6 +97,54 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingSpecialId, setEditingSpecialId] = useState<string | null>(null);
   const [listenForKey, setListenForKey] = useState(false);
+
+  // Değişiklikleri algılama ve kaydetme için useEffect
+  useEffect(() => {
+    // Düzenleme süreci devam ediyorsa kaydetme
+    if (editingId || editingSpecialId || listenForKey) {
+      return;
+    }
+
+    // Mevcut değerlerin string temsilini alın
+    const currentHotkeysStr = JSON.stringify(hotkeys);
+    const currentSpecialHotkeysStr = JSON.stringify(specialHotkeys);
+
+    // Değişiklik var mı kontrol edin
+    const hotkeysChanged = currentHotkeysStr !== prevHotkeysRef.current;
+    const specialHotkeysChanged =
+      currentSpecialHotkeysStr !== prevSpecialHotkeysRef.current;
+
+    // Değişiklik yoksa işlem yapma
+    if (!hotkeysChanged && !specialHotkeysChanged) {
+      return;
+    }
+
+    // Değişiklik varsa kaydedin
+    if (hotkeysChanged) {
+      localStorage.setItem("hotkeySettings", currentHotkeysStr);
+      prevHotkeysRef.current = currentHotkeysStr;
+    }
+
+    if (specialHotkeysChanged) {
+      localStorage.setItem("specialHotkeySettings", currentSpecialHotkeysStr);
+      prevSpecialHotkeysRef.current = currentSpecialHotkeysStr;
+    }
+
+    // Olayı tetikle
+    window.dispatchEvent(new Event("hotkeySettingsChanged"));
+
+    // Parent component'i bilgilendir (sadece gerçek değişiklikler olduğunda)
+    if (onSave && (hotkeysChanged || specialHotkeysChanged)) {
+      onSave(hotkeys, specialHotkeys);
+    }
+  }, [
+    hotkeys,
+    specialHotkeys,
+    editingId,
+    editingSpecialId,
+    listenForKey,
+    onSave,
+  ]);
 
   // Handle key events for regular hotkeys
   useEffect(() => {
@@ -217,7 +198,14 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [listenForKey, editingId, hotkeys, specialHotkeys, showError]);
+  }, [
+    listenForKey,
+    editingId,
+    hotkeys,
+    specialHotkeys,
+    showError,
+    showSuccess,
+  ]);
 
   // Handle key events for special hotkeys
   useEffect(() => {
@@ -261,11 +249,21 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
 
       setListenForKey(false);
       setEditingSpecialId(null);
+
+      // Değişiklik bildirimi
+      showSuccess("Özel kısayol güncellendi");
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [listenForKey, editingSpecialId, hotkeys, specialHotkeys, showError]);
+  }, [
+    listenForKey,
+    editingSpecialId,
+    hotkeys,
+    specialHotkeys,
+    showError,
+    showSuccess,
+  ]);
 
   const startEditing = (id: string) => {
     setEditingId(id);
@@ -293,24 +291,10 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
     if (confirmed) {
       setHotkeys(defaultHotkeys);
       setSpecialHotkeys(defaultSpecialHotkeys);
-      localStorage.setItem("hotkeySettings", JSON.stringify(defaultHotkeys));
-      localStorage.setItem(
-        "specialHotkeySettings",
-        JSON.stringify(defaultSpecialHotkeys)
-      );
-      onSave?.(defaultHotkeys, defaultSpecialHotkeys);
+
+      // Değişiklik bildirimi
       showSuccess("Kısayollar varsayılan değerlerine döndürüldü");
     }
-  };
-
-  const saveChanges = () => {
-    localStorage.setItem("hotkeySettings", JSON.stringify(hotkeys));
-    localStorage.setItem(
-      "specialHotkeySettings",
-      JSON.stringify(specialHotkeys)
-    );
-    onSave?.(hotkeys, specialHotkeys);
-    showSuccess("Kısayollar başarıyla kaydedildi");
   };
 
   return (
@@ -439,7 +423,7 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
         </div>
       </div>
 
-      {/* Action Buttons */}
+      {/* Only Reset Button - No Save Button */}
       <div className="flex justify-between mt-6 pt-4 border-t">
         <button
           onClick={resetToDefaults}
@@ -447,12 +431,6 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
         >
           <RotateCcw size={16} />
           Varsayılanlara Dön
-        </button>
-        <button
-          onClick={saveChanges}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          Değişiklikleri Kaydet
         </button>
       </div>
 
@@ -473,6 +451,12 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
             çalışır.
           </li>
           <li>• İptal etmek için ESC tuşunu kullanabilirsiniz.</li>
+          <li>
+            •{" "}
+            <strong>
+              Değişiklikler otomatik olarak kaydedilir ve anında uygulanır.
+            </strong>
+          </li>
         </ul>
       </div>
     </div>

@@ -179,41 +179,128 @@ function createWindow() {
     });
   }
 
-  if (!app.isPackaged) {
-    const menu = Menu.buildFromTemplate([
-      {
-        label: "Developer",
-        submenu: [
-          {
-            label: "Toggle DevTools",
-            accelerator: "Ctrl+Shift+I",
-            click: () => {
-              win?.webContents.toggleDevTools();
-            },
+  // main.ts içinde menü kısmını şu şekilde güncelleyin:
+
+// Menu kısmında yapılacak değişiklikler
+if (!app.isPackaged) {
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "Developer",
+      submenu: [
+        {
+          label: "Toggle DevTools",
+          accelerator: "Ctrl+Shift+I",
+          click: () => {
+            win?.webContents.toggleDevTools();
           },
-          {
-            label: "Check for Updates",
-            click: () => {
-              autoUpdater.checkForUpdatesAndNotify();
-            },
+        },
+        {
+          label: "Check for Updates",
+          click: () => {
+            autoUpdater.checkForUpdatesAndNotify();
           },
-          {
-            label: "Create Backup",
-            click: () => {
-              if (win) {
-                win.webContents.send("trigger-backup", {
-                  description: "Manuel Geliştirici Yedeklemesi",
-                });
+        },
+        {
+          label: "Create Backup",
+          click: () => {
+            if (win) {
+              win.webContents.send("trigger-backup", {
+                description: "Manuel Geliştirici Yedeklemesi",
+              });
+            }
+          },
+        },
+      ],
+    },
+    {
+      label: "Help",
+      submenu: [
+        {
+          label: "About",
+          click: () => {
+            dialog.showMessageBox(win!, {
+              title: "RoxoePOS Hakkında",
+              message: "RoxoePOS v1.0.0",
+              detail: "RoxoePOS, küçük ve orta ölçekli işletmeler için tasarlanmış modern bir satış noktası yazılımıdır.\n\n© 2025 RoxoePOS. Tüm hakları saklıdır.",
+              type: "info",
+              buttons: ["Tamam"],
+              defaultId: 0,
+            });
+          },
+        },
+        {
+          label: "Contact",
+          click: () => {
+            const contactEmail = "msg@cretique.net";
+            dialog.showMessageBox(win!, {
+              title: "İletişim",
+              message: "Bize Ulaşın",
+              detail: `Soru, öneri veya geri bildirimleriniz için: ${contactEmail}\n\nWebsite: www.cretique.net`,
+              type: "info",
+              buttons: ["E-posta Gönder", "Kapat"],
+              defaultId: 0,
+            }).then(result => {
+              if (result.response === 0) {
+                // E-posta istemcisini aç
+                require('electron').shell.openExternal(`mailto:${contactEmail}?subject=Roxoe POS%20Feedback`);
               }
-            },
+            });
           },
-        ],
-      },
-    ]);
-    Menu.setApplicationMenu(menu);
-  } else {
-    Menu.setApplicationMenu(null);
-  }
+        },
+        { type: 'separator' },
+        {
+          label: "GitHub",
+          click: () => {
+            require('electron').shell.openExternal('https://github.com/emirbatin/RoxoePOS');
+          }
+        }
+      ],
+    },
+  ]);
+  Menu.setApplicationMenu(menu);
+} else {
+  // Üretim modunda, sadece Help menüsü göster
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "Yardım",
+      submenu: [
+        {
+          label: "Hakkında",
+          click: () => {
+            dialog.showMessageBox(win!, {
+              title: "RoxoePOS Hakkında",
+              message: "RoxoePOS v" + app.getVersion(),
+              detail: "RoxoePOS, küçük ve orta ölçekli işletmeler için tasarlanmış modern bir satış noktası yazılımıdır.\n\n© 2025 RoxoePOS. Tüm hakları saklıdır.",
+              type: "info",
+              buttons: ["Tamam"],
+              defaultId: 0,
+            });
+          },
+        },
+        {
+          label: "İletişim",
+          click: () => {
+            const contactEmail = "msg@cretique.net";
+            dialog.showMessageBox(win!, {
+              title: "İletişim",
+              message: "Bize Ulaşın",
+              detail: `Soru, öneri veya geri bildirimleriniz için: ${contactEmail}\n\nWebsite: www.cretique.net`,
+              type: "info",
+              buttons: ["E-posta Gönder", "Kapat"],
+              defaultId: 0,
+            }).then(result => {
+              if (result.response === 0) {
+                // E-posta istemcisini aç
+                require('electron').shell.openExternal(`mailto:${contactEmail}?subject=Roxoe POS%20Feedback`);
+              }
+            });
+          },
+        },
+      ],
+    },
+  ]);
+  Menu.setApplicationMenu(menu);
+}
 }
 
 let lastProgressTime = Date.now();

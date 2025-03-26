@@ -124,6 +124,11 @@ const POSPage: React.FC = () => {
   });
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // YENİ: Yıldız modu görünürlüğü ve barkod tarama modu
+  const [showQuantityModeToast, setShowQuantityModeToast] =
+    useState<boolean>(false);
+  const [barcodeScanMode, setBarcodeScanMode] = useState<boolean>(false);
+
   // Filtre reset
   const resetFilters = () => {
     setSearchTerm("");
@@ -242,6 +247,16 @@ const POSPage: React.FC = () => {
     }
   };
 
+  // YENİ: SearchFilterPanel için tarama modu değişikliği yönetimi
+  const handleSearchPanelModeChange = (isScanMode: boolean) => {
+    setBarcodeScanMode(isScanMode);
+
+    // Barkod tarama modu aktifleştiğinde yıldız modunu devre dışı bırak
+    if (isScanMode && quantityMode) {
+      resetQuantityMode();
+    }
+  };
+
   // Hızlı Nakit Ödeme
   const handleQuickCashPayment = async () => {
     if (!activeTab?.cart.length) {
@@ -259,9 +274,9 @@ const POSPage: React.FC = () => {
         paymentMethod: "nakit",
         received: cartTotals.total,
       };
-      showSuccess("Nakit ödeme işlemi başlatıldı...");
+      //showSuccess("Nakit ödeme işlemi başlatıldı...");
       await handlePaymentComplete(paymentResult);
-      showSuccess("Nakit ödeme başarıyla tamamlandı");
+      //showSuccess("Nakit ödeme başarıyla tamamlandı");
     } catch (error) {
       console.error("Hızlı nakit ödeme hatası:", error);
       showError("Ödeme işlemi sırasında bir hata oluştu");
@@ -303,15 +318,15 @@ const POSPage: React.FC = () => {
       };
 
       await handlePaymentComplete(paymentResult);
-      showSuccess("Kredi kartı ile ödeme başarıyla tamamlandı");
+      //showSuccess("Kredi kartı ile ödeme başarıyla tamamlandı");
     } catch (error) {
       console.error("Hızlı kredi kartı ödeme hatası:", error);
       showError("Ödeme işlemi sırasında bir hata oluştu");
     }
   };
 
-  // Hotkeys
-  const { quantityMode, tempQuantity } = useHotkeys({
+  // Hotkeys - GÜNCELLENDİ
+  const { quantityMode, tempQuantity, resetQuantityMode } = useHotkeys({
     hotkeys: [
       {
         key: "n",
@@ -374,17 +389,44 @@ const POSPage: React.FC = () => {
       },
     ],
     onQuantityUpdate: (newQuantity) => {
-      if (!activeTab?.cart.length) return;
+      if (!activeTab?.cart.length) {
+        showError("Sepet boş! Miktar güncellenemez.");
+        return;
+      }
+
       const lastItem = activeTab.cart[activeTab.cart.length - 1];
 
       if (newQuantity > lastItem.stock) {
-        showError(`Stokta sadece ${lastItem.stock} tane ürün var.`);
+        showError(`Stokta sadece ${lastItem.stock} adet ${lastItem.name} var.`);
         return;
       }
 
       updateQuantity(lastItem.id, newQuantity - lastItem.quantity);
+      showSuccess(`${lastItem.name} miktarı ${newQuantity} olarak güncellendi`);
+    },
+    shouldHandleEvent: (event) => {
+      // Barkod tarama modu aktifse, kısayol işlemeyi devre dışı bırak
+      if (barcodeScanMode) {
+        return false;
+      }
+
+      // Diğer durumlarda işlemeye devam et
+      return true;
     },
   });
+
+  // YENİ: Yıldız modunu izle ve toast görünümünü kontrol et
+  useEffect(() => {
+    if (quantityMode) {
+      setShowQuantityModeToast(true);
+    } else {
+      // Yıldız modu kapandığında 0.5 saniye sonra toast'u kapat
+      const timeout = setTimeout(() => {
+        setShowQuantityModeToast(false);
+      }, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [quantityMode]);
 
   // Çoklu ürün ekleme
   const handleAddMultipleProducts = async (productIds: number[]) => {
@@ -424,7 +466,6 @@ const POSPage: React.FC = () => {
     ? calculateCartTotals(activeTab.cart)
     : { subtotal: 0, vatAmount: 0, total: 0, vatBreakdown: [] };
 
-  // Ödeme tamamlandığında
   // Ödeme tamamlandığında
   const handlePaymentComplete = async (paymentResult: PaymentResult) => {
     if (!activeTab) return;
@@ -601,8 +642,8 @@ const POSPage: React.FC = () => {
       setSelectedCustomer(null);
       setShowPaymentModal(false);
 
-      products.forEach(product => {
-        const cartItem = activeTab.cart.find(item => item.id === product.id);
+      products.forEach((product) => {
+        const cartItem = activeTab.cart.find((item) => item.id === product.id);
         if (cartItem) {
           product.stock -= cartItem.quantity;
         }
@@ -624,7 +665,7 @@ const POSPage: React.FC = () => {
       <div className="flex h-[calc(85vh)] gap-6">
         {/* Sol Panel */}
         <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden h-full">
-          {/* Arama & Filtre */}
+          {/* Arama & Filtre - YENİ: inputId ve onScanModeChange eklendi */}
           <div className="p-4 border-b">
             <SearchFilterPanel
               searchTerm={searchTerm}
@@ -635,6 +676,9 @@ const POSPage: React.FC = () => {
               inputRef={searchInputRef}
               onBarcodeDetected={handleBarcodeDetected}
               inputActive={document.activeElement === searchInputRef.current}
+              onScanModeChange={handleSearchPanelModeChange}
+              inputId="searchInput"
+              quantityModeActive={quantityMode}
             />
             {showFilters && (
               <div className="mt-4">
@@ -1070,12 +1114,22 @@ const POSPage: React.FC = () => {
           </div>
         )}
 
-        {/* Star Mode Göstergesi */}
-        {quantityMode && (
-          <div className="fixed bottom-4 right-4 bg-gray-200 text-gray-800 p-2 rounded shadow-md">
-            <div>Yıldız Modu Aktif</div>
-            <div>Miktar: {tempQuantity || "?"}</div>
-            <div className="text-xs text-gray-500">(Enter ile onayla)</div>
+        {/* YENİ: İyileştirilmiş Yıldız Modu Göstergesi */}
+        {showQuantityModeToast && (
+          <div
+            className={`fixed top-4 right-4 bg-indigo-600 text-white p-3 rounded-lg shadow-lg z-50 transition-all duration-300 ease-in-out ${
+              quantityMode
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 -translate-y-4"
+            }`}
+          >
+            <div className="font-bold text-center mb-1">Yıldız Modu Aktif</div>
+            <div className="text-2xl text-center font-mono">
+              {tempQuantity || "0"}
+            </div>
+            <div className="text-xs text-center mt-1">
+              Enter ile onaylayın, ESC ile iptal edin
+            </div>
           </div>
         )}
       </div>

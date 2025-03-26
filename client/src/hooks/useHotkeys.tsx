@@ -1,139 +1,246 @@
-// hooks/useHotkeys.ts
-import { useCallback, useEffect, useState } from 'react';
-import { SpecialHotkeySettings, UseHotkeysProps, UseHotkeysReturn } from '../types/hotkey';
+// hooks/useHotkeys.ts - Güncellenmiş versiyon
+import { useState, useEffect, useCallback, useRef } from "react";
 
-const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+interface Hotkey {
+  key: string;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
+  callback: () => void;
+}
+
+interface CustomHotkeySettings {
+  id: string;
+  description: string;
+  defaultKey: string;
+  defaultModifier: boolean;
+  currentKey: string;
+  currentModifier: boolean;
+}
+
+interface SpecialHotkeySettings {
+  id: string;
+  description: string;
+  type: "quantity" | "numpad";
+  defaultTrigger: string;
+  currentTrigger: string;
+  defaultTerminator?: string;
+  currentTerminator?: string;
+  isEditable?: boolean;
+}
+
+interface UseHotkeysOptions {
+  hotkeys: Hotkey[];
+  onQuantityUpdate?: (quantity: number) => void;
+  shouldHandleEvent?: (event: KeyboardEvent) => boolean;
+}
+
+// Kısayol ayarlarını yükleme - ayrı fonksiyon olarak tanımlandı
+const loadHotkeySettings = () => {
+  try {
+    const savedHotkeys = localStorage.getItem("hotkeySettings");
+    const savedSpecialHotkeys = localStorage.getItem("specialHotkeySettings");
+    
+    // Yüklenen ayarları loglama (debug için)
+    console.log("Loaded hotkey settings:", savedHotkeys ? JSON.parse(savedHotkeys) : "None");
+    console.log("Loaded special hotkey settings:", savedSpecialHotkeys ? JSON.parse(savedSpecialHotkeys) : "None");
+    
+    return {
+      hotkeySettings: savedHotkeys ? JSON.parse(savedHotkeys) : null,
+      specialHotkeySettings: savedSpecialHotkeys ? JSON.parse(savedSpecialHotkeys) : null
+    };
+  } catch (error) {
+    console.error("Error loading hotkey settings:", error);
+    return { hotkeySettings: null, specialHotkeySettings: null };
+  }
+};
 
 export const useHotkeys = ({
   hotkeys,
   onQuantityUpdate,
-}: UseHotkeysProps): UseHotkeysReturn => {
+  shouldHandleEvent = () => true,
+}: UseHotkeysOptions) => {
   const [quantityMode, setQuantityMode] = useState(false);
   const [tempQuantity, setTempQuantity] = useState("");
-
-  const loadHotkeySettings = useCallback(() => {
-    try {
-      const saved = localStorage.getItem('hotkeySettings');
-      const savedSpecial = localStorage.getItem('specialHotkeySettings');
-      return {
-        normal: saved ? JSON.parse(saved) : null,
-        special: savedSpecial ? JSON.parse(savedSpecial) : null
-      };
-    } catch {
-      return { normal: null, special: null };
-    }
+  
+  // Ayar değişikliklerini izlemek için kullanılan ref
+  const hotkeySettingsRef = useRef<CustomHotkeySettings[] | null>(null);
+  const specialHotkeySettingsRef = useRef<SpecialHotkeySettings[] | null>(null);
+  
+  // İlk kez ayarları yükle
+  useEffect(() => {
+    const { hotkeySettings, specialHotkeySettings } = loadHotkeySettings();
+    hotkeySettingsRef.current = hotkeySettings;
+    specialHotkeySettingsRef.current = specialHotkeySettings;
+  }, []);
+  
+  // Kısayol ayarı değişikliklerini dinle
+  useEffect(() => {
+    const handleHotkeySettingsChanged = () => {
+      console.log("Hotkey settings changed event detected");
+      const { hotkeySettings, specialHotkeySettings } = loadHotkeySettings();
+      hotkeySettingsRef.current = hotkeySettings;
+      specialHotkeySettingsRef.current = specialHotkeySettings;
+    };
+    
+    // Özel bir olay tanımladık
+    window.addEventListener("hotkeySettingsChanged", handleHotkeySettingsChanged);
+    
+    return () => {
+      window.removeEventListener("hotkeySettingsChanged", handleHotkeySettingsChanged);
+    };
   }, []);
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      if (event.key.match(/^F\d+$/)) {
-        event.preventDefault();
+  // Özel tuşları işleyen fonksiyon
+  const handleSpecialKeys = useCallback(
+    (e: KeyboardEvent) => {
+      const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+      const ctrlKey = isMac ? e.metaKey : e.ctrlKey;
+
+      // Eğer aktif element bir input veya textarea ise ve searchInput değilse, olayları işleme
+      if (
+        document.activeElement && 
+        document.activeElement.matches("input:not(#searchInput), textarea")
+      ) {
+        return false; // Bu case'de hiçbir tuşu işlemeyeceğiz
       }
 
-      const settings = loadHotkeySettings();
-      const specialSettings = settings.special as SpecialHotkeySettings[] | null;
-
-      const starModeConfig = specialSettings?.find(s => s.id === 'star_mode');
-      const quickQuantityConfig = specialSettings?.find(s => s.id === 'quick_quantity');
-
-      const isInputActive = document.activeElement instanceof HTMLInputElement ||
-                          document.activeElement instanceof HTMLTextAreaElement;
-
-      if (isInputActive && !quantityMode) {
-        if (event.key === 'Escape') {
-          (document.activeElement as HTMLElement).blur();
+      // Yıldız karakteri için özel hotkey ayarını kontrol et
+      const specialHotkeys = specialHotkeySettingsRef.current;
+      const starModeHotkey = specialHotkeys?.find(h => h.id === "star_mode");
+      const starTrigger = starModeHotkey?.currentTrigger || "*";
+      
+      // Yıldız modu işlemesi - güncel ayara göre
+      if (e.key === starTrigger && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // Eğer arama inputu aktifse, normal davranış devam etsin
+        if (document.activeElement?.id === "searchInput") {
+          return false;
         }
-        return;
-      }
-
-      if (starModeConfig && event.key === starModeConfig.currentTrigger) {
-        event.preventDefault();
+        
+        e.preventDefault();
         setQuantityMode(true);
         setTempQuantity("");
-        return;
+        console.log(`Quantity mode activated with trigger: ${starTrigger}`);
+        return true;
       }
 
+      // Yıldız modu aktifse sayı girişi
       if (quantityMode) {
-        event.preventDefault();
-        if (/[0-9]/.test(event.key)) {
-          setTempQuantity(prev => prev + event.key);
+        if (/^[0-9]$/.test(e.key)) {
+          e.preventDefault();
+          setTempQuantity((prev) => prev + e.key);
+          console.log("Quantity updated:", tempQuantity + e.key);
+          return true;
         }
-        else if (
-          starModeConfig && 
-          event.key === (starModeConfig.currentTerminator || 'Enter') && 
-          tempQuantity
-        ) {
-          const newQuantity = parseInt(tempQuantity, 10);
-          if (!isNaN(newQuantity) && newQuantity > 0 && onQuantityUpdate) {
-            onQuantityUpdate(newQuantity);
+
+        // Enter tuşu - miktarı onayla
+        if (e.key === "Enter") {
+          e.preventDefault();
+          console.log("Quantity confirmed:", tempQuantity);
+          
+          if (tempQuantity !== "" && onQuantityUpdate) {
+            const newQuantity = parseInt(tempQuantity, 10);
+            if (!isNaN(newQuantity) && newQuantity > 0) {
+              onQuantityUpdate(newQuantity);
+            }
           }
+          
           setQuantityMode(false);
           setTempQuantity("");
+          return true;
         }
-        else if (event.key === 'Escape') {
+
+        // Escape veya herhangi bir başka tuş - yıldız modunu iptal et
+        if (e.key === "Escape" || !/^[0-9]$/.test(e.key)) {
+          e.preventDefault();
+          console.log("Quantity mode canceled");
           setQuantityMode(false);
           setTempQuantity("");
+          return true;
         }
-        return;
+        
+        return true; // Yıldız modu aktifken tüm tuşları engelle
       }
 
-      if (
-        quickQuantityConfig?.currentTrigger === '0-9' &&
-        /^[0-9]$/.test(event.key) &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey &&
-        !event.shiftKey &&
-        !isInputActive
-      ) {
-        event.preventDefault();
-        const quantity = parseInt(event.key, 10);
-        if (!isNaN(quantity) && onQuantityUpdate) {
-          onQuantityUpdate(quantity);
+      // Normal hotkeys işlemesi - güncel ayarlara göre
+      // Kaydedilmiş kısayolları kontrol et
+      const savedHotkeys = hotkeySettingsRef.current;
+      
+      for (const hotkey of hotkeys) {
+        // Bu hotkey için kaydedilmiş bir ayar var mı?
+        const savedHotkey = savedHotkeys?.find(h => {
+          // Hotkey ID eşleşmesini bul
+          // Burada biraz tahmin gerekiyor çünkü hotkey objeleri ile savedHotkey objeleri arasında 
+          // direkt bir ID ilişkisi yok. Kısayol açıklamasına veya fonksiyonuna göre eşleştirme yapılabilir.
+          if (h.id === "new_sale" && hotkey.callback.name.includes("startNewSale")) return true;
+          if (h.id === "payment" && hotkey.ctrlKey && hotkey.key === "p") return true;
+          if (h.id === "cancel" && hotkey.key === "Escape") return true;
+          if (h.id === "search_focus" && hotkey.ctrlKey && hotkey.key === "k") return true;
+          if (h.id === "new_tab" && hotkey.ctrlKey && hotkey.key === "t") return true;
+          if (h.id === "close_tab" && hotkey.ctrlKey && hotkey.key === "w") return true;
+          if (h.id === "switch_tab" && hotkey.ctrlKey && hotkey.key === "Tab") return true;
+          if (h.id === "quick_cash_payment" && hotkey.key === "F7") return true;
+          if (h.id === "quick_card_payment" && hotkey.key === "F8") return true;
+          return false;
+        });
+        
+        // Eğer kaydedilmiş ayar bulunduysa, onu kullan
+        const keyToCheck = savedHotkey ? savedHotkey.currentKey : hotkey.key;
+        const modifierToCheck = savedHotkey ? savedHotkey.currentModifier : hotkey.ctrlKey;
+        
+        if (
+          e.key.toLowerCase() === keyToCheck.toLowerCase() &&
+          (modifierToCheck === undefined || modifierToCheck === ctrlKey) &&
+          (hotkey.altKey === undefined || hotkey.altKey === e.altKey) &&
+          (hotkey.shiftKey === undefined || hotkey.shiftKey === e.shiftKey)
+        ) {
+          e.preventDefault();
+          console.log(`Executing hotkey: ${keyToCheck} (${savedHotkey ? 'custom' : 'default'})`);
+          hotkey.callback();
+          return true;
         }
-        return;
       }
 
-      hotkeys.forEach(({ key, callback, ctrlKey, metaKey, altKey, shiftKey }) => {
-        const customHotkey = settings.normal?.find((ch: any) => 
-          ch.defaultKey.toLowerCase() === key.toLowerCase() && 
-          ch.defaultModifier === !!ctrlKey
-        );
-
-        let matchesKey = false;
-        let matchesModifier = false;
-
-        if (customHotkey) {
-          matchesKey = event.key.toLowerCase() === customHotkey.currentKey.toLowerCase();
-          matchesModifier = isMac 
-            ? event.metaKey === customHotkey.currentModifier
-            : event.ctrlKey === customHotkey.currentModifier;
-        } else {
-          matchesKey = event.key.toLowerCase() === key.toLowerCase();
-          matchesModifier = isMac 
-            ? (!!event.metaKey === !!ctrlKey)
-            : (!!event.ctrlKey === !!ctrlKey);
-        }
-
-        const matchesAlt = !!event.altKey === !!altKey;
-        const matchesShift = !!event.shiftKey === !!shiftKey;
-
-        if (matchesKey && matchesModifier && matchesAlt && matchesShift) {
-          event.preventDefault();
-          callback(event);
-        }
-      });
+      return false;
     },
-    [hotkeys, quantityMode, tempQuantity, onQuantityUpdate, loadHotkeySettings]
+    [hotkeys, quantityMode, tempQuantity, onQuantityUpdate]
   );
 
   useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Dışarıdan gelen kontrol fonksiyonu önce çalıştırılır
+      if (!shouldHandleEvent(e)) {
+        return;
+      }
 
-  return {
-    quantityMode,
-    tempQuantity
+      // Özel tuşları işle
+      const handled = handleSpecialKeys(e);
+      
+      // Eğer özel tuşlar işlendiyse, durumu logla
+      if (handled) {
+        console.log("Event handled by useHotkeys:", e.key);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, [handleSpecialKeys, shouldHandleEvent]);
+
+  // Yıldız modu değiştiğinde loglama
+  useEffect(() => {
+    if (quantityMode) {
+      console.log("Quantity mode is active. Current quantity:", tempQuantity);
+    }
+  }, [quantityMode, tempQuantity]);
+
+  return { 
+    quantityMode, 
+    tempQuantity,
+    resetQuantityMode: () => {
+      setQuantityMode(false);
+      setTempQuantity("");
+    }
   };
 };
+
+export default useHotkeys;

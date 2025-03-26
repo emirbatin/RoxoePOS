@@ -520,9 +520,8 @@ const SettingsPage: React.FC = () => {
     switch (activeTab) {
       case "pos":
         return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-xl font-semibold">POS Cihazı Ayarları</h2>
+          <div>
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {connectionStatus === "connected" && (
                   <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full flex items-center gap-1">
@@ -573,7 +572,7 @@ const SettingsPage: React.FC = () => {
               }`}
             >
               {/* POS Marka ve Bağlantı Ayarları */}
-              <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 mt-6">
                 <h3 className="font-medium text-gray-900 mb-4">
                   Cihaz Bilgileri
                 </h3>
@@ -718,8 +717,6 @@ const SettingsPage: React.FC = () => {
       case "barcode":
         return (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold">Barkod Okuyucu Ayarları</h2>
-
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -829,8 +826,6 @@ const SettingsPage: React.FC = () => {
       case "receipt":
         return (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold">İşletme ve Fiş Ayarları</h2>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <h3 className="font-medium text-gray-900 mb-4">
@@ -1055,10 +1050,6 @@ const SettingsPage: React.FC = () => {
       case "backup":
         return (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold">
-              Veri Yedekleme ve Geri Yükleme
-            </h2>
-
             {/* Yedekleme İşlemleri */}
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h3 className="font-medium text-gray-900 mb-4">
@@ -1066,33 +1057,6 @@ const SettingsPage: React.FC = () => {
               </h3>
 
               <div className="flex items-center gap-4 mb-5">
-                {/* TEST BUTONU
-                
-                <button
-                  onClick={async () => {
-                    try {
-                      const result = await window.ipcRenderer.invoke(
-                        "test-auto-backup"
-                      );
-                      if (result.success) {
-                        showSuccess("Otomatik yedekleme testi başarılı!");
-                        loadBackupHistory(); // Geçmişi yenile
-                      } else {
-                        showError(`Test başarısız: ${result.error}`);
-                      }
-                    } catch (error) {
-                      showError(
-                        `Test hatası: ${
-                          error instanceof Error ? error.message : String(error)
-                        }`
-                      );
-                    }
-                  }}
-                >
-                  Otomatik Yedeklemeyi Test Et
-                </button>
-                */}
-
                 <button
                   className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-300"
                   onClick={handleCreateBackup}
@@ -1287,14 +1251,14 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
         );
+      // SettingsPage.tsx içinde "hotkeys" tab render kısmında yapılacak değişiklik
       case "hotkeys":
         return (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold">Klavye Kısayolları</h2>
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <HotkeySettings
                 onSave={(newHotkeys, newSpecialHotkeys) => {
-                  // Kısayollar zaten HotkeySettings içinde kaydediliyor
+                  // Kısayol değişikliği olduğunda, global event tetikle
                   window.dispatchEvent(
                     new CustomEvent("hotkeysUpdated", {
                       detail: {
@@ -1303,7 +1267,17 @@ const SettingsPage: React.FC = () => {
                       },
                     })
                   );
-                  showSuccess("Kısayollar başarıyla kaydedildi");
+
+                  // Kaydetme durumunu değiştir (diğer tablar gibi gösterge)
+                  setSaveStatus({
+                    status: "saved",
+                    message: "Kısayollar kaydedildi",
+                  });
+
+                  // 3 saniye sonra mesajı kaldır
+                  setTimeout(() => {
+                    setSaveStatus({ status: "idle", message: "" });
+                  }, 3000);
                 }}
               />
             </div>
@@ -1312,7 +1286,6 @@ const SettingsPage: React.FC = () => {
       case "license":
         return (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold">Lisans Yönetimi</h2>
             <div className="bg-white rounded-xl shadow-sm overflow-hidden p-6">
               {licenseInfo ? (
                 <LicenseCard
@@ -1393,7 +1366,10 @@ const SettingsPage: React.FC = () => {
   return (
     <div className="p-6 max-w-[1200px] mx-auto">
       <header className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-gray-800">Ayarlar</h1>
+        {/* Aktif tab başlığını ana başlık olarak göster */}
+        <h1 className="text-2xl font-bold text-gray-800">
+          {tabs.find((tab) => tab.id === activeTab)?.title || "Ayarlar"}
+        </h1>
 
         {/* Auto-save indicator */}
         {saveStatus.status !== "idle" && (

@@ -22,7 +22,7 @@ const LicenseCard: React.FC<LicenseCardProps> = ({
   renewalError,
 }) => {
   return (
-    <div className="bg-white p-6 rounded-lg shadow-lg">
+    <div>
       <div className="flex items-center justify-between border-b pb-2 mb-4">
         <div className="flex items-center gap-2">
           <Key
@@ -63,7 +63,9 @@ const LicenseCard: React.FC<LicenseCardProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <p className="text-sm text-gray-600">Lisans Anahtarı</p>
-          <p className="font-medium text-gray-800">{licenseInfo.maskedLicense}</p>
+          <p className="font-medium text-gray-800">
+            {licenseInfo.maskedLicense}
+          </p>
         </div>
         <div>
           <p className="text-sm text-gray-600">Geçerlilik</p>
@@ -86,7 +88,9 @@ const LicenseCard: React.FC<LicenseCardProps> = ({
           </p>
         </div>
       </div>
-      {renewalError && <p className="mt-4 text-sm text-red-600">{renewalError}</p>}
+      {renewalError && (
+        <p className="mt-4 text-sm text-red-600">{renewalError}</p>
+      )}
     </div>
   );
 };
