@@ -7,6 +7,7 @@ interface ProgressDetails {
   total: number;
   speed: string;
   remaining: number;
+  isDelta?: boolean; // Main process'ten gelen delta bilgisi
 }
 
 // Güncelleme durumu tipi
@@ -15,6 +16,7 @@ interface UpdateStatus {
   version?: string;
   progress?: ProgressDetails;
   error?: string;
+  updateType?: "delta" | "full"; // Güncelleme tipi
 }
 
 // Bayt boyutunu insan tarafından okunabilir formata dönüştürme
@@ -80,6 +82,29 @@ const UpdateNotification: React.FC = () => {
       ? updateStatus.progress.percent
       : 0;
 
+  // Delta güncelleme durumunu belirle (API'den veya boyuttan)
+  const isDeltaUpdate = () => {
+    // 1. Doğrudan main process'ten geliyorsa kullan
+    if (updateStatus.status === "downloading" && updateStatus.progress?.isDelta !== undefined) {
+      return updateStatus.progress.isDelta;
+    }
+    
+    // 2. İndirme tamamlandığında main process'ten gelen bilgi
+    if (updateStatus.status === "downloaded" && updateStatus.updateType) {
+      return updateStatus.updateType === "delta";
+    }
+    
+    // 3. Acil durum için: boyut tahmini (API'den bilgi gelmezse)
+    if (updateStatus.status === "downloading" && updateStatus.progress) {
+      const { total } = updateStatus.progress;
+      // 50MB'dan küçük indirmeler muhtemelen delta'dır
+      // (ölçü dinamik, ancak kesin bir sabit değil)
+      return total < 50 * 1024 * 1024;
+    }
+    
+    return false;
+  };
+
   const getPrimaryText = () => {
     switch (updateStatus.status) {
       case "checking":
@@ -100,16 +125,45 @@ const UpdateNotification: React.FC = () => {
   const getSecondaryText = () => {
     if (updateStatus.status === "downloading" && updateStatus.progress) {
       const { percent, transferred, total, speed } = updateStatus.progress;
-      return `${percent.toFixed(1)}% - ${formatBytes(transferred)} / ${formatBytes(
-        total
-      )} (${speed} MB/s)`;
+      const delta = isDeltaUpdate();
+      
+      return (
+        <div>
+          <div className="flex justify-between text-xs mb-1">
+            <span>{percent.toFixed(1)}%</span>
+            <span>{formatBytes(transferred)} / {formatBytes(total)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span>Hız: {speed} MB/s</span>
+            <span className={delta ? "text-green-300" : "text-gray-300"}>
+              {delta ? "Delta Güncelleme" : "Tam Güncelleme"}
+            </span>
+          </div>
+        </div>
+      );
     }
+    
     if (updateStatus.status === "downloaded") {
-      return "Güncelleme hazır, uygulamayı yeniden başlatarak yükleyebilirsiniz. Uygulama kapattığınızda otomatik olarak güncelleme yapılacaktır.";
+      const delta = isDeltaUpdate();
+      return (
+        <div>
+          <p className="text-sm text-gray-300 mb-1">
+            Güncelleme hazır, uygulamayı yeniden başlatarak yükleyebilirsiniz.
+          </p>
+          <p className="text-xs text-gray-400">
+            <span className={delta ? "text-green-300" : ""}>
+              {delta ? "Delta Güncelleme" : "Tam Güncelleme"}
+            </span> {" "}
+            • Uygulama kapattığınızda otomatik olarak kurulacaktır.
+          </p>
+        </div>
+      );
     }
+    
     if (updateStatus.status === "error") {
       return updateStatus.error || "Bilinmeyen hata";
     }
+    
     return "";
   };
 
@@ -153,15 +207,17 @@ const UpdateNotification: React.FC = () => {
 
   // Daha koyu ve premium renkler
   const getStatusColor = () => {
+    const delta = isDeltaUpdate();
+    
     switch (updateStatus.status) {
       case "checking":
         return "bg-gray-800 border-gray-700";
       case "available":
         return "bg-indigo-900 border-indigo-800";
       case "downloading":
-        return "bg-indigo-800 border-indigo-700";
+        return delta ? "bg-emerald-900 border-emerald-800" : "bg-indigo-800 border-indigo-700";
       case "downloaded":
-        return "bg-emerald-900 border-emerald-800";
+        return delta ? "bg-emerald-900 border-emerald-800" : "bg-blue-900 border-blue-800";
       case "error":
         return "bg-rose-900 border-rose-800";
       default:
@@ -171,11 +227,13 @@ const UpdateNotification: React.FC = () => {
 
   // Progress çubuğu rengi
   const getProgressColor = () => {
+    const delta = isDeltaUpdate();
+    
     switch (updateStatus.status) {
       case "downloading":
-        return "bg-indigo-400";
+        return delta ? "bg-emerald-400" : "bg-indigo-400";
       case "downloaded":
-        return "bg-emerald-400";
+        return delta ? "bg-emerald-400" : "bg-blue-400";
       default:
         return "bg-gray-400";
     }
@@ -183,9 +241,11 @@ const UpdateNotification: React.FC = () => {
 
   // Buton stili
   const getButtonStyle = () => {
+    const delta = isDeltaUpdate();
+    
     switch (updateStatus.status) {
       case "downloaded":
-        return "bg-emerald-800 hover:bg-emerald-700 text-white";
+        return delta ? "bg-emerald-800 hover:bg-emerald-700 text-white" : "bg-blue-800 hover:bg-blue-700 text-white";
       case "error":
         return "bg-rose-800 hover:bg-rose-700 text-white";
       default:
@@ -230,8 +290,12 @@ const UpdateNotification: React.FC = () => {
             </div>
           )}
 
-          {updateStatus.status !== "downloading" && getSecondaryText() && (
+          {updateStatus.status !== "downloading" && typeof getSecondaryText() === "string" && (
             <p className="text-sm text-gray-300 mb-3">{getSecondaryText()}</p>
+          )}
+          
+          {updateStatus.status !== "downloading" && typeof getSecondaryText() !== "string" && (
+            <div className="mb-3">{getSecondaryText()}</div>
           )}
 
           {updateStatus.status === "downloaded" && (

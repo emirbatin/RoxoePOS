@@ -84,7 +84,9 @@ declare global {
       requestPort: () => Promise<any>;
       getPorts: () => Promise<any[]>;
     };
-    // Yeni eklenen API'ler
+    appInfo: {
+      getVersion: () => Promise<string>;
+    };
     backupAPI: BackupAPI;
     updaterAPI: UpdaterAPI;
     ipcRenderer: IpcRenderer;

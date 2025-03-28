@@ -18,7 +18,16 @@
 !macroend
 
 !macro customInstall
-  ; Burada özel kurulum komutları olabilir
+  ; Uygulama çalışıyorsa kapanmasını bekle
+  DetailPrint "Uygulama kapatılıyor ve kurulum hazırlanıyor..."
+  ${GetParameters} $R0
+  ${If} $R0 == "${INSTALL_QUIET_PARAM}"
+    ; Sessiz kurulum modundaysa kısa bekle
+    Sleep 2000
+  ${Else}
+    ; Normal modda daha uzun bekle
+    Sleep 3000
+  ${EndIf}
 !macroend
 
 !macro customUnInstall

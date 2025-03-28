@@ -1,5 +1,10 @@
 import { ipcRenderer, contextBridge } from "electron";
 
+// --------- Version App Info API ---------
+contextBridge.exposeInMainWorld("appInfo", {
+  getVersion: () => ipcRenderer.invoke("get-app-version")
+});
+
 // --------- Expose IPC Renderer API ---------
 contextBridge.exposeInMainWorld("ipcRenderer", {
   on(...args: Parameters<typeof ipcRenderer.on>) {

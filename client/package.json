@@ -1,7 +1,7 @@
 {
   "name": "roxoepos",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.7",
   "type": "module",
   "description": "",
   "author": {
@@ -146,17 +146,6 @@
       ],
       "icon": "public/icon.ico"
     },
-    "linux": {
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "category": "Office"
-    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
@@ -180,6 +169,7 @@
     },
     "asarUnpack": [
       "node_modules/better-sqlite3"
-    ]
+    ],
+    "compression": "normal"
   }
 }

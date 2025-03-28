@@ -12,6 +12,8 @@ import {
   Download,
   Clock,
   Database,
+  Info,
+  Mail,
 } from "lucide-react";
 import { POSConfig, SerialOptions } from "../types/pos";
 import { BarcodeConfig } from "../types/barcode";
@@ -20,6 +22,7 @@ import Button from "../components/ui/Button";
 import { useAlert } from "../components/AlertProvider";
 import HotkeySettings from "../components/HotkeySettings";
 import LicenseCard from "../components/LicenseCard";
+import Icon from "../assets/icon.png";
 
 interface LicenseInfo {
   maskedLicense: string;
@@ -57,6 +60,7 @@ interface BackupScheduleConfig {
 }
 
 const SettingsPage: React.FC = () => {
+  const [appVersion, setAppVersion] = useState<string>("0.0.0");
   const { showSuccess, showError } = useAlert();
   const [activeTab, setActiveTab] = useState<string>("pos");
   const [saveStatus, setSaveStatus] = useState<{
@@ -86,6 +90,7 @@ const SettingsPage: React.FC = () => {
     { id: "backup", title: "Yedekleme", icon: <Database size={20} /> },
     { id: "hotkeys", title: "Kısayollar", icon: <Key size={20} /> },
     { id: "license", title: "Lisans", icon: <Check size={20} /> },
+    { id: "about", title: "Hakkında", icon: <Info size={20} /> },
   ];
 
   // 1) POS Config
@@ -181,6 +186,21 @@ const SettingsPage: React.FC = () => {
 
     // Yedek geçmişini yükle
     loadBackupHistory();
+  }, []);
+
+  //Uygulama Versiyonu
+  useEffect(() => {
+    // Uygulama versiyonunu yükle
+    const loadAppVersion = async () => {
+      try {
+        const version = await window.appInfo.getVersion();
+        setAppVersion(version);
+      } catch (error) {
+        console.error("Versiyon bilgisi alınamadı:", error);
+      }
+    };
+
+    loadAppVersion();
   }, []);
 
   // Yedekleme işlemleri için dinleyici ve temizleyici
@@ -1353,6 +1373,98 @@ const SettingsPage: React.FC = () => {
                   gereklidir. Lisansınızın süresi dolduğunda veya lisans
                   bilgilerinizde bir değişiklik olduğunda buradan
                   güncelleyebilirsiniz.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "about":
+        return (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex flex-col items-center justify-center text-center mb-8">
+                <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
+                  <img
+                    src={Icon}
+                    alt="Uygulama Logo"
+                    className="w-32 h-32 object-contain"
+                    onError={(e) => {
+                      e.currentTarget.src = "";
+                      e.currentTarget.alt = "POS";
+                    }}
+                  />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800">Roxoe POS</h2>
+                <p className="text-gray-500 mt-2">Sürüm {appVersion}</p>
+              </div>
+
+              <div className="space-y-4 mb-8">
+                <h3 className="font-medium text-lg text-gray-800">
+                  Uygulama Hakkında
+                </h3>
+                <p className="text-gray-600">
+                  Bu POS uygulaması, küçük ve orta ölçekli işletmeler için
+                  geliştirilmiş kapsamlı bir satış yönetim sistemidir. Barkod
+                  okuyucu ve yazarkasa entegrasyonu, stok takibi, müşteri
+                  yönetimi ve kapsamlı raporlama özellikleri içerir.
+                </p>
+
+                <p className="text-gray-600">
+                  Uygulamamız, modern web teknolojileri kullanılarak
+                  geliştirilmiş olup, hızlı ve güvenli bir şekilde çalışır.
+                  İşletmenizin ihtiyaçlarına göre özelleştirilebilir ve
+                  ölçeklenebilir.
+                </p>
+
+                <div className="pt-4">
+                  <h3 className="font-medium text-lg text-gray-800">
+                    Geliştirici Bilgileri
+                  </h3>
+                  <p className="text-gray-600 mt-2">
+                    © 2025 Cretique, Tüm hakları saklıdır.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t pt-6">
+                <h3 className="font-medium text-lg text-gray-800 mb-4">
+                  İletişim
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Sorularınız, önerileriniz veya geri bildirimleriniz mi var?
+                  Bizimle iletişime geçin.
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <button
+                    onClick={() => {
+                      window.location.href =
+                        "mailto:msg@cretique.com?subject=POS%20Uygulaması%20Destek%20Talebi";
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                  >
+                    <Mail size={18} />
+                    E-posta Gönder
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      window.open("https://www.cretique.com/destek", "_blank");
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+                  >
+                    <Info size={18} />
+                    Destek Sayfası
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-6 text-sm text-gray-500 bg-blue-50 p-4 rounded-lg">
+                <p>
+                  ℹ️ Bu uygulama, en son güncellemeleri ve güvenlik yamalarını
+                  otomatik olarak kontrol eder. Yeni bir güncelleme mevcut
+                  olduğunda bildirim alacaksınız.
                 </p>
               </div>
             </div>
