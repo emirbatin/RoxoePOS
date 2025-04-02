@@ -18,6 +18,7 @@ import {
 } from "../services/cashRegisterDB";
 import { exportService } from "../services/exportSevices";
 import ExportButton from "../components/ExportButton";
+import { CashTransaction } from "../types/cashRegister";
 
 // Dashboard sekme tipleri
 type DashboardTabKey = "overview" | "cash" | "sales" | "products";
@@ -311,55 +312,93 @@ const DashboardPage: React.FC = () => {
   };
 
   // Dışa aktarma fonksiyonu
-  const handleExport = async (
-    fileType: "excel" | "pdf",
-    reportType: "sale" | "product" | "cash"
-  ) => {
-    setShowExportMenu(false);
-    const dateRangeString = exportService.formatDateRange(startDate, endDate);
-    try {
-      if (fileType === "excel") {
-        if (reportType === "cash") {
-          const cashExportData = {
-            summary: {
-              openingBalance: cashData.openingBalance,
-              currentBalance: cashData.currentBalance,
-              totalDeposits: cashData.totalDeposits,
-              totalWithdrawals: cashData.totalWithdrawals,
-              veresiyeCollections: cashData.veresiyeCollections,
-              cashSalesTotal: cashData.cashSalesTotal,
-              cardSalesTotal: cashData.cardSalesTotal,
-            },
-            dailyData: cashData.dailyData,
-            closedSessions,
-          };
-          await exportService.exportCashDataToExcel(
-            cashExportData,
-            `Kasa Raporu ${dateRangeString}`
-          );
-        } else {
-          await exportService.exportToExcel(
-            filteredSales,
-            dateRangeString,
-            reportType
+  // DashboardPage.tsx dosyasında yaklaşık olarak satır 473 civarında
+// handleExport fonksiyonunu şu şekilde güncelleyin:
+
+async function handleExport(fileType: "excel" | "pdf", reportType: "sale" | "product" | "cash") {
+  setShowExportMenu(false);
+  const dateRangeString = exportService.formatDateRange(startDate, endDate);
+  try {
+    if (fileType === "excel") {
+      if (reportType === "cash") {
+        // İşlem geçmişini yükle - tip tanımlamaları eklendi
+        let allTransactions: CashTransaction[] = [];
+        let veresiyeTx: CashTransaction[] = [];
+        
+        // Aktif oturum varsa verileri al
+        const activeSession = await cashRegisterService.getActiveSession();
+        if (activeSession) {
+          const sessionDetails = await cashRegisterService.getSessionDetails(activeSession.id);
+          allTransactions = sessionDetails.transactions || [];
+          veresiyeTx = allTransactions.filter(t => 
+            t.description?.toLowerCase().includes('veresiye') || 
+            t.description?.toLowerCase().includes('tahsilat')
           );
         }
+        
+        console.log("Veri hazırlama başlıyor - Transactions sayısı:", allTransactions.length);
+
+        const cashExportData = {
+          summary: {
+            openingBalance: cashData.openingBalance,
+            currentBalance: cashData.currentBalance,
+            totalDeposits: cashData.totalDeposits,
+            totalWithdrawals: cashData.totalWithdrawals,
+            veresiyeCollections: cashData.veresiyeCollections,
+            cashSalesTotal: cashData.cashSalesTotal,
+            cardSalesTotal: cashData.cardSalesTotal,
+          },
+          dailyData: cashData.dailyData || [],
+          closedSessions,
+          transactions: allTransactions, // DÜZELTME: Aktif oturumun işlemleri
+          salesData: filteredSales.filter(s => s.status === 'completed'),
+          veresiyeTransactions: veresiyeTx, // DÜZELTME: Veresiye işlemleri
+          productSummary: productStats.map(product => ({
+            productName: product.name,
+            category: product.category || 'Kategori Yok',
+            totalSales: product.quantity,
+            totalRevenue: product.revenue,
+            totalProfit: product.profit,
+            profitMargin: product.profitMargin || 0 
+          }))
+        };
+        
+        console.log("Kasa Export Verileri:", {
+          "dailyData sayısı": cashExportData.dailyData.length,
+          "transactions sayısı": cashExportData.transactions.length,
+          "veresiye sayısı": cashExportData.veresiyeTransactions.length, 
+          "satış sayısı": cashExportData.salesData.length
+        });
+        
+        await exportService.exportCashDataToExcel(
+          cashExportData,
+          `Kasa Raporu ${dateRangeString}`
+        );
       } else {
-        if (reportType === "cash") {
-          alert("Kasa raporu PDF olarak henüz desteklenmiyor!");
-        } else {
-          await exportService.exportToPDF(
-            filteredSales,
-            dateRangeString,
-            reportType
-          );
-        }
+        // Diğer raporlar aynı kalabilir
+        await exportService.exportToExcel(
+          filteredSales,
+          dateRangeString,
+          reportType
+        );
       }
-    } catch (err) {
-      console.error("Dışa aktarım hatası:", err);
-      alert("Dışa aktarım sırasında bir hata oluştu!");
+    } else {
+      // PDF raporları aynı kalabilir
+      if (reportType === "cash") {
+        alert("Kasa raporu PDF olarak henüz desteklenmiyor!");
+      } else {
+        await exportService.exportToPDF(
+          filteredSales,
+          dateRangeString,
+          reportType
+        );
+      }
     }
-  };
+  } catch (err) {
+    console.error("Dışa aktarım hatası:", err);
+    alert("Dışa aktarım sırasında bir hata oluştu!");
+  }
+}
 
   // Period değişince tarih aralığını güncelle
   useEffect(() => {
@@ -440,7 +479,7 @@ const DashboardPage: React.FC = () => {
             </button>
           </div>
         </div>
-  
+
         {/* Sağ Taraf - Butonlar */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Özel Tarih Seçici */}
@@ -469,7 +508,7 @@ const DashboardPage: React.FC = () => {
                 }
               />
             </button>
-  
+
             {/* Tarih Seçici Popup */}
             {showDatePicker && (
               <div className="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-xl z-20 border border-gray-100 animate-in fade-in slide-in-from-top-5 duration-200">
@@ -477,7 +516,7 @@ const DashboardPage: React.FC = () => {
                   <div className="text-sm font-semibold text-gray-800 mb-3">
                     Özel Tarih Aralığı
                   </div>
-  
+
                   {/* Başlangıç Tarihi */}
                   <div className="mb-3">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -494,7 +533,7 @@ const DashboardPage: React.FC = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
-  
+
                   {/* Bitiş Tarihi */}
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -512,7 +551,7 @@ const DashboardPage: React.FC = () => {
                       min={startDate.toISOString().split("T")[0]}
                     />
                   </div>
-  
+
                   <button
                     onClick={() => {
                       setPeriod("custom");
@@ -526,10 +565,10 @@ const DashboardPage: React.FC = () => {
               </div>
             )}
           </div>
-  
+
           {/* YENİ: ExportButton Bileşeni - Dışa Aktarma Butonu yerine */}
-          <ExportButton 
-            currentTab={tabKey as 'overview' | 'cash' | 'sales' | 'products'}
+          <ExportButton
+            currentTab={tabKey as "overview" | "cash" | "sales" | "products"}
             startDate={startDate}
             endDate={endDate}
             isLoading={isLoading}
@@ -537,8 +576,9 @@ const DashboardPage: React.FC = () => {
             cashData={cashData}
             productStats={productStats}
             closedSessions={closedSessions}
+            transactions={[]} 
           />
-  
+
           {/* Yenileme Butonu */}
           <button
             onClick={handleRefresh}
@@ -559,7 +599,6 @@ const DashboardPage: React.FC = () => {
       </div>
     </div>
   );
-  
 
   // Seçili sekmeye göre içerik gösterme
   const renderTabContent = () => {

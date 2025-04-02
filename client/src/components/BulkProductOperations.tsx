@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Upload, Download, AlertTriangle, FileDown } from "lucide-react";
+import { Upload, Download, AlertTriangle, FileDown, RefreshCw } from "lucide-react";
 import { Product } from "../types/product";
 import { importExportService } from "../services/importExportServices";
 import { productService } from "../services/productDB";
@@ -17,7 +17,7 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
   products,
   filteredProducts, 
 }) => {
-  const { confirm, showError } = useAlert();
+  const { confirm, showError, showSuccess } = useAlert();
 
   const [error, setError] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -25,6 +25,7 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
     total: number;
     new: number;
     update: number;
+    newCategories: number;
   } | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showMappingModal, setShowMappingModal] = useState(false);
@@ -59,58 +60,200 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
     }
   };
 
+  // Enhanced product import to handle barcode duplicates better
+  const handleProductImport = async (newProducts: Product[], updatedProducts: Product[]) => {
+    try {
+      // STEP 1: First get all existing products with their barcodes for reference
+      console.log("Getting existing products with their barcodes...");
+      const allExistingProducts = await productService.getAllProducts();
+      const barcodeToProductMap = new Map<string, Product>();
+      
+      // Create a map of barcode to existing product for fast lookups
+      allExistingProducts.forEach(product => {
+        if (product.barcode) {
+          barcodeToProductMap.set(product.barcode, product);
+        }
+      });
+      
+      // STEP 2: First update existing products (that we already identified)
+      console.log(`Updating ${updatedProducts.length} existing products...`);
+      for (const product of updatedProducts) {
+        try {
+          await productService.updateProduct(product);
+        } catch (error) {
+          console.error(`Failed to update product ${product.name} (ID: ${product.id}):`, error);
+          // Continue with other products instead of stopping the whole process
+        }
+      }
+      
+      // STEP 3: For new products, check again if they exist by barcode
+      console.log(`Processing ${newProducts.length} new products...`);
+      let actuallyAdded = 0;
+      let additionallyUpdated = 0;
+      
+      for (const product of newProducts) {
+        try {
+          // Check if we already have this product by barcode
+          const existingProduct = barcodeToProductMap.get(product.barcode);
+          
+          if (existingProduct) {
+            // Product exists by barcode but wasn't in updatedProducts - update it
+            console.log(`Product with barcode ${product.barcode} already exists (ID: ${existingProduct.id}), updating instead of adding`);
+            await productService.updateProduct({
+              ...product,
+              id: existingProduct.id
+            });
+            additionallyUpdated++;
+          } else {
+            // Truly a new product - add it without an ID
+            // Create a new product object without the id property
+            const { id, ...productWithoutId } = product;
+            await productService.addProduct(productWithoutId);
+            actuallyAdded++;
+          }
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("barkoda sahip ürün zaten mevcut")) {
+            // This is a duplicate barcode error from productService
+            console.log(`Duplicate barcode detected for ${product.name}, skipping...`);
+          } else {
+            console.error(`Error processing product ${product.name}:`, error);
+          }
+          // Continue with other products
+        }
+      }
+      
+      console.log(`Import completed: ${updatedProducts.length} updated, ${actuallyAdded} added, ${additionallyUpdated} additionally updated`);
+    } catch (error) {
+      console.error("Error in product import:", error);
+      throw error;
+    }
+  };
+
   const handleMappedData = async (mappedProducts: Product[]) => {
     setIsProcessing(true);
     try {
-      const existingBarcodes = new Set(products.map((p) => p.barcode));
+      // Create barcode map of existing products for quick lookups
+      const existingProductsMap = new Map<string, Product>();
+      products.forEach(product => {
+        if (product.barcode) {
+          existingProductsMap.set(product.barcode, product);
+        }
+      });
+      
       const stats = {
         total: mappedProducts.length,
         new: 0,
         update: 0,
+        newCategories: 0
       };
   
-      // Mevcut kategorileri al
+      // Get existing categories
       const existingCategories = await productService.getCategories();
       const existingCategoryNames = new Set(existingCategories.map(c => c.name));
   
-      // Yeni kategorileri topla
+      // Collect new categories to add
       const newCategories = new Set<string>();
       mappedProducts.forEach(product => {
         if (product.category && !existingCategoryNames.has(product.category)) {
           newCategories.add(product.category);
         }
       });
-  
-      // Yeni kategorileri ekle
-      for (const categoryName of newCategories) {
-        await productService.addCategory({
-          name: categoryName,
-          icon: "📦", // Varsayılan icon
-        });
-      }
-  
+
+      // Prepare product lists for display
+      const newProducts: Product[] = [];
+      const updatedProducts: Product[] = [];
+      
+      // Classify products as new or update
       mappedProducts.forEach((product) => {
-        if (existingBarcodes.has(product.barcode)) {
+        if (existingProductsMap.has(product.barcode)) {
+          const existingProduct = existingProductsMap.get(product.barcode)!;
+          updatedProducts.push({
+            ...product,
+            id: existingProduct.id // Keep the existing ID
+          });
           stats.update++;
         } else {
+          newProducts.push(product);
           stats.new++;
         }
       });
   
+      stats.newCategories = newCategories.size;
       setImportStats(stats);
   
-      const shouldImport = await confirm(
-        `${stats.total} ürün içe aktarılacak:\n` +
-        `${stats.new} yeni ürün\n` +
-        `${stats.update} güncellenecek ürün\n` +
-        `${newCategories.size} yeni kategori eklenecek\n\n` +
-        `Devam etmek istiyor musunuz?`
-      );
+      // Create confirmation message with detailed info
+      let confirmMessage = `${stats.total} ürün içe aktarılacak:\n`;
+      confirmMessage += `• ${stats.new} yeni ürün eklenecek\n`;
+      confirmMessage += `• ${stats.update} ürün güncellenecek\n`;
+      
+      // Add a sample of products being updated if any
+      if (updatedProducts.length > 0) {
+        confirmMessage += "\nGüncellenecek ürünlerden örnekler:\n";
+        
+        // Show up to 3 examples of products being updated with their price changes
+        const exampleCount = Math.min(3, updatedProducts.length);
+        for (let i = 0; i < exampleCount; i++) {
+          const updated = updatedProducts[i];
+          const existing = existingProductsMap.get(updated.barcode)!;
+          
+          // Format price change information
+          let priceChangeInfo = "";
+          if (updated.salePrice !== existing.salePrice) {
+            priceChangeInfo = ` (Fiyat: ${existing.salePrice} TL → ${updated.salePrice} TL)`;
+          }
+          
+          confirmMessage += `• ${updated.name}${priceChangeInfo}\n`;
+        }
+        
+        if (updatedProducts.length > 3) {
+          confirmMessage += `• ... ve ${updatedProducts.length - 3} ürün daha\n`;
+        }
+      }
+      
+      // Add category information
+      if (newCategories.size > 0) {
+        confirmMessage += `\n${newCategories.size} yeni kategori eklenecek:\n`;
+        [...newCategories].slice(0, 5).forEach(cat => {
+          confirmMessage += `• ${cat}\n`;
+        });
+        
+        if (newCategories.size > 5) {
+          confirmMessage += `• ... ve ${newCategories.size - 5} kategori daha\n`;
+        }
+      }
+      
+      confirmMessage += "\nDevam etmek istiyor musunuz?";
+  
+      const shouldImport = await confirm(confirmMessage);
   
       if (shouldImport) {
-        await productService.bulkInsertProducts(mappedProducts);
-        const updatedProducts = await productService.getAllProducts();
-        onImport(updatedProducts);
+        // First add any new categories
+        for (const categoryName of newCategories) {
+          try {
+            await productService.addCategory({
+              name: categoryName,
+              icon: "📦", // Default icon
+            });
+          } catch (error) {
+            // If category already exists, just continue
+            console.warn(`Category may already exist: ${categoryName}`, error);
+          }
+        }
+
+        // Then handle products - using the enhanced method for better barcode matching
+        await handleProductImport(newProducts, updatedProducts);
+        
+        // Refresh the product list
+        const refreshedProducts = await productService.getAllProducts();
+        onImport(refreshedProducts);
+        
+        // Show success message with counts
+        showSuccess(
+          `İçe aktarım başarılı:\n` +
+          `${stats.new} yeni ürün eklendi\n` +
+          `${stats.update} ürün güncellendi\n` +
+          `${stats.newCategories} yeni kategori eklendi`
+        );
       }
     } catch (error) {
       setError(
@@ -157,6 +300,20 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
       );
     }
   };
+  
+  // Function to refresh existing product list
+  const refreshProductData = async () => {
+    try {
+      setIsProcessing(true);
+      const refreshedProducts = await productService.getAllProducts();
+      onImport(refreshedProducts);
+      showSuccess("Ürün listesi yenilendi");
+    } catch (error) {
+      showError("Ürün listesi yenilenirken hata oluştu");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <div className="bg-white p-4 rounded-lg border space-y-4">
@@ -176,6 +333,14 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
           >
             <FileDown size={16} />
             CSV Şablonu
+          </button>
+          <button
+            onClick={refreshProductData}
+            disabled={isProcessing}
+            className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+          >
+            <RefreshCw size={16} />
+            Yenile
           </button>
         </div>
       </div>
@@ -256,6 +421,7 @@ const BulkProductOperations: React.FC<BulkProductOperationsProps> = ({
             <div>Toplam: {importStats.total} ürün</div>
             <div>Yeni: {importStats.new} ürün</div>
             <div>Güncellenecek: {importStats.update} ürün</div>
+            <div>Yeni Kategoriler: {importStats.newCategories} adet</div>
           </div>
         </div>
       )}

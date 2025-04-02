@@ -418,29 +418,51 @@ export const productService = {
     console.log(`Bulk inserting ${products.length} products`);
     const db = await initProductDB();
     const tx = db.transaction("products", "readwrite");
-
+  
     try {
+      // First, create a map of all existing barcodes for faster lookup
+      const productsStore = tx.objectStore("products");
+      const allExistingProducts = await productsStore.getAll();
+      const barcodeMap = new Map();
+      
+      // Map barcode to product ID for quick lookups
+      allExistingProducts.forEach(product => {
+        if (product.barcode) {
+          barcodeMap.set(product.barcode, product.id);
+        }
+      });
+      
+      console.log(`Found ${barcodeMap.size} existing products with barcodes`);
+      
+      // Process each product
+      let updatedCount = 0;
+      let addedCount = 0;
+      
       for (const product of products) {
         const { id, ...productData } = product;
-        const existing = await tx.store
-          .index("barcode")
-          .get(productData.barcode);
-
-        if (existing) {
-          console.log(
-            `Updating existing product with barcode ${productData.barcode}`
-          );
-          await tx.store.put({ ...productData, id: existing.id });
+        
+        // Check if this product exists by barcode
+        const existingId = barcodeMap.get(productData.barcode);
+        
+        if (existingId) {
+          // Product exists - update it
+          console.log(`Updating existing product with barcode ${productData.barcode}`);
+          await productsStore.put({ ...productData, id: existingId });
+          updatedCount++;
         } else {
+          // New product - add it
           console.log(`Adding new product: ${productData.name}`);
-          await tx.store.add(productData);
+          const newId = await productsStore.add(productData);
+          addedCount++;
         }
       }
-
-      await new Promise((resolve, reject) => {
+  
+      console.log(`Updated ${updatedCount} products, Added ${addedCount} new products`);
+  
+      await new Promise<void>((resolve, reject) => {
         tx.oncomplete = () => {
           console.log("Bulk insert completed successfully");
-          resolve(undefined);
+          resolve();
         };
         tx.onerror = () => {
           console.error("Transaction error:", tx.error);

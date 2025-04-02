@@ -170,26 +170,38 @@ class CashRegisterService {
     return session;
   }
 
-  async getSessionDetails(
-    sessionId: string
-  ): Promise<{
-    session: CashRegisterSession;
-    transactions: CashTransaction[];
+  async getSessionDetails(sessionId: string): Promise<{ 
+    session: CashRegisterSession | null; 
+    transactions: CashTransaction[] 
   }> {
-    const db = await initCashRegisterDB();
-
-    // Get session info
-    const session = await db.get("cashRegisterSessions", sessionId);
-    if (!session) {
-      throw new Error("Kasa dönemi bulunamadı.");
+    try {
+      const db = await initCashRegisterDB();
+  
+      // Get session info
+      const session = await db.get("cashRegisterSessions", sessionId);
+      if (!session) {
+        console.warn(`Kasa dönemi bulunamadı, ID: ${sessionId}`);
+        return { session: null, transactions: [] };
+      }
+  
+      // Get all transactions for this session
+      const tx = db.transaction("cashTransactions", "readonly");
+      const index = tx.store.index("sessionId");
+      let transactions: CashTransaction[] = []; // Tip tanımlaması eklendi
+      
+      try {
+        transactions = await index.getAll(sessionId);
+      } catch (err) {
+        console.error("İşlem geçmişi alınırken hata:", err);
+        transactions = []; // Hata durumunda boş dizi döndür
+      }
+  
+      console.log(`${sessionId} ID'li oturum için ${transactions.length} işlem bulundu`);
+      return { session, transactions };
+    } catch (error) {
+      console.error(`Session details retrieval error for ${sessionId}:`, error);
+      return { session: null, transactions: [] }; // Hata durumunda boş dizi döndür
     }
-
-    // Get all transactions for this session
-    const tx = db.transaction("cashTransactions", "readonly");
-    const index = tx.store.index("sessionId");
-    const transactions = await index.getAll(sessionId);
-
-    return { session, transactions };
   }
 
   async getAllSessions(): Promise<CashRegisterSession[]> {
