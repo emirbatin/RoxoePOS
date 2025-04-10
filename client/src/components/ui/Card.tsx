@@ -161,34 +161,88 @@ const Card: React.FC<CardProps> = ({
   }
 
   // === PRODUCT ===
-  if (variant === "product") {
-    const stockStatusColor =
-      stock === undefined
-        ? "bg-gray-400"
-        : stock === 0
-        ? "bg-red-500"
-        : stock < 5
-        ? "bg-orange-500"
-        : "bg-green-500";
 
+  // Optimize edilmiş kart tasarımı - Düzeltilmiş Tükendi banner'ı ile
+  if (variant === "product") {
     return (
       <div
         className={clsx(
-          "relative group overflow-hidden rounded-xl transition-all duration-300 h-full flex flex-col",
-          "border border-gray-100 hover:border-indigo-200 bg-white hover:shadow-md",
-          disabled && "opacity-50 cursor-not-allowed grayscale",
+          "flex flex-col h-full bg-white rounded-lg border overflow-hidden relative",
+          !disabled
+            ? stock !== undefined && stock < 5
+              ? "border-orange-200"
+              : "border-gray-200"
+            : "border-gray-100",
+          !disabled && "hover:border-indigo-200",
+          disabled && "opacity-60",
           className
         )}
+        onClick={!disabled ? onClick : undefined}
       >
+        {/* Ürün Görseli */}
+        <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center">
+          {category && (
+            <div
+              className={clsx(
+                "absolute top-1 left-1 text-[10px] font-medium px-2 py-0.5 rounded-full shadow-sm pointer-events-none z-30 max-w-[80%] truncate",
+                stock === 0
+                  ? "bg-red-100 text-red-700"
+                  : "bg-indigo-100 text-indigo-700"
+              )}
+            >
+              {category}
+            </div>
+          )}
+          {stock === 0 && (
+            <div className="absolute bottom-0 right-0 w-32 h-32 overflow-hidden pointer-events-none z-10">
+              <div className="absolute bottom-[10px] right-[-45px] -rotate-45 bg-red-700 text-white py-1 w-36 text-center">
+                <span className="font-bold text-xs tracking-wider">
+                  TÜKENDİ
+                </span>
+              </div>
+            </div>
+          )}
+          {stock !== undefined && stock > 0 && stock < 5 && (
+            <div className="absolute bottom-0 right-0 m-1 bg-orange-100 text-orange-700 text-[10px] font-semibold px-1.5 py-0.5 rounded shadow-sm pointer-events-none z-10">
+              {stock} adet kaldı
+            </div>
+          )}
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={title}
+              className="w-full h-full object-contain"
+            />
+          ) : (
+            <div className="flex items-center justify-center p-4 w-full h-full">
+              <Image size={32} className="text-gray-300" strokeWidth={1} />
+            </div>
+          )}
+        </div>
+
+        {/* Ürün Detayları */}
+        <div className="p-2 flex flex-col">
+          {/* Kategori */}
+          <div className="text-sm text-gray-600 mb-1">
+            {title || "İsimsiz Ürün"}
+          </div>
+
+          {/* Fiyat */}
+          <div className="text-lg font-bold text-indigo-600">
+            {price || "₺0,00"}
+          </div>
+        </div>
+
+        {/* Grup Yönetim Butonları */}
         {(onAddToGroup || onRemoveFromGroup) && (
-          <div className="absolute top-1 right-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+          <div className="absolute top-1 right-1 flex gap-1 z-10">
             {onAddToGroup && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onAddToGroup();
                 }}
-                className="bg-indigo-500 text-white rounded-full hover:bg-indigo-600 shadow-sm p-1.5"
+                className="bg-white text-indigo-600 p-0.5 rounded shadow-sm border border-gray-200"
                 title="Gruba Ekle"
               >
                 <Plus size={12} />
@@ -200,7 +254,7 @@ const Card: React.FC<CardProps> = ({
                   e.stopPropagation();
                   onRemoveFromGroup();
                 }}
-                className="bg-red-500 text-white rounded-full hover:bg-red-600 shadow-sm p-1.5"
+                className="bg-white text-red-500 p-0.5 rounded shadow-sm border border-gray-200"
                 title="Gruptan Çıkar"
               >
                 <Minus size={12} />
@@ -208,82 +262,6 @@ const Card: React.FC<CardProps> = ({
             )}
           </div>
         )}
-
-        <div
-          className={clsx(
-            "absolute top-0 right-0 rounded-full",
-            stockStatusColor,
-            "w-2 h-2 m-2"
-          )}
-          title={`Stok: ${stock ?? "Belirtilmemiş"}`}
-        />
-
-        <button
-          onClick={onClick}
-          disabled={disabled}
-          className="w-full h-full text-left outline-none focus:outline-none flex flex-col"
-        >
-          <div className="w-full overflow-hidden bg-gray-50 relative aspect-square">
-            {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={title || "Ürün"}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full">
-                <Image size={36} className="text-gray-300" strokeWidth={1} />
-              </div>
-            )}
-
-            {vatRate && (
-              <div className="absolute bottom-1 left-1 bg-gray-800 bg-opacity-70 text-white rounded-md px-2 py-0.5 text-xs">
-                {vatRate} KDV
-              </div>
-            )}
-
-            {category && (
-              <div className="absolute top-1 left-1 bg-indigo-100 text-indigo-700 rounded-md px-2 py-0.5 text-xs">
-                {category}
-              </div>
-            )}
-          </div>
-
-          <div className="p-3 flex-1 flex flex-col">
-            <h3 className="font-medium text-gray-800 line-clamp-2 text-sm">
-              {title || "İsimsiz Ürün"}
-            </h3>
-
-            {stock !== undefined && (
-              <div className="text-gray-500 flex items-center gap-1 mt-1 text-xs">
-                Stok:{" "}
-                <span
-                  className={clsx(
-                    stock === 0
-                      ? "text-red-500 font-medium"
-                      : stock < 5
-                      ? "text-orange-500 font-medium"
-                      : "text-gray-600"
-                  )}
-                >
-                  {stock}
-                </span>
-                {stock < 5 && stock > 0 && (
-                  <AlertTriangle size={10} className="text-orange-500" />
-                )}
-                {stock === 0 && (
-                  <span className="text-red-500 font-medium">Tükendi</span>
-                )}
-              </div>
-            )}
-
-            <div className="flex justify-between items-center mt-2">
-              <div className="font-bold text-indigo-700 text-lg">
-                {price || "Fiyat belirtilmemiş"}
-              </div>
-            </div>
-          </div>
-        </button>
       </div>
     );
   }

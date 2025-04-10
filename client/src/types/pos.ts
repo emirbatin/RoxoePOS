@@ -20,6 +20,7 @@ export interface CartItem extends Product {
   total?: number; // KDV'siz toplam (salePrice * quantity)
   vatAmount?: number; // KDV tutarı
   totalWithVat?: number; // KDV'li toplam
+  source?: 'manual' | 'barcode'; // Ürünün eklenme kaynağı
 }
 
 /**

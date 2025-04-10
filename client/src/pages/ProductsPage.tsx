@@ -100,6 +100,7 @@ const ProductsPage: React.FC = () => {
       title: "Alış Fiyatı",
       render: (product) => formatCurrency(product.purchasePrice),
     },
+    /*
     {
       key: "salePrice",
       title: "Satış Fiyatı",
@@ -109,10 +110,10 @@ const ProductsPage: React.FC = () => {
       key: "vatRate",
       title: "KDV",
       render: (product) => formatVatRate(product.vatRate),
-    },
+    },*/
     {
       key: "priceWithVat",
-      title: "KDV'li Fiyat",
+      title: "Satış Fiyatı",
       render: (product) => formatCurrency(product.priceWithVat),
       className: "font-medium",
     },
@@ -545,7 +546,17 @@ const ProductsPage: React.FC = () => {
             emptyMessage="Ürün bulunamadı"
             className="border-none rounded-none"
             showTotals={true}
-            totalColumns={{name:"count",stock: "sum", purchasePrice: "sum", salePrice: "sum", priceWithVat: "sum"}}
+            totalColumns={{
+              name: "count",
+              stock: "sum", 
+              purchasePrice: "inventory_value", // Alış değeri = Alış fiyatı × stok
+              salePrice: "inventory_value",     // Satış değeri = Satış fiyatı × stok
+              priceWithVat: "inventory_value"   // KDV'li değer = KDV'li fiyat × stok
+            }}
+            totalFooters={{
+              purchasePrice: () => "Toplam envanter maliyeti",
+              priceWithVat: () => "Toplam satış değeri"
+            }}
             totalData={filteredProducts}
             enableSorting={true}    
             defaultSortKey="name"        

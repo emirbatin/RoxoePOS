@@ -10,6 +10,7 @@ interface ProductGroupTabsProps {
   onAddGroup: () => void;
   onRenameGroup: (groupId: number, newName: string) => void;
   onDeleteGroup?: (groupId: number) => void;
+  viewToggleIcon?: React.ReactNode; // Yeni eklenen prop
 }
 
 const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
@@ -18,7 +19,8 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
   onGroupChange,
   onAddGroup,
   onRenameGroup,
-  onDeleteGroup
+  onDeleteGroup,
+  viewToggleIcon // Yeni eklenen prop
 }) => {
   const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -94,69 +96,79 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
   };
 
   return (
-    <div className="flex items-center gap-2 p-2 mb-4 bg-white rounded-lg shadow-sm overflow-x-auto">
-      {groups.map((group) => (
-        <div
-          key={group.id}
-          onMouseDown={() => handleMouseDown(group.id, !!group.isDefault)}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onContextMenu={(e) => handleContextMenu(e, group.id, !!group.isDefault)}
-          onDoubleClick={() => !group.isDefault && handleDoubleClick(group)}
-          className={`relative group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all
-            ${activeGroupId === group.id
-              ? 'bg-indigo-50 text-indigo-600'
-              : 'hover:bg-gray-50 text-gray-700'
-            }
-            ${shakingGroupId === group.id ? 'animate-shake' : ''}
-          `}
-          onClick={() => handleClick(group.id)}
+    <div className="flex items-center gap-2 p-2 bg-white rounded-lg shadow-sm overflow-x-auto relative">
+      {/* Gruplar ve Yeni Grup butonu */}
+      <div className="flex items-center gap-2 flex-1 overflow-x-auto">
+        {groups.map((group) => (
+          <div
+            key={group.id}
+            onMouseDown={() => handleMouseDown(group.id, !!group.isDefault)}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onContextMenu={(e) => handleContextMenu(e, group.id, !!group.isDefault)}
+            onDoubleClick={() => !group.isDefault && handleDoubleClick(group)}
+            className={`relative group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all
+              ${activeGroupId === group.id
+                ? 'bg-indigo-50 text-indigo-600'
+                : 'hover:bg-gray-50 text-gray-700'
+              }
+              ${shakingGroupId === group.id ? 'animate-shake' : ''}
+            `}
+            onClick={() => handleClick(group.id)}
+          >
+            {editingGroupId === group.id ? (
+              <input
+                ref={inputRef}
+                type="text"
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                onBlur={handleEditSubmit}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleEditSubmit();
+                  if (e.key === 'Escape') setEditingGroupId(null);
+                }}
+                className="w-32 px-2 py-1 text-sm border rounded bg-white"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <>
+                <span>{group.name}</span>
+                {showDeleteButton === group.id && !group.isDefault && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onDeleteGroup) {
+                        onDeleteGroup(group.id);
+                        setShakingGroupId(null);
+                        setShowDeleteButton(null);
+                        setIsLongPress(false);
+                      }
+                    }}
+                    className="absolute right-0 p-1 bg-red-500 text-white rounded-full transform -translate-y-1/2 translate-x-1/2 hover:bg-red-600"
+                  >
+                    <Minus size={14} />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+        <button
+          onClick={handleAddGroupClick}
+          className="p-2 rounded-lg hover:bg-gray-50 text-indigo-600"
+          title="Yeni Grup"
+          id="addGroupButton" // ID ekleyerek DOM'da kolay erişim sağlıyoruz
         >
-          {editingGroupId === group.id ? (
-            <input
-              ref={inputRef}
-              type="text"
-              value={editingName}
-              onChange={(e) => setEditingName(e.target.value)}
-              onBlur={handleEditSubmit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleEditSubmit();
-                if (e.key === 'Escape') setEditingGroupId(null);
-              }}
-              className="w-32 px-2 py-1 text-sm border rounded bg-white"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <>
-              <span>{group.name}</span>
-              {showDeleteButton === group.id && !group.isDefault && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onDeleteGroup) {
-                      onDeleteGroup(group.id);
-                      setShakingGroupId(null);
-                      setShowDeleteButton(null);
-                      setIsLongPress(false);
-                    }
-                  }}
-                  className="absolute right-0 p-1 bg-red-500 text-white rounded-full transform -translate-y-1/2 translate-x-1/2 hover:bg-red-600"
-                >
-                  <Minus size={14} />
-                </button>
-              )}
-            </>
-          )}
+          <Plus size={20} />
+        </button>
+      </div>
+      
+      {/* Görünüm değiştirme ikonu */}
+      {viewToggleIcon && (
+        <div className="flex-shrink-0 ml-auto">
+          {viewToggleIcon}
         </div>
-      ))}
-      <button
-        onClick={handleAddGroupClick}
-        className="p-2 rounded-lg hover:bg-gray-50 text-indigo-600"
-        title="Yeni Grup"
-        id="addGroupButton" // ID ekleyerek DOM'da kolay erişim sağlıyoruz
-      >
-        <Plus size={20} />
-      </button>
+      )}
     </div>
   );
 };

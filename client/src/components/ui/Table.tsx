@@ -21,7 +21,7 @@ interface TableProps<
   defaultSortKey?: keyof T;
   defaultSortDirection?: "asc" | "desc";
   showTotals?: boolean;
-  totalColumns?: Partial<Record<keyof T, "sum" | "count">>;
+  totalColumns?: Partial<Record<keyof T, "sum" | "count" | "inventory_value">>;
   totalData?: T[];
   // Yeni eklenen alt bilgi desteği
   totalFooters?: Partial<Record<keyof T, (data: T[]) => React.ReactNode>>;
@@ -91,7 +91,7 @@ export function Table<
   // Sıralanmış veri
   const sortedData = sortData(data);
 
-  // Toplam hesaplama - iyileştirilmiş
+  // Toplam hesaplama - iyileştirilmiş ve envanter değeri desteği eklendi
   const totals = useMemo(() => {
     if (!showTotals || !totalColumns || Object.keys(totalColumns).length === 0)
       return null;
@@ -117,6 +117,19 @@ export function Table<
           (item) => item[typedKey] != null
         ).length;
         result[key] = count;
+      }
+      
+      // Yeni: Envanter değeri hesaplama (fiyat * stok)
+      if (type === "inventory_value") {
+        const stockKey = "stock" as keyof T; // Stok kolonu adı
+        
+        const inventoryValue = dataForTotals.reduce((total, item) => {
+          const price = Number(item[typedKey]) || 0;
+          const stock = Number(item[stockKey]) || 0;
+          return total + (price * stock);
+        }, 0);
+        
+        result[key] = inventoryValue;
       }
     });
 

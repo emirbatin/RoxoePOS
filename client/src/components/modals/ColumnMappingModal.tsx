@@ -4,6 +4,7 @@ import ExcelJS from "exceljs";
 import Papa from "papaparse";
 import { Product, VatRate } from "../../types/product";
 import { calculatePriceWithoutVat } from "../../utils/vatUtils";
+import { parseTurkishNumber } from "../../utils/numberFormatUtils";
 
 interface ColumnMappingModalProps {
   isOpen: boolean;
@@ -298,16 +299,17 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     return value.toString().trim();
   };
 
-  const parseNumber = (value: any): number | null => {
+  // Bu fonksiyon parseNumber yerine kullanılacak ve Türkçe sayı formatını (2.065,42 gibi) doğru şekilde işleyecek
+  const parseNumberWithTurkishSupport = (value: any): number | null => {
     if (value === null || value === undefined || value === "") return null;
     
-    const cleaned = cleanValue(value)
-      .replace(/\s/g, "")  // Remove spaces
-      .replace(/,/g, ".")  // Convert comma to dot for decimal
-      .replace(/[^\d.-]/g, ""); // Keep only digits, dot, and negative sign
-      
-    const number = Number(cleaned);
-    return isNaN(number) ? null : number;
+    // parseTurkishNumber fonksiyonunu kullan (utils/numberFormatUtils.ts'den import edilmiş)
+    const parsedNumber = parseTurkishNumber(value);
+    
+    // Log edilen değerlerin kontrol edilmesi için
+    // console.log(`Parsing ${value} (${typeof value}): Result = ${parsedNumber}`);
+    
+    return parsedNumber !== undefined ? parsedNumber : null;
   };
 
   const normalizeVatRate = (value: any): VatRate | null => {
@@ -324,8 +326,8 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
       return VAT_RATE_MAP[cleaned];
     }
     
-    // Try to convert to a number
-    const numValue = parseNumber(cleaned);
+    // Try to convert to a number using the Turkish number parser
+    const numValue = parseNumberWithTurkishSupport(cleaned);
     if (numValue === null) return null;
     
     // Round to nearest valid VAT rate
@@ -383,7 +385,8 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
               break;
             }
             case "purchasePrice": {
-              const price = parseNumber(rawValue);
+              // Türkçe sayı formatı için parseNumberWithTurkishSupport kullan
+              const price = parseNumberWithTurkishSupport(rawValue);
               if (price === null) {
                 warnings.push(`Geçersiz alış fiyatı: "${rawValue}", varsayılan değer 0 kullanılacak`);
                 product.purchasePrice = 0; // Default to 0
@@ -396,7 +399,8 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
               break;
             }
             case "salePrice": {
-              const price = parseNumber(rawValue);
+              // Türkçe sayı formatı için parseNumberWithTurkishSupport kullan
+              const price = parseNumberWithTurkishSupport(rawValue);
               if (price === null) {
                 // Try to use purchase price if available
                 if (product.purchasePrice !== undefined) {
@@ -440,7 +444,8 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
               break;
             }
             case "stock": {
-              const stock = parseNumber(rawValue);
+              // Türkçe sayı formatı için parseNumberWithTurkishSupport kullan
+              const stock = parseNumberWithTurkishSupport(rawValue);
               if (stock === null) {
                 warnings.push(`Geçersiz stok miktarı: "${rawValue}", varsayılan değer 0 kullanılacak`);
                 product.stock = 0; // Default to 0

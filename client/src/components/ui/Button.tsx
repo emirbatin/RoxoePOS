@@ -2,10 +2,19 @@ import React, { ReactNode } from "react";
 import clsx from "clsx";
 
 interface ButtonProps {
-  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void | Promise<void>;
+  onClick?: (
+    event: React.MouseEvent<HTMLButtonElement>
+  ) => void | Promise<void>;
   disabled?: boolean;
   children?: ReactNode;
-  variant?: "primary" | "secondary" | "danger" | "save" | "outline" ;
+  variant?:
+    | "primary"
+    | "secondary"
+    | "danger"
+    | "save"
+    | "outline"
+    | "card"
+    | "cash";
   icon?: React.ElementType;
   className?: string;
   type?: "button" | "submit" | "reset";
@@ -40,10 +49,11 @@ export const Button: React.FC<ButtonProps> = ({
       "bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed",
     danger:
       "bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed",
-    save:
-      "bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed",
+    save: "bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed",
     outline:
       "border border-gray-400 text-gray-700 hover:bg-gray-100 disabled:bg-gray-100 disabled:cursor-not-allowed",
+    card: "bg-yellow-500 text-white hover:bg-yellow-600 disabled:bg-gray-300 disabled:cursor-not-allowed",
+    cash: "bg-green-500 text-white hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed",
   };
 
   return (
@@ -51,7 +61,12 @@ export const Button: React.FC<ButtonProps> = ({
       onClick={onClick}
       disabled={disabled}
       type={type}
-      className={clsx(baseClasses, sizeClasses[size], variants[variant], className)}
+      className={clsx(
+        baseClasses,
+        sizeClasses[size],
+        variants[variant],
+        className
+      )}
       {...props}
     >
       {Icon && <Icon size={20} className="text-current" />}

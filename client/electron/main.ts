@@ -7,6 +7,7 @@ import { autoUpdater } from "electron-updater";
 import log from "electron-log";
 import { backupManager, FileUtils } from "../src/backup";
 import fs from "fs";
+import { screen } from "electron";
 
 // Log ayarları
 log.transports.file.level = "info";
@@ -325,10 +326,12 @@ function createUpdateSplash() {
 }
 
 function createWindow() {
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+
   win = new BrowserWindow({
-    width: 1280,
-    height: 720,
-    fullscreen: false,
+    width,
+    height,
+    // fullscreen: true, 
     icon: path.join(
       process.env.VITE_PUBLIC,
       process.platform === "darwin" ? "icon.icns" : "icon.ico"

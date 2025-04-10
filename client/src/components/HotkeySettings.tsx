@@ -26,32 +26,85 @@ interface SpecialHotkeySettings {
 const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
 const modKey = isMac ? "⌘" : "Ctrl";
 
-// Default settings dışarı alındı
-const defaultHotkeys: CustomHotkeySettings[] = [
-  {
-    id: "new_sale",
-    description: "Yeni Satış",
-    defaultKey: "N",
-    defaultModifier: true,
-    currentKey: "N",
-    currentModifier: true,
-  },
-  // Diğer kısayollar...
-];
+// Platform-specific default keys for some functions
+const getDefaultHotkeys = (): CustomHotkeySettings[] => {
+  return [
+    {
+      id: "new_sale",
+      description: "Yeni Satış",
+      defaultKey: "N",
+      defaultModifier: true,
+      currentKey: "N",
+      currentModifier: true,
+    },
+    {
+      id: "payment",
+      description: "Ödeme Yap",
+      defaultKey: "P",
+      defaultModifier: true,
+      currentKey: "P",
+      currentModifier: true,
+    },
+    {
+      id: "cancel",
+      description: "İptal/Kapat",
+      defaultKey: "Escape",
+      defaultModifier: false,
+      currentKey: "Escape",
+      currentModifier: false,
+    },
+    {
+      id: "search_focus",
+      description: "Ürün Ara",
+      defaultKey: "K",
+      defaultModifier: true,
+      currentKey: "K",
+      currentModifier: true,
+    },
+    {
+      id: "new_tab",
+      description: "Yeni Sekme",
+      defaultKey: "T",
+      defaultModifier: true,
+      currentKey: "T",
+      currentModifier: true,
+    },
+    {
+      id: "close_tab",
+      description: "Sekme Kapat",
+      defaultKey: "W",
+      defaultModifier: true,
+      currentKey: "W",
+      currentModifier: true,
+    },
+    {
+      id: "switch_tab",
+      description: "Sekme Değiştir",
+      defaultKey: "Tab",
+      defaultModifier: true,
+      currentKey: "Tab",
+      currentModifier: true,
+    },
+    {
+      id: "quick_cash_payment",
+      description: "Hızlı Nakit Ödeme",
+      defaultKey: isMac ? "F11" : "F7", 
+      defaultModifier: false,
+      currentKey: isMac ? "F11" : "F7",
+      currentModifier: false,
+    },
+    {
+      id: "quick_card_payment",
+      description: "Hızlı Kredi Kartı Ödeme",
+      defaultKey: isMac ? "F12" : "F8", // Mac için F12, Windows için F8
+      defaultModifier: false,
+      currentKey: isMac ? "F12" : "F8",
+      currentModifier: false,
+    },
+  ];
+};
 
-const defaultSpecialHotkeys: SpecialHotkeySettings[] = [
-  {
-    id: "star_mode",
-    description: "Hızlı Miktar Girişi",
-    type: "quantity",
-    defaultTrigger: "*",
-    currentTrigger: "*",
-    defaultTerminator: "Enter",
-    currentTerminator: "Enter",
-    isEditable: true,
-  },
-  // Diğer özel kısayollar...
-];
+const defaultHotkeys = getDefaultHotkeys();
 
 interface Props {
   onSave?: (
@@ -74,11 +127,54 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
       const parsed = saved ? JSON.parse(saved) : defaultHotkeys;
       // İlk değeri referansa kaydet
       prevHotkeysRef.current = JSON.stringify(parsed);
+
+      // Parsed içinde hızlı nakit veya kart ödeme yoksa, defaultHotkeys'ten alıp ekleyelim
+      // Bu, platform değiştiğinde eksik kısayolları otomatik olarak ekler
+      const hasCashPayment = parsed.some((h: CustomHotkeySettings) => h.id === "quick_cash_payment");
+      const hasCardPayment = parsed.some((h: CustomHotkeySettings) => h.id === "quick_card_payment");
+      
+      if (!hasCashPayment || !hasCardPayment) {
+        const result = [...parsed];
+        
+        if (!hasCashPayment) {
+          const defaultCashHotkey = defaultHotkeys.find((h: CustomHotkeySettings) => h.id === "quick_cash_payment");
+          if (defaultCashHotkey) result.push(defaultCashHotkey);
+        }
+        
+        if (!hasCardPayment) {
+          const defaultCardHotkey = defaultHotkeys.find((h: CustomHotkeySettings) => h.id === "quick_card_payment");
+          if (defaultCardHotkey) result.push(defaultCardHotkey);
+        }
+        
+        return result;
+      }
+      
       return parsed;
     } catch {
       return defaultHotkeys;
     }
   });
+
+  const defaultSpecialHotkeys: SpecialHotkeySettings[] = [
+    {
+      id: "star_mode",
+      description: "Hızlı Miktar Girişi",
+      type: "quantity",
+      defaultTrigger: "*",
+      currentTrigger: "*",
+      defaultTerminator: "Enter",
+      currentTerminator: "Enter",
+      isEditable: true,
+    },
+    {
+      id: "quick_quantity",
+      description: "Tek Tuşla Miktar",
+      type: "numpad",
+      defaultTrigger: "0-9",
+      currentTrigger: "0-9",
+      isEditable: false,
+    },
+  ];
 
   const [specialHotkeys, setSpecialHotkeys] = useState<SpecialHotkeySettings[]>(
     () => {
@@ -160,14 +256,14 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
 
       // Check for conflicts with both normal and special hotkeys
       const normalConflict = hotkeys.find(
-        (h) =>
+        (h: CustomHotkeySettings) =>
           h.id !== editingId &&
           h.currentKey.toLowerCase() === e.key.toLowerCase() &&
           h.currentModifier === (isMac ? e.metaKey : e.ctrlKey)
       );
 
       const specialConflict = specialHotkeys.find(
-        (h) => h.currentTrigger.toLowerCase() === e.key.toLowerCase()
+        (h: SpecialHotkeySettings) => h.currentTrigger.toLowerCase() === e.key.toLowerCase()
       );
 
       if (normalConflict || specialConflict) {
@@ -181,7 +277,7 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
 
       // Update hotkey
       setHotkeys((prev) =>
-        prev.map((h) =>
+        prev.map((h: CustomHotkeySettings) =>
           h.id === editingId
             ? {
                 ...h,
@@ -220,13 +316,13 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
 
       // Check for conflicts
       const normalConflict = hotkeys.find(
-        (h) =>
+        (h: CustomHotkeySettings) =>
           h.currentKey.toLowerCase() === e.key.toLowerCase() &&
           h.currentModifier === (isMac ? e.metaKey : e.ctrlKey)
       );
 
       const specialConflict = specialHotkeys.find(
-        (h) =>
+        (h: SpecialHotkeySettings) =>
           h.id !== editingSpecialId &&
           h.currentTrigger.toLowerCase() === e.key.toLowerCase()
       );
@@ -242,7 +338,7 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
 
       // Update special hotkey
       setSpecialHotkeys((prev) =>
-        prev.map((h) =>
+        prev.map((h: SpecialHotkeySettings) =>
           h.id === editingSpecialId ? { ...h, currentTrigger: e.key } : h
         )
       );
@@ -289,7 +385,7 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
     );
 
     if (confirmed) {
-      setHotkeys(defaultHotkeys);
+      setHotkeys(getDefaultHotkeys()); // Platform uyumlu varsayılanları kullan
       setSpecialHotkeys(defaultSpecialHotkeys);
 
       // Değişiklik bildirimi
@@ -297,11 +393,19 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
     }
   };
 
+  // Platform bilgisini göster
+  const platformInfo = isMac ? "macOS" : "Windows/Linux";
+
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
-      <div className="flex items-center gap-2 mb-6">
-        <Keyboard className="text-indigo-600" size={24} />
-        <h2 className="text-lg font-semibold">Klavye Kısayolları</h2>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <Keyboard className="text-indigo-600" size={24} />
+          <h2 className="text-lg font-semibold">Klavye Kısayolları</h2>
+        </div>
+        <div className="text-sm text-gray-500">
+          Platform: {platformInfo}
+        </div>
       </div>
 
       {/* Normal Hotkeys Section */}

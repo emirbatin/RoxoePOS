@@ -64,7 +64,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
   // Normal vs. Split
   const [mode, setMode] = useState<"normal" | "split">("normal");
   // Split tip: product (ürün bazında) veya equal (eşit)
-  const [splitType, setSplitType] = useState<"product" | "equal">("product");
+  const [splitType, setSplitType] = useState<"product" | "equal">("equal");
 
   // Normal ödeme
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("nakit");
@@ -140,7 +140,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
   useEffect(() => {
     if (!isOpen) {
       setMode("normal");
-      setSplitType("product");
+      setSplitType("equal");
       setPaymentMethod("nakit");
       setReceivedAmount("");
       setSelectedCustomer(null);
@@ -885,16 +885,6 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
               </h3>
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <button
-                  onClick={() => setSplitType("product")}
-                  className={`py-3 rounded-lg text-sm font-medium transition-all ${
-                    splitType === "product"
-                      ? "bg-indigo-600 text-white shadow"
-                      : "bg-white border border-gray-200 text-gray-700 hover:border-indigo-300"
-                  }`}
-                >
-                  Ürün Bazında
-                </button>
-                <button
                   onClick={() => setSplitType("equal")}
                   className={`py-3 rounded-lg text-sm font-medium transition-all ${
                     splitType === "equal"
@@ -903,6 +893,16 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                   }`}
                 >
                   Eşit Bölünmüş
+                </button>
+                <button
+                  onClick={() => setSplitType("product")}
+                  className={`py-3 rounded-lg text-sm font-medium transition-all ${
+                    splitType === "product"
+                      ? "bg-indigo-600 text-white shadow"
+                      : "bg-white border border-gray-200 text-gray-700 hover:border-indigo-300"
+                  }`}
+                >
+                  Ürün Bazında
                 </button>
               </div>
 
@@ -1218,7 +1218,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                       received: "",
                       customerId: "",
                     };
-                    
+
                     // Her kişi için dinamik olarak doğru kalan tutarı hesapla
                     const personRemaining = calculateRemainingForPerson(i);
 
@@ -1289,12 +1289,15 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                             className="w-full px-3 py-2 text-sm rounded-md border border-gray-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                           />
                           {/* Para üstü gösterimi - doğru hesaplama */}
-                          {parseFloat(p.received) > personRemaining && personRemaining > 0 && (
-                            <div className="mt-1 text-green-600 font-medium text-xs">
-                              Para Üstü:{" "}
-                              {formatCurrency(parseFloat(p.received) - personRemaining)}
-                            </div>
-                          )}
+                          {parseFloat(p.received) > personRemaining &&
+                            personRemaining > 0 && (
+                              <div className="mt-1 text-green-600 font-medium text-xs">
+                                Para Üstü:{" "}
+                                {formatCurrency(
+                                  parseFloat(p.received) - personRemaining
+                                )}
+                              </div>
+                            )}
                         </div>
 
                         {/* Veresiye müşteri */}

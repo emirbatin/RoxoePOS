@@ -141,7 +141,7 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
   ]);
 
   return (
-    <div className="mb-5">
+    <div className="w-full flex flex-col gap-4">
       <div className="flex flex-col md:flex-row gap-3">
         {/* Ana Arama Kutusu */}
         <div className="flex-1 relative">

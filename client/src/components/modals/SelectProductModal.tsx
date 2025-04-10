@@ -1,5 +1,5 @@
 // components/modals/SelectProductsModal.tsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
 import { Product } from '../../types/product';
 import { formatCurrency } from '../../utils/vatUtils';
@@ -19,8 +19,16 @@ const SelectProductsModal: React.FC<SelectProductsModalProps> = ({
   products,
   existingProductIds = []
 }) => {
+  // State'leri doğrudan isOpen değeri ile sıfırla
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  
+  // Modal kapandığında select ve close işlevini çağır 
+  const handleClose = () => {
+    setSelectedIds([]);
+    setSearchTerm('');
+    onClose();
+  };
 
   // Filtrelenmiş ürünler
   const filteredProducts = useMemo(() => {
@@ -42,9 +50,10 @@ const SelectProductsModal: React.FC<SelectProductsModalProps> = ({
 
   const handleSubmit = () => {
     onSelect(selectedIds);
-    onClose();
+    handleClose();
   };
 
+  // Modal açıldığında, bileşen render edildiğinde seçimler zaten temiz olacak
   if (!isOpen) return null;
 
   return (
@@ -53,7 +62,7 @@ const SelectProductsModal: React.FC<SelectProductsModalProps> = ({
         {/* Header */}
         <div className="p-4 border-b flex justify-between items-center">
           <h2 className="text-lg font-semibold">Ürün Seç</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+          <button onClick={handleClose} className="p-1 hover:bg-gray-100 rounded">
             <X size={20} />
           </button>
         </div>
@@ -118,7 +127,7 @@ const SelectProductsModal: React.FC<SelectProductsModalProps> = ({
             </div>
             <div className="flex gap-2">
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
               >
                 İptal

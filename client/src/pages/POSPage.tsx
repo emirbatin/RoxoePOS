@@ -69,6 +69,29 @@ const POSPage: React.FC = () => {
     clearCart,
   } = useCart();
 
+  // Görünüm tercihlerini localStorage'dan yükle ve kaydet
+  const [compactCartView, setCompactCartView] = useState<boolean>(() => {
+    const saved = localStorage.getItem("compactCartView");
+    return saved ? JSON.parse(saved) === true : false;
+  });
+
+  const [compactProductView, setCompactProductView] = useState<boolean>(() => {
+    const saved = localStorage.getItem("compactProductView");
+    return saved ? JSON.parse(saved) === true : false;
+  });
+
+  // Görünüm tercihlerini kaydet
+  useEffect(() => {
+    localStorage.setItem("compactCartView", JSON.stringify(compactCartView));
+  }, [compactCartView]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "compactProductView",
+      JSON.stringify(compactProductView)
+    );
+  }, [compactProductView]);
+
   // 3) Müşteriler (veresiye için)
   const [customers, setCustomers] = useState<Customer[]>([]);
   useEffect(() => {
@@ -129,6 +152,60 @@ const POSPage: React.FC = () => {
     useState<boolean>(false);
   const [barcodeScanMode, setBarcodeScanMode] = useState<boolean>(false);
 
+  // YENİ: Sepet paneli yeniden boyutlandırma
+  const [cartPanelWidth, setCartPanelWidth] = useState(() => {
+    const savedWidth = localStorage.getItem("cartPanelWidth");
+    return savedWidth ? parseInt(savedWidth, 10) : 320;
+  }); // Başlangıç için daha küçük: 320
+  const [isDragging, setIsDragging] = useState(false);
+  const dragHandleRef = useRef<HTMLDivElement>(null);
+  const MIN_CART_WIDTH = 250; // Minimum sepet genişliği (piksel)
+  const MAX_CART_WIDTH = 600; // Maksimum sepet genişliği (piksel)
+
+  // Mouse sürükleme işlemlerini yönetmek için event handler'ları ekleyin
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+
+      // Sürükleme sırasında panel genişliğini hesapla
+      // Ekranın sağ kenarından fare pozisyonunu çıkarıyoruz
+      const newWidth = window.innerWidth - e.clientX;
+
+      // Minimum ve maksimum sınırlar içinde kalmayı sağla
+      const clampedWidth = Math.max(
+        MIN_CART_WIDTH,
+        Math.min(MAX_CART_WIDTH, newWidth)
+      );
+
+      setCartPanelWidth(clampedWidth);
+      localStorage.setItem("cartPanelWidth", String(clampedWidth));
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.body.style.cursor = "default";
+      document.body.style.userSelect = "auto";
+    };
+
+    // Event listener'ları ekle ve temizle
+    if (isDragging) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none"; // Sürükleme sırasında metin seçimini engelle
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging]);
+
+  // Sürükleme işlemini başlatmak için handler
+  const handleDragStart = () => {
+    setIsDragging(true);
+  };
+
   // Filtre reset
   const resetFilters = () => {
     setSearchTerm("");
@@ -187,22 +264,20 @@ const POSPage: React.FC = () => {
     }
   };
 
-  // Barkod algılama
+  // Barkod algılama - YENİ GÜNCELLENMİŞ VERSİYON
   const handleBarcodeDetected = (barcode: string) => {
-    console.log("Barkod algılandı:", barcode);
-    console.log("Toplam ürün sayısı:", products.length);
-    console.log("Filtrelenmiş ürün sayısı:", filteredProducts.length);
-
+    console.log("🔍 Barkod algılandı:", barcode);
+    
     // 1) Barkod alanı ile tam eşleşme
     let matchingProduct = products.find((p) => p.barcode === barcode);
-
+  
     if (!matchingProduct) {
       // 2) Barkod sayısal ise ID ile dene
       const numericBarcode = parseInt(barcode);
       if (!isNaN(numericBarcode)) {
         matchingProduct = products.find((p) => p.id === numericBarcode);
       }
-
+  
       // 3) İsim ile tam eşleşme
       if (!matchingProduct) {
         matchingProduct = products.find(
@@ -210,39 +285,164 @@ const POSPage: React.FC = () => {
         );
       }
     }
-
+  
     if (matchingProduct) {
+      console.log("✅ Eşleşen ürün bulundu:", matchingProduct.name, "ID:", matchingProduct.id);
+      
       // Stok kontrol
-      if (matchingProduct.stock > 0) {
-        addToCart(matchingProduct);
-        showSuccess(`${matchingProduct.name} sepete eklendi`);
-      } else {
-        showError(`${matchingProduct.name} stokta yok`);
+      if (matchingProduct.stock <= 0) {
+        console.log("❌ Ürün stokta yok!");
+        showError(`${matchingProduct.name} stokta kalmadı!`);
+        return;
       }
+      
+      // Aktif sepette BARKOD TARAMASI ile eklenen aynı ürün var mı?
+      const existingBarcodeItem = activeTab?.cart.find(item => 
+        item.id === matchingProduct!.id && item.source === 'barcode'
+      );
+      
+      console.log("🛒 Sepette barkodla eklenmiş aynı ürün var mı?", 
+        existingBarcodeItem 
+          ? `EVET - Miktarı: ${existingBarcodeItem.quantity}` 
+          : "HAYIR - Yeni eklenecek"
+      );
+      
+      if (existingBarcodeItem) {
+        // Eğer barkod ile eklenmiş aynı ürün varsa, stok kontrolü yap
+        if (existingBarcodeItem.quantity + 1 > matchingProduct.stock) {
+          console.log("⚠️ Stok yetersiz!", `Stokta ${matchingProduct.stock}, Sepette ${existingBarcodeItem.quantity}`);
+          showError(`${matchingProduct.name} için stok yetersiz! Stokta ${matchingProduct.stock} adet var ve barkod ile eklenmiş ${existingBarcodeItem.quantity} adet mevcut.`);
+          return;
+        }
+        
+        console.log("📈 Barkodla eklenmiş ürünün miktarı artırılıyor:", 
+          existingBarcodeItem.quantity, " -> ", existingBarcodeItem.quantity + 1);
+        
+        // Barkodla eklenmiş ürünün miktarını artır
+        updateQuantity(existingBarcodeItem.id, 1);
+        showSuccess(`${matchingProduct.name} miktarı güncellendi`);
+        
+        // Güncellenmiş sepeti göster
+        setTimeout(() => {
+          console.log("🧾 Güncellenmiş sepet:", activeTab?.cart.map(item => ({
+            name: item.name,
+            id: item.id,
+            quantity: item.quantity,
+            source: item.source || "bilinmiyor"
+          })));
+        }, 100);
+        
+        return;
+      }
+      
+      // Yeni bir ürün olarak ekle, source olarak "barcode" işaretle
+      const barcodeProduct = {
+        ...matchingProduct,
+        source: 'barcode', // Özel bir özellik ekle
+      };
+      
+      console.log("➕ Barkod ile sepete YENİ ürün ekleniyor:", barcodeProduct.name, "kaynak: barcode");
+      addToCart(barcodeProduct);
+      showSuccess(`${barcodeProduct.name} sepete eklendi`);
+      
+      // Güncellenmiş sepeti göster
+      setTimeout(() => {
+        console.log("🧾 Güncellenmiş sepet:", activeTab?.cart.map(item => ({
+          name: item.name,
+          id: item.id,
+          quantity: item.quantity,
+          source: item.source || "bilinmiyor"
+        })));
+      }, 100);
+      
       return;
     }
-
+  
     // 4) Kısmi eşleşme ara
     const partialMatches = products.filter(
       (p) =>
         p.barcode.includes(barcode) ||
         p.name.toLowerCase().includes(barcode.toLowerCase())
     );
-
+  
+    console.log("🔍 Kısmi eşleşme sayısı:", partialMatches.length);
+  
     if (partialMatches.length === 1) {
       // Tek kısmi eşleşme
       const match = partialMatches[0];
-      if (match.stock > 0) {
-        addToCart(match);
-        showSuccess(`${match.name} sepete eklendi`);
-      } else {
-        showError(`${match.name} stokta yok`);
+      console.log("✅ Kısmi eşleşen ürün bulundu:", match.name, "ID:", match.id);
+      
+      if (match.stock <= 0) {
+        console.log("❌ Ürün stokta yok!");
+        showError(`${match.name} stokta kalmadı!`);
+        return;
       }
+      
+      // Aktif sepette BARKOD TARAMASI ile eklenen aynı ürün var mı?
+      const existingBarcodeItem = activeTab?.cart.find(item => 
+        item.id === match.id && item.source === 'barcode'
+      );
+      
+      console.log("🛒 Sepette barkodla eklenmiş aynı ürün var mı?", 
+        existingBarcodeItem 
+          ? `EVET - Miktarı: ${existingBarcodeItem.quantity}` 
+          : "HAYIR - Yeni eklenecek"
+      );
+      
+      if (existingBarcodeItem) {
+        // Eğer barkod ile eklenmiş aynı ürün varsa, stok kontrolü yap
+        if (existingBarcodeItem.quantity + 1 > match.stock) {
+          console.log("⚠️ Stok yetersiz!", `Stokta ${match.stock}, Sepette ${existingBarcodeItem.quantity}`);
+          showError(`${match.name} için stok yetersiz! Stokta ${match.stock} adet var ve barkod ile eklenmiş ${existingBarcodeItem.quantity} adet mevcut.`);
+          return;
+        }
+        
+        console.log("📈 Barkodla eklenmiş ürünün miktarı artırılıyor:", 
+          existingBarcodeItem.quantity, " -> ", existingBarcodeItem.quantity + 1);
+        
+        // Barkodla eklenmiş ürünün miktarını artır
+        updateQuantity(existingBarcodeItem.id, 1);
+        showSuccess(`${match.name} miktarı güncellendi`);
+        
+        // Güncellenmiş sepeti göster
+        setTimeout(() => {
+          console.log("🧾 Güncellenmiş sepet:", activeTab?.cart.map(item => ({
+            name: item.name,
+            id: item.id,
+            quantity: item.quantity,
+            source: item.source || "bilinmiyor"
+          })));
+        }, 100);
+        
+        return;
+      }
+      
+      // Yeni bir ürün olarak ekle
+      const barcodeProduct = {
+        ...match,
+        source: 'barcode',
+      };
+      
+      console.log("➕ Kısmi eşleşen ürün sepete YENİ ekleniyor:", barcodeProduct.name, "kaynak: barcode");
+      addToCart(barcodeProduct);
+      showSuccess(`${match.name} sepete eklendi`);
+      
+      // Güncellenmiş sepeti göster
+      setTimeout(() => {
+        console.log("🧾 Güncellenmiş sepet:", activeTab?.cart.map(item => ({
+          name: item.name,
+          id: item.id,
+          quantity: item.quantity,
+          source: item.source || "bilinmiyor"
+        })));
+      }, 100);
     } else if (partialMatches.length > 1) {
       // Birden çok kısmi eşleşme ⇒ arama terimi
+      console.log("ℹ️ Birden çok eşleşme bulundu, arama terimini güncelliyorum:", barcode);
       setSearchTerm(barcode);
     } else {
       // Hiç eşleşme yok
+      console.log("❓ Hiç eşleşme bulunamadı, arama terimini güncelliyorum:", barcode);
       setSearchTerm(barcode);
     }
   };
@@ -662,11 +862,12 @@ const POSPage: React.FC = () => {
 
   return (
     <PageLayout>
-      <div className="flex h-[calc(85vh)] gap-6">
+      {/* YENİ: Sepeti yeniden boyutlandırılabilir yapı için değiştirildi */}
+      <div className="flex h-[calc(90vh)] relative">
         {/* Sol Panel */}
-        <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden h-full">
+        <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden h-full mr-2">
           {/* Arama & Filtre - YENİ: inputId ve onScanModeChange eklendi */}
-          <div className="p-4 border-b">
+          <div className="p-3 border-b">
             <SearchFilterPanel
               searchTerm={searchTerm}
               onSearchTermChange={setSearchTerm}
@@ -742,120 +943,471 @@ const POSPage: React.FC = () => {
                 showError("Grup silinirken bir hata oluştu");
               }
             }}
-          />
-
-          {/* Ürün Grid */}
-          <div className="flex-1 p-4 overflow-y-auto">
-            {/* Gruba Ürün Ekle butonu (varsayılan değilse) */}
-            {activeGroupId !== 0 &&
-              !productGroups.find((g) => g.id === activeGroupId)?.isDefault && (
-                <div className="mb-4">
-                  <button
-                    onClick={() => setShowSelectProductsModal(true)}
-                    className="w-full py-2 px-4 bg-indigo-50 text-indigo-600 flex items-center justify-center gap-2 rounded-lg hover:bg-indigo-100 transition-colors"
+            viewToggleIcon={
+              <button
+                onClick={() => setCompactProductView(!compactProductView)}
+                className={`p-1.5 rounded-lg ${
+                  compactProductView
+                    ? "bg-indigo-50 text-indigo-600"
+                    : "text-gray-500 hover:bg-gray-50"
+                }`}
+                title={compactProductView ? "Kart Görünümü" : "Liste Görünümü"}
+              >
+                {compactProductView ? (
+                  // Grid ikonu
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                   >
-                    <Plus size={18} />
-                    Gruba Ürün Ekle
-                  </button>
-                </div>
-              )}
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                  </svg>
+                ) : (
+                  // Liste ikonu
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="8" y1="6" x2="21" y2="6" />
+                    <line x1="8" y1="12" x2="21" y2="12" />
+                    <line x1="8" y1="18" x2="21" y2="18" />
+                    <line x1="3" y1="6" x2="3.01" y2="6" />
+                    <line x1="3" y1="12" x2="3.01" y2="12" />
+                    <line x1="3" y1="18" x2="3.01" y2="18" />
+                  </svg>
+                )}
+              </button>
+            }
+          />
+          {/* Ürün Grid / Liste */}
+          <div className="flex-1 p-3 overflow-y-auto">
+            {/* Ürün listesi başlık ve filtreler */}
+            <div className="flex justify-between items-center mb-2">
+              {/* Sol taraf: Aktif grup adı ve bilgisi */}
+              <div className="text-gray-700 font-normal">
+                {productGroups.find((g) => g.id === activeGroupId)?.name ||
+                  "Tüm Ürünler"}
+                <span className="ml-2 text-sm text-gray-500">
+                  ({finalFilteredProducts.length} ürün)
+                </span>
+              </div>
 
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
-              {finalFilteredProducts.map((product) => (
-                <Card
-                  key={product.id}
-                  variant="product"
-                  title={product.name}
-                  imageUrl={product.imageUrl}
-                  category={product.category}
-                  price={formatCurrency(product.priceWithVat)}
-                  stock={product.stock}
-                  onClick={() => addToCart(product)}
-                  disabled={product.stock === 0}
-                  onAddToGroup={
-                    !productGroups.find((g) => g.id === activeGroupId)
-                      ?.isDefault &&
-                    !productGroups
-                      .find((g) => g.id === activeGroupId)
-                      ?.productIds?.includes(product.id)
-                      ? () => addProductToGroup(activeGroupId, product.id)
-                      : undefined
-                  }
-                  onRemoveFromGroup={
-                    !productGroups.find((g) => g.id === activeGroupId)
-                      ?.isDefault &&
-                    productGroups
-                      .find((g) => g.id === activeGroupId)
-                      ?.productIds?.includes(product.id)
-                      ? () => removeProductFromGroup(activeGroupId, product.id)
-                      : undefined
-                  }
-                  size="small"
-                />
-              ))}
+              {/* Sağ taraf: Butonlar */}
+              <div className="flex items-center gap-2">
+                {/* Gruba Ürün Ekle butonu - Daha kompakt ve şık */}
+                {activeGroupId !== 0 &&
+                  !productGroups.find((g) => g.id === activeGroupId)
+                    ?.isDefault && (
+                    <button
+                      onClick={() => setShowSelectProductsModal(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors text-sm"
+                    >
+                      <Plus size={16} />
+                      <span>Gruba Ekle</span>
+                    </button>
+                  )}
+              </div>
             </div>
+
+            {/* Ürün Listesi - Kompakt veya Kart Görünümü */}
+            {compactProductView ? (
+              // Liste Görünümü
+              <div className="border rounded-lg overflow-hidden">
+                {finalFilteredProducts.length === 0 ? (
+                  <div className="py-8 text-center text-gray-500">
+                    <p>Ürün bulunamadı</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {finalFilteredProducts.map((product) => (
+                      <div
+                        key={product.id}
+                        className={`flex items-center px-3 py-2 hover:bg-indigo-50 transition-colors cursor-pointer ${
+                          product.stock === 0 ? "opacity-50" : ""
+                        }`}
+                        onClick={() => {
+                          if (product.stock > 0) {
+                            const manualProduct = {
+                              ...product,
+                              source: "manual",
+                            };
+                            addToCart(manualProduct);
+                          }
+                        }}
+                      >
+                        {/* Ürün Resmi */}
+                        <div className="w-12 h-12 flex-shrink-0 mr-3 bg-gray-50 rounded-md overflow-hidden border border-gray-100">
+                          {product.imageUrl ? (
+                            <img
+                              src={product.imageUrl}
+                              alt={product.name}
+                              className="w-full h-full object-"
+                            />
+                          ) : (
+                            <div className="flex items-center justify-center h-full">
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="text-gray-300"
+                              >
+                                <rect
+                                  width="18"
+                                  height="18"
+                                  x="3"
+                                  y="3"
+                                  rx="2"
+                                  ry="2"
+                                />
+                                <circle cx="9" cy="9" r="2" />
+                                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Ürün İsmi ve Kategori */}
+                        <div className="flex-1 min-w-0 mr-2">
+                          <div className="font-medium text-gray-900 truncate">
+                            {product.name}
+                          </div>
+                          <div className="text-xs text-gray-500 flex items-center">
+                            {product.category && (
+                              <span className="inline-flex items-center gap-1 mr-2">
+                                <span className="w-2 h-2 bg-indigo-400 rounded-full"></span>
+                                {product.category}
+                              </span>
+                            )}
+                            <span
+                              className={`inline-flex items-center gap-0.5 ${
+                                product.stock === 0
+                                  ? "text-red-500"
+                                  : product.stock < 5
+                                  ? "text-orange-500"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              <span>Stok: {product.stock}</span>
+                              {product.stock < 5 && product.stock > 0 && (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="10"
+                                  height="10"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  className="text-orange-500"
+                                >
+                                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                                  <path d="M12 9v4" />
+                                  <path d="M12 17h.01" />
+                                </svg>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Stok ve Fiyat */}
+                        <div className="flex flex-col items-end mr-3">
+                          <div className="text-indigo-600 font-medium">
+                            {formatCurrency(product.priceWithVat)}
+                          </div>
+                        </div>
+
+                        {/* Sepete Ekle Butonu */}
+                        <button
+                          className={`p-1.5 rounded-full ${
+                            product.stock > 0
+                              ? "bg-indigo-100 text-indigo-600 hover:bg-indigo-200"
+                              : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                          }`}
+                          disabled={product.stock === 0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (product.stock > 0) {
+                              const manualProduct = {
+                                ...product,
+                                source: "manual",
+                              };
+                              addToCart(manualProduct);
+                            }
+                          }}
+                          title={
+                            product.stock > 0 ? "Sepete Ekle" : "Stokta Yok"
+                          }
+                        >
+                          <Plus size={16} />
+                        </button>
+
+                        {/* Grup Ekle/Çıkar Butonları */}
+                        {!productGroups.find((g) => g.id === activeGroupId)
+                          ?.isDefault && (
+                          <div className="ml-2">
+                            {!productGroups
+                              .find((g) => g.id === activeGroupId)
+                              ?.productIds?.includes(product.id) ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  addProductToGroup(activeGroupId, product.id);
+                                }}
+                                className="p-1 text-green-600 hover:bg-green-50 rounded-full"
+                                title="Gruba Ekle"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" />
+                                  <path d="M12 8v8" />
+                                  <path d="M8 12h8" />
+                                </svg>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeProductFromGroup(
+                                    activeGroupId,
+                                    product.id
+                                  );
+                                }}
+                                className="p-1 text-red-500 hover:bg-red-50 rounded-full"
+                                title="Gruptan Çıkar"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" />
+                                  <path d="M8 12h8" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Kart Görünümü (Orijinal)
+              <div className="grid xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-2">
+                {finalFilteredProducts.map((product) => (
+                  <Card
+                    key={product.id}
+                    variant="product"
+                    title={product.name}
+                    imageUrl={product.imageUrl}
+                    category={product.category}
+                    price={formatCurrency(product.priceWithVat)}
+                    stock={product.stock}
+                    onClick={() => {
+                      if (product.stock > 0) {
+                        const manualProduct = {
+                          ...product,
+                          source: "manual",
+                        };
+                        addToCart(manualProduct);
+                      }
+                    }}
+                    disabled={product.stock === 0}
+                    onAddToGroup={
+                      !productGroups.find((g) => g.id === activeGroupId)
+                        ?.isDefault &&
+                      !productGroups
+                        .find((g) => g.id === activeGroupId)
+                        ?.productIds?.includes(product.id)
+                        ? () => addProductToGroup(activeGroupId, product.id)
+                        : undefined
+                    }
+                    onRemoveFromGroup={
+                      !productGroups.find((g) => g.id === activeGroupId)
+                        ?.isDefault &&
+                      productGroups
+                        .find((g) => g.id === activeGroupId)
+                        ?.productIds?.includes(product.id)
+                        ? () =>
+                            removeProductFromGroup(activeGroupId, product.id)
+                        : undefined
+                    }
+                    size="small"
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Sağ Panel - Sepet */}
-        <div className="w-96 bg-white rounded-lg shadow-sm flex flex-col h-full">
+        {/* YENİ: Sürükleme Kolu */}
+        <div
+          ref={dragHandleRef}
+          className="absolute top-0 bottom-0 w-6 cursor-col-resize flex items-center justify-center z-10"
+          style={{
+            left: `calc(100% - ${cartPanelWidth}px - 12px)`,
+            borderRadius: "4px",
+          }}
+          onMouseDown={handleDragStart}
+        >
+          <div className="h-16 w-1 bg-gray-300 rounded-full hover:bg-indigo-400 transition-colors"></div>
+        </div>
+
+        {/* YENİ: Yeniden boyutlandırılabilir Sepet Paneli */}
+        <div
+          className="bg-white rounded-lg shadow-sm flex flex-col h-full"
+          style={{ width: `${cartPanelWidth}px` }}
+        >
           {/* Sepet Sekmeleri */}
-          <div className="flex items-center gap-2 p-2 border-b overflow-x-auto">
-            {cartTabs.map((tab) => {
-              const itemCount = tab.cart.reduce(
-                (sum, i) => sum + i.quantity,
-                0
-              );
-              return (
-                <div
-                  key={tab.id}
-                  className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer ${
-                    activeTabId === tab.id
-                      ? "bg-indigo-50 text-indigo-600"
-                      : "hover:bg-gray-50"
-                  }`}
-                  onClick={() => setActiveTabId(tab.id)}
-                >
-                  <ShoppingCart size={14} />
-                  <span>{tab.title}</span>
-                  <span className="text-xs text-gray-500">({itemCount})</span>
-                  {cartTabs.length > 1 && (
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (tab.cart.length > 0) {
-                          const confirmed = await confirm(
-                            `${tab.title} sepetini silmek istediğinize emin misiniz?`
-                          );
-                          if (confirmed) removeTab(tab.id);
-                        } else {
-                          removeTab(tab.id);
-                        }
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 rounded"
-                    >
-                      <X size={14} className="text-red-500" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between p-3 border-b overflow-x-auto">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              {cartTabs.map((tab) => {
+                const itemCount = tab.cart.reduce(
+                  (sum, i) => sum + i.quantity,
+                  0
+                );
+                return (
+                  <div
+                    key={tab.id}
+                    className={`group flex items-center gap-1 px-2 py-1 rounded-lg cursor-pointer ${
+                      activeTabId === tab.id
+                        ? "bg-indigo-50 text-indigo-600"
+                        : "hover:bg-gray-50"
+                    }`}
+                    onClick={() => setActiveTabId(tab.id)}
+                  >
+                    <ShoppingCart size={14} />
+                    <span className="truncate max-w-[60px]">{tab.title}</span>
+                    <span className="text-xs text-gray-500">({itemCount})</span>
+                    {cartTabs.length > 1 && (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (tab.cart.length > 0) {
+                            const confirmed = await confirm(
+                              `${tab.title} sepetini silmek istediğinize emin misiniz?`
+                            );
+                            if (confirmed) removeTab(tab.id);
+                          } else {
+                            removeTab(tab.id);
+                          }
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 rounded"
+                      >
+                        <X size={12} className="text-red-500" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              <button
+                onClick={addNewTab}
+                className="p-1 rounded-lg hover:bg-gray-50 text-indigo-600"
+                title="Yeni Sepet"
+              >
+                <Plus size={18} />
+              </button>
+            </div>
+
+            {/* Kompakt görünüm butonu */}
             <button
-              onClick={addNewTab}
-              className="p-2 rounded-lg hover:bg-gray-50 text-indigo-600"
-              title="Yeni Sepet"
+              onClick={() => setCompactCartView(!compactCartView)}
+              className={`p-1 rounded-lg ${
+                compactCartView
+                  ? "bg-indigo-50 text-indigo-600"
+                  : "text-gray-500 hover:bg-gray-50"
+              }`}
+              title={compactCartView ? "Normal Görünüm" : "Kompakt Görünüm"}
             >
-              <Plus size={20} />
+              {compactCartView ? (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect width="18" height="18" x="3" y="3" rx="2" />
+                  <path d="M8 16h.01" />
+                  <path d="M12 16h.01" />
+                  <path d="M16 16h.01" />
+                  <path d="M8 12h.01" />
+                  <path d="M12 12h.01" />
+                  <path d="M16 12h.01" />
+                  <path d="M8 8h.01" />
+                  <path d="M12 8h.01" />
+                  <path d="M16 8h.01" />
+                </svg>
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+              )}
             </button>
           </div>
 
           {/* Aktif Sepet İçeriği */}
           {activeTab && (
             <>
-              <div className="p-4 border-b">
+              <div className="p-3 border-b">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                    <ShoppingCart size={20} />
+                  <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                    <ShoppingCart size={18} />
                     {activeTab.cart.reduce(
                       (sum, i) => sum + i.quantity,
                       0
@@ -872,17 +1424,17 @@ const POSPage: React.FC = () => {
                           clearCart();
                         }
                       }}
-                      className="text-red-500 hover:text-red-600"
+                      className="text-red-500 hover:text-red-600 p-1"
                       title="Sepeti Temizle"
                     >
-                      <Trash2 size={20} />
+                      <Trash2 size={18} />
                     </button>
                   )}
                 </div>
               </div>
 
               {/* Sepet Öğeleri */}
-              <div className="flex-1 p-4 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto">
                 {activeTab.cart.length === 0 ? (
                   <div className="text-center text-gray-500 py-8">
                     <ShoppingCart
@@ -891,61 +1443,96 @@ const POSPage: React.FC = () => {
                     />
                     <p>Sepet boş</p>
                   </div>
-                ) : (
-                  activeTab.cart.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-3 py-3 border-b last:border-0"
-                    >
-                      <div className="flex-1">
-                        <div className="font-medium">{item.name}</div>
-                        <div className="text-sm space-y-0.5">
-                          <div className="text-gray-500">
-                            {formatCurrency(item.salePrice)} +{" "}
-                            {formatVatRate(item.vatRate)} KDV
-                          </div>
-                          <div className="text-gray-900 font-medium">
-                            Toplam: {formatCurrency(item.totalWithVat || 0)}
+                ) : compactCartView ? (
+                  // Kompakt Görünüm
+                  <div className="py-1">
+                    {activeTab.cart.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center px-2 py-1 hover:bg-gray-50"
+                      >
+                        <div className="flex-1 mr-1 truncate">
+                          <div className="font-medium text-sm truncate">
+                            {item.name}
                           </div>
                         </div>
+                        <div className="text-gray-900 text-sm font-medium whitespace-nowrap">
+                          {formatCurrency(item.totalWithVat || 0)}
+                        </div>
+                        <div className="flex items-center ml-1">
+                          <button
+                            onClick={() => updateQuantity(item.id, -1)}
+                            className="p-0.5 hover:bg-gray-200 rounded"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <span className="w-6 text-center text-sm">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => updateQuantity(item.id, 1)}
+                            className="p-0.5 hover:bg-gray-200 rounded"
+                          >
+                            <Plus size={14} />
+                          </button>
+                          <button
+                            onClick={() => removeFromCart(item.id)}
+                            className="p-0.5 hover:bg-gray-200 rounded text-red-500 ml-1"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => updateQuantity(item.id, -1)}
-                          className="p-1 hover:bg-gray-100 rounded"
-                        >
-                          <Minus size={16} />
-                        </button>
-                        <span className="w-8 text-center">{item.quantity}</span>
-                        <button
-                          onClick={() => updateQuantity(item.id, 1)}
-                          className="p-1 hover:bg-gray-100 rounded"
-                        >
-                          <Plus size={16} />
-                        </button>
-                        <button
-                          onClick={() => removeFromCart(item.id)}
-                          className="p-1 hover:bg-gray-100 rounded text-red-500"
-                        >
-                          <X size={16} />
-                        </button>
+                    ))}
+                  </div>
+                ) : (
+                  // Normal Görünüm
+                  <div className="p-3">
+                    {activeTab.cart.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center gap-3 py-2 border-b last:border-0"
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium">{item.name}</div>
+                          <div className="text-sm space-y-0.5">
+                            <div className="text-gray-900 font-normal">
+                              Toplam: {formatCurrency(item.totalWithVat || 0)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => updateQuantity(item.id, -1)}
+                            className="p-1 hover:bg-gray-100 rounded"
+                          >
+                            <Minus size={16} />
+                          </button>
+                          <span className="w-8 text-center">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => updateQuantity(item.id, 1)}
+                            className="p-1 hover:bg-gray-100 rounded"
+                          >
+                            <Plus size={16} />
+                          </button>
+                          <button
+                            onClick={() => removeFromCart(item.id)}
+                            className="p-1 hover:bg-gray-100 rounded text-red-500"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                  </div>
                 )}
               </div>
 
               {/* Toplam & Ödeme */}
-              <div className="border-t p-4">
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>Ara Toplam:</span>
-                    <span>{formatCurrency(cartTotals.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>KDV:</span>
-                    <span>{formatCurrency(cartTotals.vatAmount)}</span>
-                  </div>
+              <div className="border-t p-3">
+                <div className="space-y-2 mb-3">
                   <div className="flex justify-between font-semibold text-lg">
                     <span>Toplam:</span>
                     <span className="text-indigo-600">
@@ -972,9 +1559,9 @@ const POSPage: React.FC = () => {
                   Ödeme Yap
                 </Button>
 
-                <div className="flex flex-row justify-between my-4">
+                <div className="flex flex-row justify-between mt-3">
                   <Button
-                    className="mr-2 red"
+                    className="mr-1"
                     onClick={() => {
                       if (!isRegisterOpen) {
                         showError(
@@ -985,14 +1572,14 @@ const POSPage: React.FC = () => {
                       handleQuickCashPayment();
                     }}
                     disabled={!activeTab.cart.length}
-                    variant="primary"
+                    variant="cash"
                     icon={Banknote}
                   >
-                    Hızlı Nakit
+                    {compactCartView ? "Hızlı Nakit" : "Hızlı Nakit"}
                   </Button>
 
                   <Button
-                    className="ml-2"
+                    className="ml-1"
                     onClick={() => {
                       if (!isRegisterOpen) {
                         showError(
@@ -1003,136 +1590,140 @@ const POSPage: React.FC = () => {
                       handleQuickCardPayment();
                     }}
                     disabled={!activeTab.cart.length}
-                    variant="primary"
+                    variant="card"
                     icon={CreditCard}
                   >
-                    Hızlı Kart
+                    {compactCartView ? "Hızlı Kart" : "Hızlı Kart"}
                   </Button>
                 </div>
               </div>
             </>
           )}
         </div>
-
-        {/* Debug panel */}
-        {process.env.NODE_ENV === "development" && (
-          <div className="fixed bottom-4 left-4 z-50">
-            <div className="bg-white p-4 rounded-lg shadow-lg border space-y-3">
-              <h3 className="font-bold">Barkod Test Araçları</h3>
-
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  id="testBarcode"
-                  defaultValue=""
-                  className="border rounded px-2 py-1"
-                  placeholder="Barkod/ID giriniz"
-                />
-                <button
-                  onClick={() => {
-                    const barcodeInput = document.getElementById(
-                      "testBarcode"
-                    ) as HTMLInputElement;
-                    const barcode = barcodeInput?.value || "";
-                    if (!barcode) {
-                      showError("Lütfen test için bir barkod veya ID girin");
-                      return;
-                    }
-                    console.log("Test Et butonuna tıklandı, barkod:", barcode);
-                    handleBarcodeDetected(barcode);
-                  }}
-                  className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
-                >
-                  Test Et
-                </button>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    console.log("****** ÜRÜN LISTESI DEBUG ******");
-                    console.log("Toplam ürün sayısı:", products.length);
-                    products.forEach((product) => {
-                      console.log(
-                        `Ürün: ${product.name}, ID: ${product.id}, Barkod: ${product.barcode}, Stok: ${product.stock}`
-                      );
-                    });
-                    console.log("********************************");
-                  }}
-                  className="bg-purple-500 text-white px-3 py-1 rounded hover:bg-purple-600 w-full"
-                >
-                  Ürünleri Listele
-                </button>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    if (products.length > 0) {
-                      const firstProduct = products[0];
-                      console.log("İlk ürün test ediliyor:", firstProduct);
-                      if (firstProduct.barcode) {
-                        handleBarcodeDetected(firstProduct.barcode);
-                      } else {
-                        handleBarcodeDetected(firstProduct.id.toString());
-                      }
-                    } else {
-                      showError("Ürün listesi boş");
-                    }
-                  }}
-                  className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 w-full"
-                >
-                  İlk Ürünü Test Et
-                </button>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    if (products.length > 0) {
-                      const firstProduct = products[0];
-                      if (firstProduct.stock > 0) {
-                        addToCart(firstProduct);
-                        showSuccess(`${firstProduct.name} sepete eklendi`);
-                      } else {
-                        showError(`${firstProduct.name} stokta yok!`);
-                      }
-                    } else {
-                      showError("Ürün listesi boş");
-                    }
-                  }}
-                  className="bg-orange-500 text-white px-3 py-1 rounded hover:bg-orange-600 w-full"
-                >
-                  İlk Ürünü Sepete Ekle
-                </button>
-              </div>
-
-              <div className="text-xs text-gray-500">
-                Bu panel sadece geliştirme ortamında görünür
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* YENİ: İyileştirilmiş Yıldız Modu Göstergesi */}
-        {showQuantityModeToast && (
-          <div
-            className={`fixed top-4 right-4 bg-indigo-600 text-white p-3 rounded-lg shadow-lg z-50 transition-all duration-300 ease-in-out ${
-              quantityMode
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 -translate-y-4"
-            }`}
-          >
-            <div className="font-bold text-center mb-1">Yıldız Modu Aktif</div>
-            <div className="text-2xl text-center font-mono">
-              {tempQuantity || "0"}
-            </div>
-            <div className="text-xs text-center mt-1">
-              Enter ile onaylayın, ESC ile iptal edin
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Debug panel */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="fixed bottom-4 left-4 z-50">
+          <div className="bg-white p-4 rounded-lg shadow-lg border space-y-3">
+            <h3 className="font-bold">Barkod Test Araçları</h3>
+
+            <div className="flex gap-3">
+              <input
+                type="text"
+                id="testBarcode"
+                defaultValue=""
+                className="border rounded px-2 py-1"
+                placeholder="Barkod/ID giriniz"
+              />
+              <button
+                onClick={() => {
+                  const barcodeInput = document.getElementById(
+                    "testBarcode"
+                  ) as HTMLInputElement;
+                  const barcode = barcodeInput?.value || "";
+                  if (!barcode) {
+                    showError("Lütfen test için bir barkod veya ID girin");
+                    return;
+                  }
+                  console.log("Test Et butonuna tıklandı, barkod:", barcode);
+                  handleBarcodeDetected(barcode);
+                }}
+                className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+              >
+                Test Et
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  console.log("****** ÜRÜN LISTESI DEBUG ******");
+                  console.log("Toplam ürün sayısı:", products.length);
+                  products.forEach((product) => {
+                    console.log(
+                      `Ürün: ${product.name}, ID: ${product.id}, Barkod: ${product.barcode}, Stok: ${product.stock}`
+                    );
+                  });
+                  console.log("********************************");
+                }}
+                className="bg-purple-500 text-white px-3 py-1 rounded hover:bg-purple-600 w-full"
+              >
+                Ürünleri Listele
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (products.length > 0) {
+                    const firstProduct = products[0];
+                    console.log("İlk ürün test ediliyor:", firstProduct);
+                    if (firstProduct.barcode) {
+                      handleBarcodeDetected(firstProduct.barcode);
+                    } else {
+                      handleBarcodeDetected(firstProduct.id.toString());
+                    }
+                  } else {
+                    showError("Ürün listesi boş");
+                  }
+                }}
+                className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 w-full"
+              >
+                İlk Ürünü Test Et
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (products.length > 0) {
+                    const firstProduct = products[0];
+                    if (firstProduct.stock > 0) {
+                      const manualProduct = {
+                        ...firstProduct,
+                        source: "manual",
+                      };
+                      addToCart(manualProduct);
+                      showSuccess(`${firstProduct.name} sepete eklendi`);
+                    } else {
+                      showError(`${firstProduct.name} stokta yok!`);
+                    }
+                  } else {
+                    showError("Ürün listesi boş");
+                  }
+                }}
+                className="bg-orange-500 text-white px-3 py-1 rounded hover:bg-orange-600 w-full"
+              >
+                İlk Ürünü Sepete Ekle
+              </button>
+            </div>
+
+            <div className="text-xs text-gray-500">
+              Bu panel sadece geliştirme ortamında görünür
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* YENİ: İyileştirilmiş Yıldız Modu Göstergesi */}
+      {showQuantityModeToast && (
+        <div
+          className={`fixed top-4 right-4 bg-indigo-600 text-white p-3 rounded-lg shadow-lg z-50 transition-all duration-300 ease-in-out ${
+            quantityMode
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 -translate-y-4"
+          }`}
+        >
+          <div className="font-bold text-center mb-1">Yıldız Modu Aktif</div>
+          <div className="text-2xl text-center font-mono">
+            {tempQuantity || "0"}
+          </div>
+          <div className="text-xs text-center mt-1">
+            Enter ile onaylayın, ESC ile iptal edin
+          </div>
+        </div>
+      )}
 
       {/* Ödeme Modal */}
       <PaymentModal
