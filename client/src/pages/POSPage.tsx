@@ -1136,15 +1136,6 @@ const POSPage: React.FC = () => {
           <div className="flex-1 p-3 overflow-y-auto">
             {/* Ürün listesi başlık ve filtreler */}
             <div className="flex justify-between items-center mb-2">
-              {/* Sol taraf: Aktif grup adı ve bilgisi */}
-              <div className="text-gray-700 font-normal">
-                {productGroups.find((g) => g.id === activeGroupId)?.name ||
-                  "Tüm Ürünler"}
-                <span className="ml-2 text-sm text-gray-500">
-                  ({finalFilteredProducts.length} ürün)
-                </span>
-              </div>
-
               {/* Sağ taraf: Butonlar */}
               <div className="flex items-center gap-2">
                 {/* Gruba Ürün Ekle butonu - Daha kompakt ve şık */}

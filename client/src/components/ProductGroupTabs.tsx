@@ -1,7 +1,9 @@
 // components/ProductGroupTabs.tsx
-import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Edit2, Minus } from 'lucide-react';
-import { ProductGroup } from '../services/productDB';
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { Plus, Edit2, Minus } from "lucide-react";
+import { ProductGroup } from "../services/productDB";
+import { useProductGroups } from "../hooks/useProductGroups";
+import { useProducts } from "../hooks/useProducts";
 
 interface ProductGroupTabsProps {
   groups: ProductGroup[];
@@ -20,10 +22,10 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
   onAddGroup,
   onRenameGroup,
   onDeleteGroup,
-  viewToggleIcon // Yeni eklenen prop
+  viewToggleIcon, // Yeni eklenen prop
 }) => {
   const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
-  const [editingName, setEditingName] = useState('');
+  const [editingName, setEditingName] = useState("");
   const [shakingGroupId, setShakingGroupId] = useState<number | null>(null);
   const [showDeleteButton, setShowDeleteButton] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -39,7 +41,7 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
 
   const handleMouseDown = (groupId: number, isDefault: boolean) => {
     if (isDefault) return; // Varsayılan grup için çalışmasın
-    
+
     pressTimer.current = setTimeout(() => {
       setShakingGroupId(groupId);
       setShowDeleteButton(groupId);
@@ -53,10 +55,14 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent, groupId: number, isDefault: boolean) => {
+  const handleContextMenu = (
+    e: React.MouseEvent,
+    groupId: number,
+    isDefault: boolean
+  ) => {
     e.preventDefault();
     if (isDefault) return; // Varsayılan grup için çalışmasın
-    
+
     setShakingGroupId(groupId);
     setShowDeleteButton(groupId);
   };
@@ -95,6 +101,41 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
     }
   };
 
+  const {
+    products,
+    categories,
+    loading: productsLoading,
+    searchTerm,
+    setSearchTerm,
+    selectedCategory,
+    setSelectedCategory,
+    filteredProducts,
+  } = useProducts({ enableCategories: true });
+
+  const {
+    groups: productGroups,
+    addGroup,
+    renameGroup,
+    addProductToGroup,
+    removeProductFromGroup,
+    refreshGroups,
+  } = useProductGroups();
+
+  const finalFilteredProducts = useMemo(() => {
+    const defaultGroup = productGroups.find((g) => g.isDefault);
+
+    // Varsayılan grupta => filteredProducts'ı olduğu gibi göster
+    if (defaultGroup && activeGroupId === defaultGroup.id) {
+      return filteredProducts;
+    }
+
+    // Diğer gruplarda => o gruba ait productIds'e sahip ürünleri göster
+    const group = productGroups.find((g) => g.id === activeGroupId);
+    return filteredProducts.filter((p) =>
+      (group?.productIds ?? []).includes(p.id)
+    );
+  }, [filteredProducts, activeGroupId, productGroups]);
+
   return (
     <div className="flex items-center gap-2 p-2 bg-white rounded-lg shadow-sm overflow-x-auto relative">
       {/* Gruplar ve Yeni Grup butonu */}
@@ -105,15 +146,18 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
             onMouseDown={() => handleMouseDown(group.id, !!group.isDefault)}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
-            onContextMenu={(e) => handleContextMenu(e, group.id, !!group.isDefault)}
+            onContextMenu={(e) =>
+              handleContextMenu(e, group.id, !!group.isDefault)
+            }
             onDoubleClick={() => !group.isDefault && handleDoubleClick(group)}
             className={`relative group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all
-              ${activeGroupId === group.id
-                ? 'bg-indigo-50 text-indigo-600'
-                : 'hover:bg-gray-50 text-gray-700'
-              }
-              ${shakingGroupId === group.id ? 'animate-shake' : ''}
-            `}
+                ${
+                  activeGroupId === group.id
+                    ? "bg-indigo-50 text-indigo-600"
+                    : "hover:bg-gray-50 text-gray-700"
+                }
+                ${shakingGroupId === group.id ? "animate-shake" : ""}
+              `}
             onClick={() => handleClick(group.id)}
           >
             {editingGroupId === group.id ? (
@@ -124,15 +168,26 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
                 onChange={(e) => setEditingName(e.target.value)}
                 onBlur={handleEditSubmit}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleEditSubmit();
-                  if (e.key === 'Escape') setEditingGroupId(null);
+                  if (e.key === "Enter") handleEditSubmit();
+                  if (e.key === "Escape") setEditingGroupId(null);
                 }}
                 className="w-32 px-2 py-1 text-sm border rounded bg-white"
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
               <>
-                <span>{group.name}</span>
+                <span>
+                  {group.name}{" "}
+                  <span className="text-sm text-gray-500">
+                    (
+                    {group.isDefault
+                      ? filteredProducts.length
+                      : filteredProducts.filter((p) =>
+                          (group.productIds ?? []).includes(p.id)
+                        ).length}
+                    )
+                  </span>
+                </span>
                 {showDeleteButton === group.id && !group.isDefault && (
                   <button
                     onClick={(e) => {
@@ -157,17 +212,25 @@ const ProductGroupTabs: React.FC<ProductGroupTabsProps> = ({
           onClick={handleAddGroupClick}
           className="p-2 rounded-lg hover:bg-gray-50 text-indigo-600"
           title="Yeni Grup"
-          id="addGroupButton" // ID ekleyerek DOM'da kolay erişim sağlıyoruz
+          id="addGroupButton"
         >
           <Plus size={20} />
         </button>
       </div>
-      
+
+      {/* Aktif grup adı ve ürün sayısı 
+      <div className="text-gray-700 font-normal whitespace-nowrap mx-2">
+        {productGroups.find((g) => g.id === activeGroupId)?.name ||
+          "Tüm Ürünler"}
+        <span className="ml-1 text-sm text-gray-500">
+          ({finalFilteredProducts.length} ürün)
+        </span>
+      </div>
+      */}
+
       {/* Görünüm değiştirme ikonu */}
       {viewToggleIcon && (
-        <div className="flex-shrink-0 ml-auto">
-          {viewToggleIcon}
-        </div>
+        <div className="flex-shrink-0 ml-auto">{viewToggleIcon}</div>
       )}
     </div>
   );

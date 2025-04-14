@@ -8,6 +8,7 @@ export interface ProductGroup {
   name: string;
   order: number;
   isDefault?: boolean;
+  productIds?: number[];
 }
 
 export interface ProductGroupRelation {
