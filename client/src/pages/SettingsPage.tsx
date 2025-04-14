@@ -1442,7 +1442,7 @@ const SettingsPage: React.FC = () => {
                   <button
                     onClick={() => {
                       window.location.href =
-                        "mailto:msg@cretique.com?subject=POS%20Uygulaması%20Destek%20Talebi";
+                        "mailto:msg@cretique.net?subject=POS%20Uygulaması%20Destek%20Talebi";
                     }}
                     className="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                   >
@@ -1452,7 +1452,7 @@ const SettingsPage: React.FC = () => {
 
                   <button
                     onClick={() => {
-                      window.open("https://www.cretique.com/destek", "_blank");
+                      window.open("https://www.cretique.net/destek", "_blank");
                     }}
                     className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
                   >
