@@ -119,7 +119,7 @@ const Card: React.FC<CardProps> = ({
         </div>
         <div className="px-5 py-3">
           <div
-            className="text-xl font-semibold text-gray-800 truncate"
+            className="text-xl font-semibold text-gray-800"
             title={String(value)}
           >
             {value}
@@ -163,108 +163,130 @@ const Card: React.FC<CardProps> = ({
   // === PRODUCT ===
 
   // Optimize edilmiş kart tasarımı - Düzeltilmiş Tükendi banner'ı ile
-  if (variant === "product") {
-    return (
-      <div
-        className={clsx(
-          "flex flex-col h-full bg-white rounded-lg border overflow-hidden relative",
-          !disabled
-            ? stock !== undefined && stock < 5
-              ? "border-orange-200"
-              : "border-gray-200"
-            : "border-gray-100",
-          !disabled && "hover:border-indigo-200",
-          disabled && "opacity-60",
-          className
+  // Card.tsx dosyasının içinden ilgili bölüm
+
+// === PRODUCT ===
+if (variant === "product") {
+  return (
+    <div
+      className={clsx(
+        // ↓↓↓ h-full sınıfı buradan kaldırıldı ↓↓↓
+        "flex flex-col bg-white rounded-lg border overflow-hidden relative",
+        // ↑↑↑ h-full sınıfı buradan kaldırıldı ↑↑↑
+        !disabled
+          ? stock !== undefined && stock < 5
+            ? "border-orange-200" // Az kalan stok için turuncu çerçeve
+            : "border-gray-200"   // Normal stok için gri çerçeve
+          : "border-gray-100",    // Devre dışıysa daha soluk çerçeve
+        !disabled && "hover:border-indigo-200", // Üzerine gelince çerçeve rengi
+        disabled && "opacity-60",               // Devre dışıysa opaklık
+        className
+      )}
+      // Tıklama olayını sadece kart devre dışı değilse ekle
+      onClick={!disabled ? onClick : undefined}
+    >
+      {/* Ürün Görseli Konteyneri */}
+      {/* aspect-square: Kare olmasını sağlar */}
+      {/* overflow-hidden: Taşan kısımları gizler (özellikle Tükendi banner'ı için) */}
+      <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
+        {/* Kategori Etiketi (Opsiyonel) */}
+        {category && (
+          <div
+            className={clsx(
+              "absolute top-1 left-1 text-[10px] font-medium px-2 py-0.5 rounded-full shadow-sm pointer-events-none z-30 max-w-[80%] truncate",
+              stock === 0
+                ? "bg-red-100 text-red-700"       // Stok yoksa kırmızı
+                : "bg-indigo-100 text-indigo-700" // Stok varsa indigo
+            )}
+            title={category} // Uzun kategoriler için tooltip
+          >
+            {category}
+          </div>
         )}
-        onClick={!disabled ? onClick : undefined}
-      >
-        {/* Ürün Görseli */}
-        <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center">
-          {category && (
-            <div
-              className={clsx(
-                "absolute top-1 left-1 text-[10px] font-medium px-2 py-0.5 rounded-full shadow-sm pointer-events-none z-30 max-w-[80%] truncate",
-                stock === 0
-                  ? "bg-red-100 text-red-700"
-                  : "bg-indigo-100 text-indigo-700"
-              )}
-            >
-              {category}
+        {/* Tükendi Banner'ı (Stok 0 ise) */}
+        {stock === 0 && (
+          <div className="absolute bottom-0 right-0 w-32 h-32 overflow-hidden pointer-events-none z-10">
+            <div className="absolute bottom-[10px] right-[-45px] -rotate-45 bg-red-700 text-white py-1 w-36 text-center">
+              <span className="font-bold text-xs tracking-wider">
+                TÜKENDİ
+              </span>
             </div>
-          )}
-          {stock === 0 && (
-            <div className="absolute bottom-0 right-0 w-32 h-32 overflow-hidden pointer-events-none z-10">
-              <div className="absolute bottom-[10px] right-[-45px] -rotate-45 bg-red-700 text-white py-1 w-36 text-center">
-                <span className="font-bold text-xs tracking-wider">
-                  TÜKENDİ
-                </span>
-              </div>
-            </div>
-          )}
-          {stock !== undefined && stock > 0 && stock < 5 && (
-            <div className="absolute bottom-0 right-0 m-1 bg-orange-100 text-orange-700 text-[10px] font-semibold px-1.5 py-0.5 rounded shadow-sm pointer-events-none z-10">
-              {stock} adet kaldı
-            </div>
-          )}
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={title}
-              className="w-full h-full object-contain"
-            />
-          ) : (
-            <div className="flex items-center justify-center p-4 w-full h-full">
-              <Image size={32} className="text-gray-300" strokeWidth={1} />
-            </div>
-          )}
-        </div>
-
-        {/* Ürün Detayları */}
-        <div className="p-2 flex flex-col">
-          {/* Kategori */}
-          <div className="text-sm text-gray-600 mb-1">
-            {title || "İsimsiz Ürün"}
           </div>
-
-          {/* Fiyat */}
-          <div className="text-lg font-bold text-indigo-600">
-            {price || "₺0,00"}
+        )}
+        {/* Az Kaldı Etiketi (Stok 1-4 arası ise) */}
+        {stock !== undefined && stock > 0 && stock < 5 && (
+          <div className="absolute bottom-0 right-0 m-1 bg-orange-100 text-orange-700 text-[10px] font-semibold px-1.5 py-0.5 rounded shadow-sm pointer-events-none z-10">
+            {stock} adet kaldı
           </div>
-        </div>
-
-        {/* Grup Yönetim Butonları */}
-        {(onAddToGroup || onRemoveFromGroup) && (
-          <div className="absolute top-1 right-1 flex gap-1 z-10">
-            {onAddToGroup && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddToGroup();
-                }}
-                className="bg-white text-indigo-600 p-0.5 rounded shadow-sm border border-gray-200"
-                title="Gruba Ekle"
-              >
-                <Plus size={12} />
-              </button>
-            )}
-            {onRemoveFromGroup && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemoveFromGroup();
-                }}
-                className="bg-white text-red-500 p-0.5 rounded shadow-sm border border-gray-200"
-                title="Gruptan Çıkar"
-              >
-                <Minus size={12} />
-              </button>
-            )}
+        )}
+        {/* Asıl Ürün Görseli veya Placeholder */}
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={title}
+            // object-cover: Resmi kırparak kare alanı doldurur, oranı korur
+            // object-contain: Resmi kırmadan kare alana sığdırır, boşluk bırakabilir
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          // Resim yoksa placeholder ikon
+          <div className="flex items-center justify-center p-4 w-full h-full">
+            <Image size={32} className="text-gray-300" strokeWidth={1} />
           </div>
         )}
       </div>
-    );
-  }
+
+      {/* Ürün Detayları Bölümü */}
+      <div className="p-2 flex flex-col">
+        {/* Ürün Adı */}
+        {/* truncate: Uzun isimleri ... ile keser */}
+        {/* mb-1: Altında küçük bir boşluk bırakır */}
+        <div className="text-sm text-gray-600 mb-1" title={title || "İsimsiz Ürün"}>
+          {title || "İsimsiz Ürün"}
+        </div>
+
+        {/* Fiyat */}
+        {/* text-lg: Biraz daha büyük font */}
+        {/* font-bold: Kalın yazı */}
+        {/* text-indigo-600: Marka rengi */}
+        <div className="text-lg font-bold text-indigo-600">
+          {price || "₺0,00"}
+        </div>
+      </div>
+
+      {/* Grup Yönetim Butonları (Opsiyonel) */}
+      {/* Sadece onAddToGroup veya onRemoveFromGroup prop'ları varsa görünür */}
+      {(onAddToGroup || onRemoveFromGroup) && (
+        <div className="absolute top-1 right-1 flex gap-1 z-10">
+          {onAddToGroup && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation(); // Kartın kendi onClick'ini tetiklemeyi önler
+                onAddToGroup();
+              }}
+              className="bg-white text-indigo-600 p-0.5 rounded shadow-sm border border-gray-200 hover:bg-indigo-50"
+              title="Gruba Ekle"
+            >
+              <Plus size={12} />
+            </button>
+          )}
+          {onRemoveFromGroup && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation(); // Kartın kendi onClick'ini tetiklemeyi önler
+                onRemoveFromGroup();
+              }}
+              className="bg-white text-red-500 p-0.5 rounded shadow-sm border border-gray-200 hover:bg-red-50"
+              title="Gruptan Çıkar"
+            >
+              <Minus size={12} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
   // === STAT ===
   if (variant === "stat") {

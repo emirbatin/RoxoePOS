@@ -1730,7 +1730,7 @@ const POSPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Debug panel */}
+      {/* Debug panel 
       {process.env.NODE_ENV === "development" && (
         <div className="fixed bottom-4 left-4 z-50">
           <div className="bg-white p-4 rounded-lg shadow-lg border space-y-3">
@@ -1833,7 +1833,7 @@ const POSPage: React.FC = () => {
           </div>
         </div>
       )}
-
+*/}
       {/* YENİ: İyileştirilmiş Yıldız Modu Göstergesi */}
       {showQuantityModeToast && (
         <div
