@@ -254,7 +254,7 @@ const CashTab: React.FC<CashTabProps> = ({
           variant="summary"
           title="Toplam Satış"
           value={`₺${(
-            cashData.cashSalesTotal + cashData.cardSalesTotal - cashData.totalWithdrawals
+            cashData.cashSalesTotal + cashData.cardSalesTotal
           ).toFixed(2)}`}
           description="Tüm satışların toplamı"
           color="purple"
