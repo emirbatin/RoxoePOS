@@ -8,6 +8,7 @@ import {
   CreditCard,
   Trash2,
   Banknote,
+  Tag,
 } from "lucide-react";
 import { useHotkeys } from "../hooks/useHotkeys";
 import { CartTab, PaymentMethod, PaymentResult } from "../types/pos";
@@ -27,7 +28,7 @@ import ReceiptModal from "../components/modals/ReceiptModal";
 import Button from "../components/ui/Button";
 import { useAlert } from "../components/AlertProvider";
 import PageLayout from "../components/layout/PageLayout";
-import SearchFilterPanel from "../components/SearchFilterPanel";
+import FilterPanel, { ActiveFilter } from "../components/ui/FilterPanel"; // Yeni bileşeni import ediyoruz
 import Card from "../components/ui/Card";
 import SelectProductsModal from "../components/modals/SelectProductModal";
 import ProductGroupTabs from "../components/ProductGroupTabs";
@@ -39,6 +40,7 @@ import { posService } from "../services/posServices";
 
 // YENİ: Kasa yönetimi
 import { cashRegisterService } from "../services/cashRegisterDB";
+import { normalizedSearch } from "../utils/turkishSearch";
 
 const POSPage: React.FC = () => {
   const { showError, showSuccess, confirm } = useAlert();
@@ -213,6 +215,47 @@ const POSPage: React.FC = () => {
     setShowFilters(false);
   };
 
+  // POS için filtreleme etiketleri
+  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
+
+  // Kategori değişikliklerini takip edip filtreleri güncelle
+  useEffect(() => {
+    if (selectedCategory && selectedCategory !== "Tümü") {
+      // Kategori filtresini güncelle veya ekle
+      const existingFilterIndex = activeFilters.findIndex(
+        (f) => f.key === "category"
+      );
+
+      if (existingFilterIndex >= 0) {
+        // Mevcut filtreyi güncelle
+        const updatedFilters = [...activeFilters];
+        updatedFilters[existingFilterIndex] = {
+          key: "category",
+          label: "Kategori",
+          value: selectedCategory,
+          color: "blue",
+          icon: <Tag size={14} />,
+        };
+        setActiveFilters(updatedFilters);
+      } else {
+        // Yeni filtre ekle
+        setActiveFilters([
+          ...activeFilters,
+          {
+            key: "category",
+            label: "Kategori",
+            value: selectedCategory,
+            color: "blue",
+            icon: <Tag size={14} />,
+          },
+        ]);
+      }
+    } else {
+      // Kategori filtresi Tümü ise, bu filtreyi kaldır
+      setActiveFilters(activeFilters.filter((f) => f.key !== "category"));
+    }
+  }, [selectedCategory]);
+
   // **KASA AÇIK MI?** Durumu
   const [isRegisterOpen, setIsRegisterOpen] = useState<boolean>(false);
 
@@ -265,189 +308,279 @@ const POSPage: React.FC = () => {
   };
 
   // Barkod algılama - YENİ GÜNCELLENMİŞ VERSİYON
+  // Barkod algılama - SADECE BARKOD ARAMA YAPAN VERSİYON
   const handleBarcodeDetected = (barcode: string) => {
     console.log("🔍 Barkod algılandı:", barcode);
-    
-    // 1) Barkod alanı ile tam eşleşme
+
+    // 1) SADECE barkod alanı ile tam eşleşme
     let matchingProduct = products.find((p) => p.barcode === barcode);
-  
+
     if (!matchingProduct) {
-      // 2) Barkod sayısal ise ID ile dene
-      const numericBarcode = parseInt(barcode);
-      if (!isNaN(numericBarcode)) {
-        matchingProduct = products.find((p) => p.id === numericBarcode);
-      }
-  
-      // 3) İsim ile tam eşleşme
-      if (!matchingProduct) {
-        matchingProduct = products.find(
-          (p) => p.name.toLowerCase() === barcode.toLowerCase()
-        );
-      }
+      console.log("❓ Barkodla tam eşleşme yok:", barcode);
+      showError(`Barkod bulunamadı: ${barcode}`);
+      return;
     }
-  
+
     if (matchingProduct) {
-      console.log("✅ Eşleşen ürün bulundu:", matchingProduct.name, "ID:", matchingProduct.id);
-      
+      console.log(
+        "✅ Eşleşen ürün bulundu:",
+        matchingProduct.name,
+        "ID:",
+        matchingProduct.id
+      );
+
       // Stok kontrol
       if (matchingProduct.stock <= 0) {
         console.log("❌ Ürün stokta yok!");
         showError(`${matchingProduct.name} stokta kalmadı!`);
         return;
       }
-      
-      // Aktif sepette BARKOD TARAMASI ile eklenen aynı ürün var mı?
-      const existingBarcodeItem = activeTab?.cart.find(item => 
-        item.id === matchingProduct!.id && item.source === 'barcode'
+
+      // Sepet kontrol - Aktif sepet var mı?
+      if (!activeTab) {
+        console.log("❌ Aktif sepet bulunamadı!");
+        return;
+      }
+
+      console.log("🛒 Sepette arama yapılıyor...");
+      console.log(
+        "Sepet içeriği:",
+        activeTab.cart.map((item) => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          source: item.source,
+        }))
       );
-      
-      console.log("🛒 Sepette barkodla eklenmiş aynı ürün var mı?", 
-        existingBarcodeItem 
-          ? `EVET - Miktarı: ${existingBarcodeItem.quantity}` 
+
+      // Aktif sepette BARKOD TARAMASI ile eklenen aynı ürün var mı?
+      const existingBarcodeItem = activeTab.cart.find(
+        (item) => item.id === matchingProduct!.id && item.source === "barcode"
+      );
+
+      console.log(
+        "🔍 Sepette barkodla eklenmiş aynı ürün var mı?",
+        existingBarcodeItem
+          ? `EVET - ${existingBarcodeItem.name} (${existingBarcodeItem.id}) - Miktarı: ${existingBarcodeItem.quantity}`
           : "HAYIR - Yeni eklenecek"
       );
-      
+
       if (existingBarcodeItem) {
         // Eğer barkod ile eklenmiş aynı ürün varsa, stok kontrolü yap
         if (existingBarcodeItem.quantity + 1 > matchingProduct.stock) {
-          console.log("⚠️ Stok yetersiz!", `Stokta ${matchingProduct.stock}, Sepette ${existingBarcodeItem.quantity}`);
-          showError(`${matchingProduct.name} için stok yetersiz! Stokta ${matchingProduct.stock} adet var ve barkod ile eklenmiş ${existingBarcodeItem.quantity} adet mevcut.`);
+          console.log(
+            "⚠️ Stok yetersiz:",
+            `Stokta ${matchingProduct.stock}, Sepette ${existingBarcodeItem.quantity}`
+          );
+          showError(
+            `${matchingProduct.name} için stok yetersiz! Stokta ${matchingProduct.stock} adet var ve barkod ile eklenmiş ${existingBarcodeItem.quantity} adet mevcut.`
+          );
           return;
         }
-        
-        console.log("📈 Barkodla eklenmiş ürünün miktarı artırılıyor:", 
-          existingBarcodeItem.quantity, " -> ", existingBarcodeItem.quantity + 1);
-        
-        // Barkodla eklenmiş ürünün miktarını artır
-        updateQuantity(existingBarcodeItem.id, 1);
-        showSuccess(`${matchingProduct.name} miktarı güncellendi`);
-        
-        // Güncellenmiş sepeti göster
+
+        console.log(
+          "📈 Barkodla eklenmiş ürünün miktarı artırılıyor:",
+          existingBarcodeItem.quantity,
+          " -> ",
+          existingBarcodeItem.quantity + 1
+        );
+
+        // Miktarı 1 artır
+        const successful = updateQuantity(existingBarcodeItem.id, 1);
+        console.log("Miktar güncelleme başarılı mı:", successful);
+
+        if (successful) {
+          showSuccess(`${matchingProduct.name} miktarı güncellendi`);
+        } else {
+          showError(
+            `${matchingProduct.name} miktarı güncellenemedi. Lütfen tekrar deneyin.`
+          );
+        }
+
+        // Güncellenmiş sepet içeriği kontrol
         setTimeout(() => {
-          console.log("🧾 Güncellenmiş sepet:", activeTab?.cart.map(item => ({
-            name: item.name,
-            id: item.id,
-            quantity: item.quantity,
-            source: item.source || "bilinmiyor"
-          })));
+          if (activeTab) {
+            const updatedItem = activeTab.cart.find(
+              (i) => i.id === existingBarcodeItem.id
+            );
+            console.log(
+              "🔄 Sepet güncellendi:",
+              updatedItem
+                ? `${updatedItem.name} - Yeni miktar: ${updatedItem.quantity}`
+                : "Ürün bulunamadı"
+            );
+          }
         }, 100);
-        
+
         return;
       }
-      
+
       // Yeni bir ürün olarak ekle, source olarak "barcode" işaretle
       const barcodeProduct = {
         ...matchingProduct,
-        source: 'barcode', // Özel bir özellik ekle
+        source: "barcode", // Önemli: Barkodla eklendiğini belirt
       };
-      
-      console.log("➕ Barkod ile sepete YENİ ürün ekleniyor:", barcodeProduct.name, "kaynak: barcode");
+
+      console.log(
+        "➕ Barkod ile sepete YENİ ürün ekleniyor:",
+        barcodeProduct.name,
+        "kaynak: barcode"
+      );
       addToCart(barcodeProduct);
       showSuccess(`${barcodeProduct.name} sepete eklendi`);
-      
-      // Güncellenmiş sepeti göster
+
+      // Güncellenmiş sepeti kontrol et
       setTimeout(() => {
-        console.log("🧾 Güncellenmiş sepet:", activeTab?.cart.map(item => ({
-          name: item.name,
-          id: item.id,
-          quantity: item.quantity,
-          source: item.source || "bilinmiyor"
-        })));
+        if (activeTab) {
+          console.log(
+            "🧾 Güncellenmiş sepet:",
+            activeTab.cart.map((item) => ({
+              name: item.name,
+              id: item.id,
+              quantity: item.quantity,
+              source: item.source || "bilinmiyor",
+            }))
+          );
+        }
       }, 100);
-      
+
       return;
     }
-  
-    // 4) Kısmi eşleşme ara
+
+    // 3) Kısmi eşleşme ara
     const partialMatches = products.filter(
-      (p) =>
-        p.barcode.includes(barcode) ||
-        p.name.toLowerCase().includes(barcode.toLowerCase())
+      (p) => p.barcode.includes(barcode) || normalizedSearch(p.name, barcode)
     );
-  
+
     console.log("🔍 Kısmi eşleşme sayısı:", partialMatches.length);
-  
+
     if (partialMatches.length === 1) {
-      // Tek kısmi eşleşme
+      // Tek kısmi eşleşme - Üstteki ile benzer şekilde işleme devam et
       const match = partialMatches[0];
-      console.log("✅ Kısmi eşleşen ürün bulundu:", match.name, "ID:", match.id);
-      
+      console.log(
+        "✅ Kısmi eşleşen ürün bulundu:",
+        match.name,
+        "ID:",
+        match.id
+      );
+
       if (match.stock <= 0) {
         console.log("❌ Ürün stokta yok!");
         showError(`${match.name} stokta kalmadı!`);
         return;
       }
-      
-      // Aktif sepette BARKOD TARAMASI ile eklenen aynı ürün var mı?
-      const existingBarcodeItem = activeTab?.cart.find(item => 
-        item.id === match.id && item.source === 'barcode'
-      );
-      
-      console.log("🛒 Sepette barkodla eklenmiş aynı ürün var mı?", 
-        existingBarcodeItem 
-          ? `EVET - Miktarı: ${existingBarcodeItem.quantity}` 
-          : "HAYIR - Yeni eklenecek"
-      );
-      
-      if (existingBarcodeItem) {
-        // Eğer barkod ile eklenmiş aynı ürün varsa, stok kontrolü yap
-        if (existingBarcodeItem.quantity + 1 > match.stock) {
-          console.log("⚠️ Stok yetersiz!", `Stokta ${match.stock}, Sepette ${existingBarcodeItem.quantity}`);
-          showError(`${match.name} için stok yetersiz! Stokta ${match.stock} adet var ve barkod ile eklenmiş ${existingBarcodeItem.quantity} adet mevcut.`);
-          return;
-        }
-        
-        console.log("📈 Barkodla eklenmiş ürünün miktarı artırılıyor:", 
-          existingBarcodeItem.quantity, " -> ", existingBarcodeItem.quantity + 1);
-        
-        // Barkodla eklenmiş ürünün miktarını artır
-        updateQuantity(existingBarcodeItem.id, 1);
-        showSuccess(`${match.name} miktarı güncellendi`);
-        
-        // Güncellenmiş sepeti göster
-        setTimeout(() => {
-          console.log("🧾 Güncellenmiş sepet:", activeTab?.cart.map(item => ({
-            name: item.name,
-            id: item.id,
-            quantity: item.quantity,
-            source: item.source || "bilinmiyor"
-          })));
-        }, 100);
-        
+
+      // Sepet kontrolü
+      if (!activeTab) {
+        console.log("❌ Aktif sepet bulunamadı!");
         return;
       }
-      
-      // Yeni bir ürün olarak ekle
+
+      // Aktif sepette BARKOD TARAMASI ile eklenen aynı ürün var mı?
+      const existingBarcodeItem = activeTab.cart.find(
+        (item) => item.id === match.id && item.source === "barcode"
+      );
+
+      console.log(
+        "🔍 Sepette barkodla eklenmiş aynı ürün var mı?",
+        existingBarcodeItem
+          ? `EVET - ${existingBarcodeItem.name} (${existingBarcodeItem.id}) - Miktarı: ${existingBarcodeItem.quantity}`
+          : "HAYIR - Yeni eklenecek"
+      );
+
+      if (existingBarcodeItem) {
+        // Stok kontrolü
+        if (existingBarcodeItem.quantity + 1 > match.stock) {
+          console.log(
+            "⚠️ Stok yetersiz:",
+            `Stokta ${match.stock}, Sepette ${existingBarcodeItem.quantity}`
+          );
+          showError(
+            `${match.name} için stok yetersiz! Stokta ${match.stock} adet var ve barkod ile eklenmiş ${existingBarcodeItem.quantity} adet mevcut.`
+          );
+          return;
+        }
+
+        console.log(
+          "📈 Barkodla eklenmiş ürünün miktarı artırılıyor:",
+          existingBarcodeItem.quantity,
+          " -> ",
+          existingBarcodeItem.quantity + 1
+        );
+
+        // Miktarı 1 artır
+        const successful = updateQuantity(existingBarcodeItem.id, 1);
+        console.log("Miktar güncelleme başarılı mı:", successful);
+
+        if (successful) {
+          showSuccess(`${match.name} miktarı güncellendi`);
+        } else {
+          showError(
+            `${match.name} miktarı güncellenemedi. Lütfen tekrar deneyin.`
+          );
+        }
+
+        // Güncellenmiş sepet içeriği kontrol
+        setTimeout(() => {
+          if (activeTab) {
+            const updatedItem = activeTab.cart.find(
+              (i) => i.id === existingBarcodeItem.id
+            );
+            console.log(
+              "🔄 Sepet güncellendi:",
+              updatedItem
+                ? `${updatedItem.name} - Yeni miktar: ${updatedItem.quantity}`
+                : "Ürün bulunamadı"
+            );
+          }
+        }, 100);
+
+        return;
+      }
+
+      // Yeni ürün ekle
       const barcodeProduct = {
         ...match,
-        source: 'barcode',
+        source: "barcode", // Önemli: Barkodla eklendiğini belirt
       };
-      
-      console.log("➕ Kısmi eşleşen ürün sepete YENİ ekleniyor:", barcodeProduct.name, "kaynak: barcode");
+
+      console.log(
+        "➕ Kısmi eşleşen ürün sepete YENİ ekleniyor:",
+        barcodeProduct.name,
+        "kaynak: barcode"
+      );
       addToCart(barcodeProduct);
       showSuccess(`${match.name} sepete eklendi`);
-      
-      // Güncellenmiş sepeti göster
+
+      // Güncellenmiş sepeti kontrol et
       setTimeout(() => {
-        console.log("🧾 Güncellenmiş sepet:", activeTab?.cart.map(item => ({
-          name: item.name,
-          id: item.id,
-          quantity: item.quantity,
-          source: item.source || "bilinmiyor"
-        })));
+        if (activeTab) {
+          console.log(
+            "🧾 Güncellenmiş sepet:",
+            activeTab.cart.map((item) => ({
+              name: item.name,
+              id: item.id,
+              quantity: item.quantity,
+              source: item.source || "bilinmiyor",
+            }))
+          );
+        }
       }, 100);
     } else if (partialMatches.length > 1) {
       // Birden çok kısmi eşleşme ⇒ arama terimi
-      console.log("ℹ️ Birden çok eşleşme bulundu, arama terimini güncelliyorum:", barcode);
+      console.log(
+        "ℹ️ Birden çok eşleşme bulundu, arama terimini güncelliyorum:",
+        barcode
+      );
       setSearchTerm(barcode);
     } else {
       // Hiç eşleşme yok
-      console.log("❓ Hiç eşleşme bulunamadı, arama terimini güncelliyorum:", barcode);
-      setSearchTerm(barcode);
+      console.log("❓ Hiç eşleşme bulunamadı:", barcode);
+      showError(`Barkod bulunamadı: ${barcode}`);
     }
   };
 
-  // YENİ: SearchFilterPanel için tarama modu değişikliği yönetimi
+  // Barkod tarama modu değişikliği yönetimi
   const handleSearchPanelModeChange = (isScanMode: boolean) => {
     setBarcodeScanMode(isScanMode);
 
@@ -866,9 +999,10 @@ const POSPage: React.FC = () => {
       <div className="flex h-[calc(90vh)] relative">
         {/* Sol Panel */}
         <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm overflow-hidden h-full mr-2">
-          {/* Arama & Filtre - YENİ: inputId ve onScanModeChange eklendi */}
+          {/* Arama & Filtre - FilterPanel bileşeni */}
           <div className="p-3 border-b">
-            <SearchFilterPanel
+            <FilterPanel
+              mode="pos"
               searchTerm={searchTerm}
               onSearchTermChange={setSearchTerm}
               onReset={resetFilters}
@@ -876,11 +1010,13 @@ const POSPage: React.FC = () => {
               toggleFilter={() => setShowFilters((prev) => !prev)}
               inputRef={searchInputRef}
               onBarcodeDetected={handleBarcodeDetected}
-              inputActive={document.activeElement === searchInputRef.current}
               onScanModeChange={handleSearchPanelModeChange}
-              inputId="searchInput"
               quantityModeActive={quantityMode}
+              activeFilters={activeFilters}
+              searchPlaceholder="Ürün Adı, Barkod veya Kategori Ara..."
+              inputId="searchInput"
             />
+
             {showFilters && (
               <div className="mt-4">
                 <div className="flex flex-wrap gap-2 items-center">
@@ -995,6 +1131,7 @@ const POSPage: React.FC = () => {
               </button>
             }
           />
+
           {/* Ürün Grid / Liste */}
           <div className="flex-1 p-3 overflow-y-auto">
             {/* Ürün listesi başlık ve filtreler */}

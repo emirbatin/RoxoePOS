@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Search, Filter, RefreshCw, X, Loader2, Scan } from "lucide-react";
+import { Search, Filter, RefreshCw, X, Loader2, Scan, CheckCircle, Tag, Settings, ChevronDown, XCircle } from "lucide-react";
 
 interface SearchFilterPanelProps {
   searchTerm: string;
@@ -13,7 +13,9 @@ interface SearchFilterPanelProps {
   loading?: boolean;
   onScanModeChange?: (isScanning: boolean) => void;
   inputId?: string;
-  quantityModeActive?: boolean; // Yeni prop: Yıldız modu durumunu kontrol et
+  quantityModeActive?: boolean;
+  // Aktif filtreleri görüntülemek için yeni prop ekleyebiliriz
+  activeFilters?: Array<{key: string, label: string, value: string, color?: string}>;
 }
 
 const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
@@ -28,7 +30,8 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
   loading = false,
   onScanModeChange,
   inputId = "searchInput",
-  quantityModeActive = false, // Varsayılan değer: false
+  quantityModeActive = false,
+  activeFilters = [], // Varsayılan değer boş dizi
 }) => {
   const [barcodeBuffer, setBarcodeBuffer] = useState("");
   const [isFocused, setIsFocused] = useState(false);
@@ -137,14 +140,44 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
     onSearchTermChange,
     inputRef,
     inputId,
-    quantityModeActive, // Bağımlılık listesine eklendi
+    quantityModeActive,
   ]);
 
+  // Aktif filtrelerin sayısını belirle
+  const activeFilterCount = activeFilters.length > 0 ? activeFilters.length : (showFilter ? 1 : 0);
+  
+  // Filtre etiketinin rengini belirlemek için helper fonksiyon
+  const getFilterTagColor = (key: string) => {
+    const colorMap: Record<string, string> = {
+      'category': 'blue',
+      'price': 'emerald',
+      'stock': 'amber',
+      'status': 'violet',
+      'default': 'indigo'
+    };
+    
+    return colorMap[key] || colorMap.default;
+  };
+  
+  // Filtre rengine bağlı CSS sınıflarını belirle
+  const getFilterTagClasses = (color: string) => {
+    const colorMap: Record<string, {bg: string, text: string, hoverText: string}> = {
+      'blue': {bg: 'bg-blue-50', text: 'text-blue-700', hoverText: 'hover:text-blue-600'},
+      'emerald': {bg: 'bg-emerald-50', text: 'text-emerald-700', hoverText: 'hover:text-emerald-600'},
+      'amber': {bg: 'bg-amber-50', text: 'text-amber-700', hoverText: 'hover:text-amber-600'},
+      'violet': {bg: 'bg-violet-50', text: 'text-violet-700', hoverText: 'hover:text-violet-600'},
+      'indigo': {bg: 'bg-indigo-50', text: 'text-indigo-700', hoverText: 'hover:text-indigo-600'},
+    };
+    
+    const colorClasses = colorMap[color] || colorMap.indigo;
+    return `${colorClasses.bg} ${colorClasses.text}`;
+  };
+
   return (
-    <div className="w-full flex flex-col gap-4">
-      <div className="flex flex-col md:flex-row gap-3">
-        {/* Ana Arama Kutusu */}
-        <div className="flex-1 relative">
+    <div className="bg-white p-4 rounded-xl border shadow-sm mb-3">
+      <div className="flex flex-col md:flex-row justify-between gap-4">
+        {/* Sol: Arama */}
+        <div className="relative flex-1">
           <div className="relative group">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
               {isProcessingBarcode ? (
@@ -172,11 +205,11 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
               onBlur={() => {
                 setIsFocused(false);
               }}
-              className={`w-full pl-11 pr-12 h-11 bg-white border rounded-xl shadow-sm 
+              className={`w-full pl-11 pr-12 py-2.5 border rounded-lg shadow-sm 
                          text-gray-800 text-base placeholder:text-gray-400
-                         focus:outline-none focus:ring-2 focus:border-indigo-500
+                         focus:outline-none focus:ring-2 focus:border-indigo-500 
                          transition-all duration-200 ease-in-out
-                         ${isProcessingBarcode ? 'border-green-500 ring-green-200 ring-2' : 'border-gray-200 focus:ring-indigo-500'}`}
+                         ${isProcessingBarcode ? 'bg-green-50 border-green-300 ring-green-200 ring-2' : 'bg-gray-50 border-gray-300 focus:ring-indigo-500'}`}
               aria-label="Arama"
             />
 
@@ -209,61 +242,94 @@ const SearchFilterPanel: React.FC<SearchFilterPanelProps> = ({
             )}
           </div>
         </div>
-
-        {/* Butonlar Kısmı */}
-        <div className="flex gap-2 justify-end">
-          {/* Filtre Butonu - Sabit Genişlik */}
+        
+        {/* Sağ: Filtre ve Sıfırlama Butonları */}
+        <div className="flex space-x-3">
+          {/* Filtre Butonu */}
           <button
             onClick={toggleFilter}
-            className={`h-11 w-11 md:w-auto border rounded-xl flex items-center justify-center md:justify-start md:gap-2 md:px-3.5 transition-all duration-200
-                      hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500
-                      ${
-                        showFilter
-                          ? "bg-indigo-50 border-indigo-300 text-indigo-700"
-                          : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                      }`}
-            title={showFilter ? "Filtreleri Gizle" : "Filtreleri Göster"}
-            aria-label={showFilter ? "Filtreleri Gizle" : "Filtreleri Göster"}
+            className={`flex items-center gap-2 py-2.5 px-4 rounded-lg border transition-all font-medium text-sm ${
+              showFilter || activeFilterCount > 0
+                ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                : "border-gray-300 hover:border-indigo-300 text-gray-700"
+            }`}
           >
-            <Filter size={18} />
-            <span className="font-medium hidden md:block whitespace-nowrap">
-              Filtreler
+            <Filter 
+              size={18} 
+              className={activeFilterCount > 0 ? "text-indigo-600" : "text-gray-500"} 
+            />
+            <span>
+              {activeFilterCount > 0 ? `Filtreler (${activeFilterCount})` : "Filtrele"}
             </span>
-            {showFilter && (
-              <span className="bg-indigo-100 text-indigo-800 text-xs font-medium px-2 py-0.5 rounded-full ml-1 hidden md:inline-block">
-                Aktif
-              </span>
-            )}
-            {showFilter && (
-              <span className="absolute -top-1 -right-1 bg-indigo-500 w-2.5 h-2.5 rounded-full md:hidden"></span>
-            )}
+            <ChevronDown size={16} className={showFilter ? "rotate-180 transition-transform" : "transition-transform"} />
           </button>
-
-          {/* Sıfırlama Butonu - Sabit Genişlik */}
+          
+          {/* Sıfırlama Butonu */}
           <button
             onClick={onReset}
-            className="h-11 w-11 md:w-auto bg-white border border-gray-200 rounded-xl flex items-center justify-center md:justify-start md:gap-2 md:px-3.5
-                     hover:bg-gray-50 hover:shadow-sm transition-all duration-200
-                     focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-500"
-            title="Arama ve Filtreleri Sıfırla"
-            aria-label="Arama ve Filtreleri Sıfırla"
+            className="flex items-center gap-2 py-2.5 px-4 rounded-lg border border-gray-300 hover:border-indigo-300 text-gray-700 transition-all font-medium text-sm"
           >
-            <RefreshCw size={18} className="text-gray-600" />
-            <span className="font-medium text-gray-700 hidden md:block whitespace-nowrap">
-              Sıfırla
-            </span>
+            <RefreshCw
+              size={18}
+              className="text-gray-500"
+            />
+            <span>Sıfırla</span>
           </button>
         </div>
       </div>
 
-      {/* Filtre Açıklaması - Filtreler aktifse göster */}
-      {showFilter && (
-        <div className="mt-3 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-lg text-sm text-indigo-800">
-          <div className="flex items-center">
-            <Filter size={16} className="mr-2 text-indigo-600" />
-            <span className="font-medium">Aktif Filtreler:</span>
-            <span className="ml-2">Tüm filtreler uygulanıyor</span>
-          </div>
+      {/* Aktif Filtreler - Etiketler olarak */}
+      {(activeFilters.length > 0 || showFilter) && (
+        <div className="flex flex-wrap gap-2 mt-4">
+          {/* Filtreleri etiketler olarak göster */}
+          {activeFilters.map((filter, index) => {
+            const color = filter.color || getFilterTagColor(filter.key);
+            const tagClasses = getFilterTagClasses(color);
+            
+            return (
+              <span 
+                key={`${filter.key}-${index}`} 
+                className={`inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-medium ${tagClasses}`}
+              >
+                <Tag size={14} />
+                {filter.label}: {filter.value}
+                <button 
+                  onClick={() => {
+                    // Burada filtre kaldırma fonksiyonu çağrılabilir
+                    // Şu an için demo olarak boş bırakıyoruz
+                    console.log(`Filtre kaldırıldı: ${filter.key}`);
+                  }}
+                  className={`text-${color}-400 hover:text-${color}-600 ml-1`}
+                >
+                  <XCircle size={14} />
+                </button>
+              </span>
+            );
+          })}
+          
+          {/* Filtre açıklaması - Filtreler aktifse göster */}
+          {showFilter && (
+            <div className="animate-in fade-in slide-in-from-top-5 duration-200 w-full mt-2">
+              <div className="px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-lg text-sm text-indigo-800">
+                <div className="flex items-center">
+                  <Settings size={16} className="mr-2 text-indigo-600" />
+                  <span className="font-medium">Filtre Paneli Açık:</span>
+                  <span className="ml-2">Filtrelerinizi yapılandırın ve ürünleri filtrelemeye başlayın</span>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Tüm Filtreleri Temizle Butonu - Filtreler aktifse göster */}
+          {activeFilters.length > 0 && (
+            <button 
+              onClick={onReset}
+              className="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
+            >
+              <XCircle size={14} />
+              Tüm Filtreleri Temizle
+            </button>
+          )}
         </div>
       )}
     </div>

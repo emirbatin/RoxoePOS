@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Calendar, ChevronDown, Download, RefreshCw } from "lucide-react";
 
 // Dashboard Bileşenleri
 import OverviewTab from "../components/dashboard/OverviewTab";
 import CashTab from "../components/dashboard/CashTab";
 import SalesTab from "../components/dashboard/SalesTab";
 import ProductsTab from "../components/dashboard/ProductsTab";
+import DateFilter from "../components/ui/DatePicker"; // Yeni DateFilter bileşeni
 
 // Hooks ve Servisler
 import { useSales } from "../hooks/useSales";
@@ -24,7 +24,11 @@ import { CashTransaction } from "../types/cashRegister";
 type DashboardTabKey = "overview" | "cash" | "sales" | "products";
 
 // Hook: Kasa verilerini ve kapanmış oturumları getirir
-function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
+function useCashDataWithClosedSessions(
+  startDate: Date,
+  endDate: Date,
+  period: "day" | "week" | "month" | "year" | "custom"
+) {
   const [loading, setLoading] = useState<boolean>(true);
 
   // Kasa verileri
@@ -60,14 +64,24 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
       setLoading(true);
 
       try {
-        // Veri yükleme işlemleri (değişmedi)
+        // Tüm oturumları getir
         const all = await cashRegisterService.getAllSessions();
 
+        // Seçilen tarih aralığındaki oturumları filtrele
         const sessionsInRange = all.filter((s) => {
-          const d = new Date(s.openingDate);
-          return d >= startDate && d <= endDate;
+          const sessionDate = new Date(s.openingDate);
+
+          // Başlangıç ve bitiş günü tam gün olarak ayarla
+          const startDateTime = new Date(startDate);
+          startDateTime.setHours(0, 0, 0, 0);
+
+          const endDateTime = new Date(endDate);
+          endDateTime.setHours(23, 59, 59, 999);
+
+          return sessionDate >= startDateTime && sessionDate <= endDateTime;
         });
 
+        // Aktif oturumu getir
         const activeSession = await cashRegisterService.getActiveSession();
 
         let totalDeposits = 0;
@@ -77,7 +91,8 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
         let totalCardSales = 0;
         let totalOpeningBalance = 0;
 
-        const dailyTransactions: {
+        // Günlük/saatlik işlemler için obje
+        const transactionsData: {
           [key: string]: {
             date: string;
             deposits: number;
@@ -87,51 +102,74 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
           };
         } = {};
 
-        // Oturumları işleme (değişmedi)
+        // Bugün için saat bazlı görünüm hazırlama (boş saatleri doldurmak için)
+        if (period === "day") {
+          // Günün tüm saatleri için varsayılan değerlerle girdiler oluştur
+          for (let hour = 0; hour < 24; hour++) {
+            const hourKey = `${hour.toString().padStart(2, "0")}:00`;
+            transactionsData[hourKey] = {
+              date: hourKey,
+              deposits: 0,
+              withdrawals: 0,
+              veresiye: 0,
+              total: 0,
+            };
+          }
+        }
+
+        // Oturumları işle
         for (const sess of sessionsInRange) {
           const details = await cashRegisterService.getSessionDetails(sess.id);
 
-          if (sess.status === CashRegisterStatus.OPEN) {
-            totalOpeningBalance += sess.openingBalance;
-            totalCashSales += sess.cashSalesTotal || 0;
-            totalCardSales += sess.cardSalesTotal || 0;
+          // Her oturum için verileri topla (aktif veya kapalı)
+          totalOpeningBalance += sess.openingBalance;
+          totalCashSales += sess.cashSalesTotal || 0;
+          totalCardSales += sess.cardSalesTotal || 0;
 
-            if (details.transactions) {
-              for (const tx of details.transactions) {
-                const dt = new Date(tx.date);
-                const dateStr = dt.toISOString().split("T")[0];
+          if (details.transactions) {
+            for (const tx of details.transactions) {
+              const dt = new Date(tx.date);
 
-                if (!dailyTransactions[dateStr]) {
-                  dailyTransactions[dateStr] = {
-                    date: dateStr,
-                    deposits: 0,
-                    withdrawals: 0,
-                    veresiye: 0,
-                    total: 0,
-                  };
-                }
+              // period "day" ise saat formatında key kullan, yoksa tarih formatında
+              let dataKey;
+              if (period === "day") {
+                // Saat formatında kayıt (HH:00)
+                dataKey = `${dt.getHours().toString().padStart(2, "0")}:00`;
+              } else {
+                // Tarih formatında kayıt (yyyy-MM-dd)
+                dataKey = dt.toISOString().split("T")[0];
+              }
 
-                if (tx.type === "GİRİŞ") {
-                  totalDeposits += tx.amount;
-                  dailyTransactions[dateStr].deposits += tx.amount;
-                  dailyTransactions[dateStr].total += tx.amount;
-                } else if (tx.type === "ÇIKIŞ") {
-                  totalWithdrawals += tx.amount;
-                  dailyTransactions[dateStr].withdrawals += tx.amount;
-                  dailyTransactions[dateStr].total -= tx.amount;
-                } else if (tx.type === "VERESIYE_TAHSILAT") {
-                  totalDeposits += tx.amount;
-                  veresiyeCollections += tx.amount;
-                  dailyTransactions[dateStr].veresiye += tx.amount;
-                  dailyTransactions[dateStr].deposits += tx.amount;
-                  dailyTransactions[dateStr].total += tx.amount;
-                }
+              if (!transactionsData[dataKey]) {
+                transactionsData[dataKey] = {
+                  date: dataKey,
+                  deposits: 0,
+                  withdrawals: 0,
+                  veresiye: 0,
+                  total: 0,
+                };
+              }
+
+              if (tx.type === "GİRİŞ") {
+                totalDeposits += tx.amount;
+                transactionsData[dataKey].deposits += tx.amount;
+                transactionsData[dataKey].total += tx.amount;
+              } else if (tx.type === "ÇIKIŞ") {
+                totalWithdrawals += tx.amount;
+                transactionsData[dataKey].withdrawals += tx.amount;
+                transactionsData[dataKey].total -= tx.amount;
+              } else if (tx.type === "VERESIYE_TAHSILAT") {
+                totalDeposits += tx.amount;
+                veresiyeCollections += tx.amount;
+                transactionsData[dataKey].veresiye += tx.amount;
+                transactionsData[dataKey].deposits += tx.amount;
+                transactionsData[dataKey].total += tx.amount;
               }
             }
           }
         }
 
-        // Kapalı oturumları ayarla
+        // Kapalı oturumları ayarla ve sırala
         const closed = sessionsInRange
           .filter((s) => s.status === CashRegisterStatus.CLOSED)
           .sort((a, b) => {
@@ -143,23 +181,65 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
 
         setClosedSessions(closed);
 
+        // Son kapatılan oturumu ayarla
         if (closed.length > 0) {
           setLastClosedSession(closed[0]);
         } else {
           setLastClosedSession(null);
         }
 
-        // Aktif oturum bakiyesini hesapla
+        // Mevcut kasa bakiyesini hesapla
         let currBalance = 0;
         let isActive = false;
+        let openingBalance = period === "day" ? 0 : totalOpeningBalance;
 
         if (activeSession) {
+          // Aktif oturum varsa
           isActive = true;
           currBalance =
             activeSession.openingBalance +
             (activeSession.cashSalesTotal || 0) +
             (activeSession.cashDepositTotal || 0) -
             (activeSession.cashWithdrawalTotal || 0);
+
+          // Günlük görünümde açılış bakiyesini aktif oturumdan al
+          if (period === "day") {
+            openingBalance = activeSession.openingBalance;
+          }
+        } else if (closed.length > 0) {
+          // Aktif oturum yoksa, son kapanan oturumun verilerini kullan
+          const lastSession = closed[0];
+
+          // Son kapanan oturumun kapanış bakiyesini hesapla
+          currBalance =
+            lastSession.countingAmount !== null &&
+            lastSession.countingAmount !== undefined
+              ? lastSession.countingAmount
+              : lastSession.openingBalance +
+                (lastSession.cashSalesTotal || 0) +
+                (lastSession.cashDepositTotal || 0) -
+                (lastSession.cashWithdrawalTotal || 0);
+
+          // Günlük görünümde açılış bakiyesini son kapanan oturumdan al
+          if (period === "day") {
+            openingBalance = lastSession.openingBalance;
+          }
+        }
+
+        // Sıralama için veriyi hazırla
+        let dailyData;
+        if (period === "day") {
+          // Saatlere göre sırala (00:00'dan 23:00'a)
+          dailyData = Object.values(transactionsData).sort((a, b) => {
+            return (
+              parseInt(a.date.split(":")[0]) - parseInt(b.date.split(":")[0])
+            );
+          });
+        } else {
+          // Tarihe göre sırala
+          dailyData = Object.values(transactionsData).sort((a, b) =>
+            a.date.localeCompare(b.date)
+          );
         }
 
         // Kasa verilerini güncelle
@@ -169,20 +249,10 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
           totalWithdrawals,
           veresiyeCollections,
           isActive,
-          openingBalance: totalOpeningBalance,
+          openingBalance,
           cashSalesTotal: totalCashSales,
           cardSalesTotal: totalCardSales,
-          dailyData: Object.values(
-            dailyTransactions as {
-              [key: string]: {
-                date: string;
-                deposits: number;
-                withdrawals: number;
-                veresiye: number;
-                total: number;
-              };
-            }
-          ).sort((a, b) => a.date.localeCompare(b.date)),
+          dailyData,
         });
       } catch (err) {
         console.error("Kasa verileri yüklenirken hata:", err);
@@ -192,7 +262,7 @@ function useCashDataWithClosedSessions(startDate: Date, endDate: Date) {
     };
 
     loadAll();
-  }, [startDate, endDate]);
+  }, [startDate, endDate, period]);
 
   return { cashData, closedSessions, lastClosedSession, loading };
 }
@@ -208,12 +278,10 @@ const DashboardPage: React.FC = () => {
   >("day");
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [endDate, setEndDate] = useState<Date>(new Date());
-  const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
-  const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // Satış verileri
   const { sales, loading: salesLoading } = useSales(30000);
-  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // Sıralama state'i
   const [cashSortConfig, setCashSortConfig] = useState<{
@@ -226,11 +294,25 @@ const DashboardPage: React.FC = () => {
 
   // Seçili tarih aralığındaki satışlar
   const filteredSales = useMemo(() => {
-    const s = startDate.getTime();
-    const e = endDate.getTime();
+    // Başlangıç tarihini günün başlangıcına ayarla (00:00:00)
+    const startDateTime = new Date(startDate);
+    startDateTime.setHours(0, 0, 0, 0);
+
+    // Bitiş tarihini günün sonuna ayarla (23:59:59.999)
+    const endDateTime = new Date(endDate);
+    endDateTime.setHours(23, 59, 59, 999);
+
+    // Tarih aralığını konsola yazdır (hata ayıklama için)
+    console.log(
+      "Filtreleme yapılıyor:",
+      `${startDateTime.toLocaleString()} - ${endDateTime.toLocaleString()}`
+    );
+
+    // Satışları filtrele
     return sales.filter((sale) => {
-      const t = new Date(sale.date).getTime();
-      return t >= s && t <= e;
+      const saleDate = new Date(sale.date);
+      // Doğru şekilde kontrol et: satış tarihi >= başlangıç tarihi VE satış tarihi <= bitiş tarihi
+      return saleDate >= startDateTime && saleDate <= endDateTime;
     });
   }, [sales, startDate, endDate]);
 
@@ -240,7 +322,7 @@ const DashboardPage: React.FC = () => {
     closedSessions,
     lastClosedSession,
     loading: cashLoading,
-  } = useCashDataWithClosedSessions(startDate, endDate);
+  } = useCashDataWithClosedSessions(startDate, endDate, period);
 
   // Kapanmış oturumları sıralayan useMemo
   const sortedClosedSessions = useMemo(() => {
@@ -312,100 +394,98 @@ const DashboardPage: React.FC = () => {
   };
 
   // Dışa aktarma fonksiyonu
-  // DashboardPage.tsx dosyasında yaklaşık olarak satır 473 civarında
-// handleExport fonksiyonunu şu şekilde güncelleyin:
+  async function handleExport(
+    fileType: "excel" | "pdf",
+    reportType: "sale" | "product" | "cash"
+  ) {
+    const dateRangeString = exportService.formatDateRange(startDate, endDate);
+    try {
+      if (fileType === "excel") {
+        if (reportType === "cash") {
+          // İşlem geçmişini yükle - tip tanımlamaları eklendi
+          let allTransactions: CashTransaction[] = [];
+          let veresiyeTx: CashTransaction[] = [];
 
-async function handleExport(fileType: "excel" | "pdf", reportType: "sale" | "product" | "cash") {
-  setShowExportMenu(false);
-  const dateRangeString = exportService.formatDateRange(startDate, endDate);
-  try {
-    if (fileType === "excel") {
-      if (reportType === "cash") {
-        // İşlem geçmişini yükle - tip tanımlamaları eklendi
-        let allTransactions: CashTransaction[] = [];
-        let veresiyeTx: CashTransaction[] = [];
-        
-        // Aktif oturum varsa verileri al
-        const activeSession = await cashRegisterService.getActiveSession();
-        if (activeSession) {
-          const sessionDetails = await cashRegisterService.getSessionDetails(activeSession.id);
-          allTransactions = sessionDetails.transactions || [];
-          veresiyeTx = allTransactions.filter(t => 
-            t.description?.toLowerCase().includes('veresiye') || 
-            t.description?.toLowerCase().includes('tahsilat')
+          // Aktif oturum varsa verileri al
+          const activeSession = await cashRegisterService.getActiveSession();
+          if (activeSession) {
+            const sessionDetails = await cashRegisterService.getSessionDetails(
+              activeSession.id
+            );
+            allTransactions = sessionDetails.transactions || [];
+            veresiyeTx = allTransactions.filter(
+              (t) =>
+                t.description?.toLowerCase().includes("veresiye") ||
+                t.description?.toLowerCase().includes("tahsilat")
+            );
+          }
+
+          console.log(
+            "Veri hazırlama başlıyor - Transactions sayısı:",
+            allTransactions.length
+          );
+
+          const cashExportData = {
+            summary: {
+              openingBalance: cashData.openingBalance,
+              currentBalance: cashData.currentBalance,
+              totalDeposits: cashData.totalDeposits,
+              totalWithdrawals: cashData.totalWithdrawals,
+              veresiyeCollections: cashData.veresiyeCollections,
+              cashSalesTotal: cashData.cashSalesTotal,
+              cardSalesTotal: cashData.cardSalesTotal,
+            },
+            dailyData: cashData.dailyData || [],
+            closedSessions,
+            transactions: allTransactions,
+            salesData: filteredSales.filter((s) => s.status === "completed"),
+            veresiyeTransactions: veresiyeTx,
+            productSummary: productStats.map((product) => ({
+              productName: product.name,
+              category: product.category || "Kategori Yok",
+              totalSales: product.quantity,
+              totalRevenue: product.revenue,
+              totalProfit: product.profit,
+              profitMargin: product.profitMargin || 0,
+            })),
+          };
+
+          console.log("Kasa Export Verileri:", {
+            "dailyData sayısı": cashExportData.dailyData.length,
+            "transactions sayısı": cashExportData.transactions.length,
+            "veresiye sayısı": cashExportData.veresiyeTransactions.length,
+            "satış sayısı": cashExportData.salesData.length,
+          });
+
+          await exportService.exportCashDataToExcel(
+            cashExportData,
+            `Kasa Raporu ${dateRangeString}`
+          );
+        } else {
+          // Diğer raporlar aynı kalabilir
+          await exportService.exportToExcel(
+            filteredSales,
+            dateRangeString,
+            reportType
           );
         }
-        
-        console.log("Veri hazırlama başlıyor - Transactions sayısı:", allTransactions.length);
-
-        const cashExportData = {
-          summary: {
-            openingBalance: cashData.openingBalance,
-            currentBalance: cashData.currentBalance,
-            totalDeposits: cashData.totalDeposits,
-            totalWithdrawals: cashData.totalWithdrawals,
-            veresiyeCollections: cashData.veresiyeCollections,
-            cashSalesTotal: cashData.cashSalesTotal,
-            cardSalesTotal: cashData.cardSalesTotal,
-          },
-          dailyData: cashData.dailyData || [],
-          closedSessions,
-          transactions: allTransactions, // DÜZELTME: Aktif oturumun işlemleri
-          salesData: filteredSales.filter(s => s.status === 'completed'),
-          veresiyeTransactions: veresiyeTx, // DÜZELTME: Veresiye işlemleri
-          productSummary: productStats.map(product => ({
-            productName: product.name,
-            category: product.category || 'Kategori Yok',
-            totalSales: product.quantity,
-            totalRevenue: product.revenue,
-            totalProfit: product.profit,
-            profitMargin: product.profitMargin || 0 
-          }))
-        };
-        
-        console.log("Kasa Export Verileri:", {
-          "dailyData sayısı": cashExportData.dailyData.length,
-          "transactions sayısı": cashExportData.transactions.length,
-          "veresiye sayısı": cashExportData.veresiyeTransactions.length, 
-          "satış sayısı": cashExportData.salesData.length
-        });
-        
-        await exportService.exportCashDataToExcel(
-          cashExportData,
-          `Kasa Raporu ${dateRangeString}`
-        );
       } else {
-        // Diğer raporlar aynı kalabilir
-        await exportService.exportToExcel(
-          filteredSales,
-          dateRangeString,
-          reportType
-        );
+        // PDF raporları aynı kalabilir
+        if (reportType === "cash") {
+          alert("Kasa raporu PDF olarak henüz desteklenmiyor!");
+        } else {
+          await exportService.exportToPDF(
+            filteredSales,
+            dateRangeString,
+            reportType
+          );
+        }
       }
-    } else {
-      // PDF raporları aynı kalabilir
-      if (reportType === "cash") {
-        alert("Kasa raporu PDF olarak henüz desteklenmiyor!");
-      } else {
-        await exportService.exportToPDF(
-          filteredSales,
-          dateRangeString,
-          reportType
-        );
-      }
+    } catch (err) {
+      console.error("Dışa aktarım hatası:", err);
+      alert("Dışa aktarım sırasında bir hata oluştu!");
     }
-  } catch (err) {
-    console.error("Dışa aktarım hatası:", err);
-    alert("Dışa aktarım sırasında bir hata oluştu!");
   }
-}
-
-  // Period değişince tarih aralığını güncelle
-  useEffect(() => {
-    const [start, end] = exportService.getDateRange(period);
-    setStartDate(start);
-    setEndDate(end);
-  }, [period]);
 
   // Tarih formatını güzelleştiren yardımcı fonksiyon
   const formatDate = (date: Date | string | undefined) => {
@@ -418,187 +498,20 @@ async function handleExport(fileType: "excel" | "pdf", reportType: "sale" | "pro
     return new Date(date).toLocaleDateString("tr-TR", options);
   };
 
-  // Tarih filtreleme bileşeni
-  const renderDateFilter = () => (
-    <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100">
-      <div className="p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        {/* Sol Taraf - Hızlı Filtreler */}
-        <div className="flex items-center gap-3">
-          <div className="flex bg-gray-50 rounded-lg p-1 shadow-sm">
-            <button
-              onClick={() => {
-                setPeriod("day");
-                setShowDatePicker(false);
-              }}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                period === "day"
-                  ? "bg-white text-indigo-600 shadow-sm"
-                  : "text-gray-600 hover:text-indigo-600 hover:bg-gray-100"
-              }`}
-            >
-              Bugün
-            </button>
-            <button
-              onClick={() => {
-                setPeriod("week");
-                setShowDatePicker(false);
-              }}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                period === "week"
-                  ? "bg-white text-indigo-600 shadow-sm"
-                  : "text-gray-600 hover:text-indigo-600 hover:bg-gray-100"
-              }`}
-            >
-              Bu Hafta
-            </button>
-            <button
-              onClick={() => {
-                setPeriod("month");
-                setShowDatePicker(false);
-              }}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                period === "month"
-                  ? "bg-white text-indigo-600 shadow-sm"
-                  : "text-gray-600 hover:text-indigo-600 hover:bg-gray-100"
-              }`}
-            >
-              Bu Ay
-            </button>
-            <button
-              onClick={() => {
-                setPeriod("year");
-                setShowDatePicker(false);
-              }}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                period === "year"
-                  ? "bg-white text-indigo-600 shadow-sm"
-                  : "text-gray-600 hover:text-indigo-600 hover:bg-gray-100"
-              }`}
-            >
-              Bu Yıl
-            </button>
-          </div>
-        </div>
+  // Tarih değişimleri için callback
+  const handleDateChange = (start: Date, end: Date) => {
+    console.log("Tarih değişiyor:", start, end);
+    setStartDate(start);
+    setEndDate(end);
+  };
 
-        {/* Sağ Taraf - Butonlar */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Özel Tarih Seçici */}
-          <div className="relative">
-            <button
-              onClick={() => setShowDatePicker(!showDatePicker)}
-              className={`flex items-center gap-2 py-2 px-3 rounded-md border transition-all ${
-                showDatePicker || period === "custom"
-                  ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                  : "border-gray-200 bg-white text-gray-700 hover:border-indigo-200 hover:bg-indigo-50/50"
-              }`}
-            >
-              <Calendar
-                size={16}
-                className={
-                  period === "custom" ? "text-indigo-600" : "text-gray-500"
-                }
-              />
-              <span className="font-medium text-sm">
-                {formatDate(startDate)} - {formatDate(endDate)}
-              </span>
-              <ChevronDown
-                size={14}
-                className={
-                  period === "custom" ? "text-indigo-600" : "text-gray-400"
-                }
-              />
-            </button>
-
-            {/* Tarih Seçici Popup */}
-            {showDatePicker && (
-              <div className="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-xl z-20 border border-gray-100 animate-in fade-in slide-in-from-top-5 duration-200">
-                <div className="p-4 w-80">
-                  <div className="text-sm font-semibold text-gray-800 mb-3">
-                    Özel Tarih Aralığı
-                  </div>
-
-                  {/* Başlangıç Tarihi */}
-                  <div className="mb-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Başlangıç Tarihi
-                    </label>
-                    <input
-                      type="date"
-                      value={startDate.toISOString().split("T")[0]}
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          setStartDate(new Date(e.target.value));
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-
-                  {/* Bitiş Tarihi */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Bitiş Tarihi
-                    </label>
-                    <input
-                      type="date"
-                      value={endDate.toISOString().split("T")[0]}
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          setEndDate(new Date(e.target.value));
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      min={startDate.toISOString().split("T")[0]}
-                    />
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setPeriod("custom");
-                      setShowDatePicker(false);
-                    }}
-                    className="w-full py-2 mt-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
-                  >
-                    Tarihleri Uygula
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* YENİ: ExportButton Bileşeni - Dışa Aktarma Butonu yerine */}
-          <ExportButton
-            currentTab={tabKey as "overview" | "cash" | "sales" | "products"}
-            startDate={startDate}
-            endDate={endDate}
-            isLoading={isLoading}
-            sales={filteredSales}
-            cashData={cashData}
-            productStats={productStats}
-            closedSessions={closedSessions}
-            transactions={[]} 
-          />
-
-          {/* Yenileme Butonu */}
-          <button
-            onClick={handleRefresh}
-            className={`flex items-center gap-2 py-2 px-3 rounded-md border border-gray-200 bg-white hover:border-indigo-300 transition-all ${
-              isLoading ? "cursor-not-allowed opacity-75" : ""
-            }`}
-            disabled={isLoading}
-          >
-            <RefreshCw
-              size={16}
-              className={`text-gray-500 ${isLoading ? "animate-spin" : ""}`}
-            />
-            <span className="text-gray-700 font-medium text-sm">
-              {isLoading ? "Yükleniyor" : "Yenile"}
-            </span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  // Periyot değişimi için callback
+  const handlePeriodChange = (
+    newPeriod: "day" | "week" | "month" | "year" | "custom"
+  ) => {
+    console.log("Periyot değişiyor:", newPeriod);
+    setPeriod(newPeriod);
+  };
 
   // Seçili sekmeye göre içerik gösterme
   const renderTabContent = () => {
@@ -631,6 +544,7 @@ async function handleExport(fileType: "excel" | "pdf", reportType: "sale" | "pro
             formatDate={formatDate}
             handleCashSort={handleCashSort}
             cashSortConfig={cashSortConfig}
+            period={period}
           />
         );
       case "sales":
@@ -667,9 +581,30 @@ async function handleExport(fileType: "excel" | "pdf", reportType: "sale" | "pro
   };
 
   return (
-    <div className="dashboard-container">
-      {/* Tarih Filtreleme */}
-      {renderDateFilter()}
+    <div className="dashboard-container p-2">
+      {/* Yeni DateFilter bileşeni */}
+      <DateFilter
+        startDate={startDate}
+        endDate={endDate}
+        period={period}
+        onPeriodChange={handlePeriodChange}
+        onDateChange={handleDateChange}
+        isLoading={isLoading}
+        onRefresh={handleRefresh}
+        exportButton={
+          <ExportButton
+            currentTab={tabKey as "overview" | "cash" | "sales" | "products"}
+            startDate={startDate}
+            endDate={endDate}
+            isLoading={isLoading}
+            sales={filteredSales}
+            cashData={cashData}
+            productStats={productStats}
+            closedSessions={closedSessions}
+            transactions={[]}
+          />
+        }
+      />
 
       {/* Seçilen Sekmenin İçeriği */}
       <div className="transition-all duration-300 ease-in-out">

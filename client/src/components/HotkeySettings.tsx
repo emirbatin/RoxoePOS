@@ -398,7 +398,7 @@ const HotkeySettings: React.FC<Props> = ({ onSave }) => {
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Keyboard className="text-indigo-600" size={24} />
           <h2 className="text-lg font-semibold">Klavye Kısayolları</h2>

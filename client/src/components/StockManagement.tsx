@@ -91,7 +91,7 @@ const StockManagement: React.FC<StockManagementProps> = ({
           </div>
 
           {/* Mevcut Stok Bilgisi */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+          <div className="mb-3 p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Package size={20} className="text-gray-500" />

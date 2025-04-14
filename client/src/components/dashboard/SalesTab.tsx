@@ -52,7 +52,7 @@ const SalesTab: React.FC<SalesTabProps> = ({
   period,
 }) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Üst özet kartları */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <Card
@@ -114,7 +114,7 @@ const SalesTab: React.FC<SalesTabProps> = ({
 
       {/* Günlük Satışlar Grafiği */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
+        <div className="px-6 py-3 border-b border-gray-100">
           <h2 className="text-lg font-medium text-gray-800">Günlük Satışlar</h2>
         </div>
         <div className="p-4">
@@ -191,7 +191,7 @@ const SalesTab: React.FC<SalesTabProps> = ({
 
       {/* İptal ve İade Analizi */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
+        <div className="px-6 py-3 border-b border-gray-100">
           <h2 className="text-lg font-medium text-gray-800">
             İptal ve İade Analizi
           </h2>
@@ -280,7 +280,7 @@ const SalesTab: React.FC<SalesTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Kategori Dağılımı */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
+          <div className="px-6 py-3 border-b border-gray-100">
             <h2 className="text-lg font-medium text-gray-800">
               Kategori Dağılımı
             </h2>
@@ -339,7 +339,7 @@ const SalesTab: React.FC<SalesTabProps> = ({
 
         {/* Kategori Bazlı Kârlılık */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
+          <div className="px-6 py-3 border-b border-gray-100">
             <h2 className="text-lg font-medium text-gray-800">
               Kategori Bazlı Kârlılık
             </h2>
@@ -399,13 +399,13 @@ const SalesTab: React.FC<SalesTabProps> = ({
 
       {/* Aylık Satış Trendi - İlerleme çubuğu tarzında */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
+        <div className="px-6 py-3 border-b border-gray-100">
           <h2 className="text-lg font-medium text-gray-800">
             Satış Performansı
           </h2>
         </div>
         <div className="p-6">
-          <div className="space-y-6">
+          <div className="space-y-3">
             {/* Kategori başlıkları ve ilerleme çubukları */}
             {categoryData.slice(0, 5).map((category, index) => (
               <div key={index}>

@@ -144,25 +144,34 @@ export function useCart() {
 
   function updateQuantity(productId: number, change: number): boolean {
     if (!activeTab) return false;
-
+  
     const tab = cartTabs.find((t) => t.id === activeTabId);
     if (!tab) return false;
-
+  
     const item = tab.cart.find((i) => i.id === productId);
     if (!item) return false;
-
+  
     const newQuantity = item.quantity + change;
-
+    console.log(`updateQuantity: ${item.name} miktarı ${item.quantity} -> ${newQuantity}`);
+  
+    // Belki iki kez çağrılıp çalışıyor - burada koruma ekleyelim
+    if (newQuantity === item.quantity) {
+      console.log("Miktar değişmedi, güncelleme yapılmıyor");
+      return true;
+    }
+  
     // Check if new quantity exceeds stock
     if (newQuantity > item.stock) {
-      return false; // Indicate failure due to stock limit
+      console.log("Stok sınırı aşıldı!");
+      return false;
     }
-
+  
     // Prevent quantity from going below 1
     if (newQuantity <= 0) {
-      return false; // Or you can handle item removal here if needed
+      console.log("Miktar 0'dan küçük olamaz!");
+      return false;
     }
-
+  
     // If stock is sufficient, update the cart
     setCartTabs((prev) =>
       prev.map((tab) => {
@@ -175,8 +184,8 @@ export function useCart() {
         return { ...tab, cart: updatedCart };
       })
     );
-
-    return true; // Update was successful
+  
+    return true;
   }
 
   // Sepetten ürün kaldır

@@ -67,7 +67,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
+        <div className="px-6 py-3 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <h2 className="text-xl font-semibold text-gray-900">Fiş Görüntüle</h2>
           <div className="flex gap-2">
             <button

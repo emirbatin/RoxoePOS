@@ -117,7 +117,7 @@ const Card: React.FC<CardProps> = ({
         <div className={`px-5 py-3 ${themeClass.bg}`}>
           <h3 className={`text-sm font-medium ${themeClass.text}`}>{title}</h3>
         </div>
-        <div className="px-5 py-4">
+        <div className="px-5 py-3">
           <div
             className="text-xl font-semibold text-gray-800 truncate"
             title={String(value)}

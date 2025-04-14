@@ -65,7 +65,6 @@ const DynamicWindowTitle: React.FC = () => {
       timeEnd: 11,
       messages: [
         "📊 Sabah satışları başladı, hadi bakalım!",
-        "🏆 İlk satışlar her zaman şans getirir!",
         "💯 İyi bir başlangıç, mükemmel bir gün demektir!",
         "🔥 Bugünkü hedefe şimdiden yaklaşıyoruz!",
         "📈 Bugün grafikler yukarı doğru!",
@@ -272,7 +271,6 @@ const DynamicWindowTitle: React.FC = () => {
     "🎭 Gülümse, satış gelecek! Kasam beni çağırıyor!",
     "🎲 Kumar oynamana gerek yok, sen zaten kazanıyorsun!",
     "🧪 İş formülünü bulmuşsun, patent aldır bence!",
-    "🍀 Şans senden yana, çünkü şansı zorluyorsun!",
     "🎨 Satış sanatının Picasso'su sensin!",
     "🌶️ Satışların acı biber gibi yakıyor ortalığı!",
   ];
@@ -283,7 +281,6 @@ const DynamicWindowTitle: React.FC = () => {
     "🔓 Kasalar açıldı, müşteriler sırada! Haydi bakalım patron!",
     "💰 Kasa açık, işletme açık, hedefler büyük! İşte bu!",
     "☕ Kasayı açtın, kahveni hazırla, bugün müthiş olacak!",
-    "🌈 Yeni bir gün, yeni fırsatlar! Kasa açıldı, şansın açık olsun!",
     "⚡ Kasa açıldı! Bugün elektrik gibi çalışacağız patron!",
     "📊 Kasa açık, grafikler yukarı doğru gitmeye hazır!",
     "🎯 Hedef belirle, kasayı aç, başarıyı yakala! Bugün senin günün!",

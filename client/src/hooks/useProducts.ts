@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Product, Category } from "../types/product";
 import { productService } from "../services/productDB";
+import { normalizedSearch } from "../utils/turkishSearch";
 
 /**
  * @param options.enableCategories Eğer true ise kategorileri de çekiyor.
@@ -48,12 +49,12 @@ export function useProducts(options?: UseProductsOptions) {
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const matchesSearch =
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        normalizedSearch(product.name, searchTerm) ||
         product.barcode.includes(searchTerm);
-
+  
       const matchesCategory =
         selectedCategory === "Tümü" || product.category === selectedCategory;
-
+  
       return matchesSearch && matchesCategory;
     });
   }, [products, searchTerm, selectedCategory]);

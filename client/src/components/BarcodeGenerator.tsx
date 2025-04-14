@@ -111,7 +111,7 @@ const BarcodeGenerator: React.FC<BarcodeGeneratorProps> = ({ product, onClose })
           </div>
 
           {/* Barkod Önizleme */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg flex justify-center">
+          <div className="mb-3 p-4 bg-gray-50 rounded-lg flex justify-center">
             {/* Barkod çizimi gelecek */}
             <div className={`bg-white p-4 rounded border ${
               barcodeSize === 'small' ? 'w-24 h-12' :

@@ -88,13 +88,33 @@ class CreditService {
 
   async deleteCustomer(customerId: number): Promise<boolean> {
     const db = await this.dbPromise;
-    const transactions = await this.getTransactionsByCustomerId(customerId);
-
-    // Müşterinin aktif borcu varsa silmeye izin verme
-    if (transactions.some((t) => t.status === "active" || t.status === "overdue")) {
+    const customer = await this.getCustomerById(customerId);
+    
+    if (!customer) return false;
+    
+    // Müşterinin gerçek borç durumunu kontrol et
+    if (customer.currentDebt > 0) {
+      console.log(`Müşteri ${customerId}: Borç durumu ${customer.currentDebt}, silinemez.`);
       return false;
     }
-
+    
+    // Borcu 0 olsa da, tüm aktif işlemleri kontrol edelim
+    const transactions = await this.getTransactionsByCustomerId(customerId);
+    const activeTransactions = transactions.filter(t => 
+      t.status === "active" || t.status === "overdue"
+    );
+    
+    // Borç 0 ama aktif işlemler varsa
+    if (customer.currentDebt === 0 && activeTransactions.length > 0) {
+      console.log(`Müşteri ${customerId}: Borç 0 ama ${activeTransactions.length} aktif işlem var. Bunları temizliyoruz.`);
+      
+      // Tüm aktif işlemleri "paid" olarak işaretle
+      for (const tx of activeTransactions) {
+        await this.updateTransactionStatus(tx.id, "paid");
+      }
+    }
+    
+    // Müşteriyi sil
     await db.delete("customers", customerId);
     return true;
   }
@@ -115,6 +135,70 @@ class CreditService {
     return transactions
       .filter((t) => t.customerId === customerId)
       .sort((a, b) => b.date.getTime() - a.date.getTime());
+  }
+
+  // Ödeme işlemi yaparken borçları otomatik olarak işleyen yeni metot
+  async processPayment(customerId: number, paymentAmount: number): Promise<boolean> {
+    try {
+      // 1. Müşterinin aktif borç işlemlerini en eski eklenen olandan başlayarak al
+      const activeDebts = await this.getTransactionsByCustomerId(customerId)
+        .then(txs => 
+          txs.filter(tx => 
+            tx.type === 'debt' && 
+            (tx.status === 'active' || tx.status === 'overdue')
+          ).sort((a, b) => {
+            // Önce eklenme tarihine göre sırala (en eski eklenmiş borç önce)
+            return new Date(a.date).getTime() - new Date(b.date).getTime();
+          })
+        );
+      
+      console.log("Aktif borçlar:", activeDebts.map(d => 
+        `ID: ${d.id}, Miktar: ${d.amount}, Tarih: ${d.date.toLocaleDateString()}, Vade: ${d.dueDate?.toLocaleDateString() || "Yok"}`
+      ));
+      
+      // 2. Ödeme miktarını en eski eklenen borçlardan başlayarak düş
+      let remainingPayment = paymentAmount;
+      const paidDebts = [];
+      
+      for (const debt of activeDebts) {
+        if (remainingPayment <= 0) break;
+        
+        // Bu borç ne kadar ödenebilir?
+        const paymentForThisDebt = Math.min(debt.amount, remainingPayment);
+        
+        if (paymentForThisDebt >= debt.amount) {
+          // Borç tamamen ödendi
+          await this.updateTransactionStatus(debt.id, 'paid');
+          paidDebts.push({ id: debt.id, amount: debt.amount, fullyPaid: true });
+          remainingPayment -= debt.amount;
+          console.log(`Borç ${debt.id} tamamen ödendi: ${debt.amount}. Kalan ödeme: ${remainingPayment}`);
+        } else {
+          // Borç kısmen ödendi - işlem tutarını güncelle
+          const db = await this.dbPromise;
+          const transaction = await db.get("transactions", debt.id);
+          
+          if (transaction) {
+            // Kalan borç tutarını hesapla
+            const updatedAmount = debt.amount - paymentForThisDebt;
+            
+            // İşlemi güncelle
+            transaction.amount = updatedAmount;
+            await db.put("transactions", transaction);
+            
+            paidDebts.push({ id: debt.id, amount: paymentForThisDebt, fullyPaid: false });
+            console.log(`Borç ${debt.id} kısmen ödendi: ${paymentForThisDebt}/${debt.amount}. Kalan borç: ${updatedAmount}`);
+            remainingPayment = 0;
+          }
+        }
+      }
+      
+      console.log("Ödenen borçlar:", paidDebts);
+      
+      return true;
+    } catch (error) {
+      console.error("Ödeme işleme hatası:", error);
+      return false;
+    }
   }
 
   async addTransaction(
@@ -147,6 +231,11 @@ class CreditService {
       currentDebt: customer.currentDebt + debtChange,
     });
 
+    // Eğer ödeme işlemiyse, ilgili borçları otomatik olarak güncelle
+    if (transaction.type === "payment") {
+      await this.processPayment(transaction.customerId, transaction.amount);
+    }
+
     return { ...newTransaction, id: id as number }; // id number olarak zorlanır
   }
 
@@ -167,42 +256,42 @@ class CreditService {
 
   // Özet istatistikler
   // creditService.ts içindeki getCustomerSummary metodunu güncelle
-async getCustomerSummary(customerId: number): Promise<CustomerSummary> {
-  const transactions = await this.getTransactionsByCustomerId(customerId);
-  const activeTransactions = transactions.filter(
-    (t) => t.status === "active" || t.status === "overdue"
-  );
+  async getCustomerSummary(customerId: number): Promise<CustomerSummary> {
+    const transactions = await this.getTransactionsByCustomerId(customerId);
+    const activeTransactions = transactions.filter(
+      (t) => t.status === "active" || t.status === "overdue"
+    );
 
-  // İndirimli işlemleri bul
-  const discountedTransactions = transactions.filter(
-    (t) => t.discountAmount && t.discountAmount > 0
-  );
-  
-  // Toplam indirim tutarı
-  const totalDiscount = discountedTransactions.reduce(
-    (sum, t) => sum + (t.discountAmount || 0), 0
-  );
+    // İndirimli işlemleri bul
+    const discountedTransactions = transactions.filter(
+      (t) => t.discountAmount && t.discountAmount > 0
+    );
+    
+    // Toplam indirim tutarı
+    const totalDiscount = discountedTransactions.reduce(
+      (sum, t) => sum + (t.discountAmount || 0), 0
+    );
 
-  const summary: CustomerSummary = {
-    totalDebt: activeTransactions.reduce(
-      (sum, t) => sum + (t.type === "debt" ? t.amount : -t.amount),
-      0
-    ),
-    totalOverdue: activeTransactions
-      .filter((t) => t.status === "overdue")
-      .reduce((sum, t) => sum + t.amount, 0),
-    lastTransactionDate: transactions[0]?.date,
-    activeTransactions: activeTransactions.length,
-    overdueTransactions: activeTransactions.filter(
-      (t) => t.status === "overdue"
-    ).length,
-    // Eksik alanları ekle
-    discountedSalesCount: discountedTransactions.length,
-    totalDiscount: totalDiscount
-  };
+    const summary: CustomerSummary = {
+      totalDebt: activeTransactions.reduce(
+        (sum, t) => sum + (t.type === "debt" ? t.amount : -t.amount),
+        0
+      ),
+      totalOverdue: activeTransactions
+        .filter((t) => t.status === "overdue")
+        .reduce((sum, t) => sum + t.amount, 0),
+      lastTransactionDate: transactions[0]?.date,
+      activeTransactions: activeTransactions.length,
+      overdueTransactions: activeTransactions.filter(
+        (t) => t.status === "overdue"
+      ).length,
+      // Eksik alanları ekle
+      discountedSalesCount: discountedTransactions.length,
+      totalDiscount: totalDiscount
+    };
 
-  return summary;
-}
+    return summary;
+  }
 }
 
 export const creditService = new CreditService();

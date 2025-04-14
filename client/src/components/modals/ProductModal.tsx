@@ -127,7 +127,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
         <div className="overflow-y-auto flex-1">
           <form onSubmit={handleSubmit} className="p-6">
             {/* Basic Info Section */}
-            <div className="space-y-6">
+            <div className="space-y-3">
               <div className="bg-white p-4 rounded-lg border space-y-4">
                 <h3 className="font-medium text-gray-800 border-b pb-2">Temel Bilgiler</h3>
                 <div className="grid gap-4">

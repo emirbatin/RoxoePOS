@@ -616,7 +616,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2">
       <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col">
         {/* HEADER */}
-        <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+        <div className="px-5 py-3 border-b border-gray-200 flex justify-between items-center bg-gray-50">
           <div className="flex-1">
             <h2 className="text-xl font-semibold text-gray-900">Ödeme</h2>
             <p className="text-gray-500 text-sm">
@@ -680,7 +680,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => setMode("normal")}
-                className={`py-4 rounded-lg text-base font-medium transition-all ${
+                className={`py-3 rounded-lg text-base font-medium transition-all ${
                   mode === "normal"
                     ? "bg-indigo-600 text-white shadow"
                     : "bg-white border border-gray-200 text-gray-700 hover:border-indigo-300"
@@ -690,7 +690,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
               </button>
               <button
                 onClick={() => setMode("split")}
-                className={`py-4 rounded-lg text-base font-medium transition-all ${
+                className={`py-3 rounded-lg text-base font-medium transition-all ${
                   mode === "split"
                     ? "bg-indigo-600 text-white shadow"
                     : "bg-white border border-gray-200 text-gray-700 hover:border-indigo-300"
@@ -715,7 +715,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                     key={method}
                     onClick={() => setPaymentMethod(method)}
                     className={clsx(
-                      "flex flex-col items-center justify-center py-4 rounded-lg transition-all w-full h-20",
+                      "flex flex-col items-center justify-center py-3 rounded-lg transition-all w-full h-20",
                       paymentMethod === method
                         ? "bg-indigo-600 text-white shadow"
                         : "bg-white border border-gray-200 text-gray-700 hover:border-indigo-300"
@@ -1088,7 +1088,7 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                                 (input.paymentMethod === "veresiye" &&
                                   !input.customerId)
                               }
-                              className={`w-full py-4 rounded-lg text-md font-medium transition-all ${
+                              className={`w-full py-3 rounded-lg text-md font-medium transition-all ${
                                 input.selectedQuantity === 0 ||
                                 receivedNum < partialCost ||
                                 (input.paymentMethod === "veresiye" &&
@@ -1379,12 +1379,12 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
         </div>
 
         {/* FOOTER - MEKERZİ ÖDEME BUTONLARI */}
-        <div className="px-5 py-4 border-t border-gray-200 bg-gray-50 space-y-3">
+        <div className="px-5 py-3 border-t border-gray-200 bg-gray-50 space-y-3">
           {/* Merkezi Ödeme Tamamla Butonu */}
           <button
             onClick={handlePaymentButtonClick}
             disabled={isPaymentButtonDisabled()}
-            className={`w-full py-4 rounded-lg text-base font-bold transition-all ${
+            className={`w-full py-3 rounded-lg text-base font-bold transition-all ${
               isPaymentButtonDisabled()
                 ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                 : "bg-green-600 text-white hover:bg-green-700 shadow"

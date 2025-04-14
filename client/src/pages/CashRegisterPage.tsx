@@ -9,6 +9,7 @@ import {
   Plus,
   AlertTriangle,
   UserCheck,
+  Info,
 } from "lucide-react";
 import PageLayout from "../components/layout/PageLayout";
 import { useAlert } from "../components/AlertProvider";
@@ -128,9 +129,11 @@ const CashRegisterPage: React.FC = () => {
   }, [showError]);
 
   // Dynamic cash register information
-  const theoreticalBalance =
-    openingBalance + dailyCashSales + cashDeposits - cashWithdrawals;
-  const dailyTotalSales = dailyCashSales + dailyCardSales;
+  const theoreticalBalance = openingBalance + dailyCashSales + cashDeposits - cashWithdrawals;
+  // openingBalance + dailyCashSales + cashDeposits - cashWithdrawals; eski hali geri dönmek gerekirse diye.
+  const dailyTotalSales =
+    dailyCashSales + dailyCardSales - cashWithdrawals + cashDeposits;
+  //dailyCashSales + dailyCardSales eski hali geri dönmek gerekirse diye.
 
   // Open cash register
   const handleOpenRegister = async () => {
@@ -704,10 +707,10 @@ const CashRegisterPage: React.FC = () => {
 
   return (
     <PageLayout>
-      <div className="space-y-6">
+      <div className="space-y-3">
         {/* Cash Register Status Card */}
         <div className="bg-white rounded-lg border p-6">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex justify-between items-center mb-3">
             <h2 className="text-xl font-semibold">Kasa Durumu</h2>
             <span
               className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -790,13 +793,32 @@ const CashRegisterPage: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-gray-500">Teorik Kasa Bakiyesi</span>
+                    <span className="flex items-center gap-1 text-gray-500">
+                      Teorik Kasa Bakiyesi
+                      <div className="relative group">
+                        <Info size={16} className="text-gray-400 cursor-help" />
+                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 hidden group-hover:block bg-gray-800/75 text-white text-xs rounded p-2 w-48">
+                          Kasa Bakiyesi: Açılış bakiyesi sayılmaksızın kasaya giren ve çıkan net parayı gösterir.
+                        </div>
+                      </div>
+                    </span>
                     <span className="font-medium">
                       {formatCurrency(theoreticalBalance)}
                     </span>
                   </div>
+
                   <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-gray-500">Toplam Satış</span>
+                    <span className="flex items-center gap-1 text-gray-500">
+                      Toplam Satış Bakiyesi
+                      <div className="relative group">
+                        <Info size={16} className="text-gray-400 cursor-help" />
+                        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 hidden group-hover:block bg-gray-800/75 text-white text-xs rounded p-2 w-48">
+                          Net satış hesaplaması: Nakit ve Kart satışları
+                          toplamıyla beraber nakit giriş ve çıkış işlemleri
+                          hesaplanmış şekilde gösterir.
+                        </div>
+                      </div>
+                    </span>
                     <span className="font-medium">
                       {formatCurrency(dailyTotalSales)}
                     </span>
@@ -884,7 +906,7 @@ const CashRegisterPage: React.FC = () => {
 
         {/* Transaction History */}
         <div className="bg-white rounded-lg border p-6">
-          <h2 className="text-xl font-semibold mb-6">İşlem Geçmişi</h2>
+          <h2 className="text-xl font-semibold mb-3">İşlem Geçmişi</h2>
           {registerStatus === CashRegisterStatus.OPEN ? (
             <div className="space-y-2">
               {openingDate && (
@@ -957,7 +979,7 @@ const CashRegisterPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-gray-500 py-4">
+                <div className="text-center text-gray-500 py-3">
                   Henüz işlem bulunmuyor.
                 </div>
               )}

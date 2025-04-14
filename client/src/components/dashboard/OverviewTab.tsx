@@ -100,7 +100,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Üst özet kartları */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card
@@ -137,7 +137,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Günlük Satış Trend Grafiği */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
+          <div className="px-6 py-3 border-b border-gray-100">
             <h2 className="text-lg font-medium text-gray-800">
               Günlük Satış Trend
             </h2>
@@ -193,7 +193,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
 
         {/* Kategori Dağılımı Grafiği */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
+          <div className="px-6 py-3 border-b border-gray-100">
             <h2 className="text-lg font-medium text-gray-800">
               Kategori Dağılımı
             </h2>
@@ -254,7 +254,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
       {/* Son Kapanan Kasa */}
       {lastClosedSession && (
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+          <div className="px-6 py-3 border-b border-gray-100 flex justify-between items-center">
             <h2 className="text-lg font-medium text-gray-800">
               Son Kapanan Kasa Özeti
             </h2>
@@ -316,7 +316,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
 
       {/* En Çok Satan Ürünler Tablosu */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+        <div className="px-6 py-3 border-b border-gray-100 flex justify-between items-center">
           <h2 className="text-lg font-medium text-gray-800">
             En Çok Satan Ürünler
           </h2>

@@ -199,7 +199,7 @@ const SaleDetailPage: React.FC = () => {
   // Sale verisi varsa göster
   return (
     <PageLayout>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-3">
         <button
           onClick={() => navigate("/history")}
           className="flex items-center text-gray-600 hover:text-gray-800"
@@ -217,7 +217,7 @@ const SaleDetailPage: React.FC = () => {
       {/* Satış ve Ürün Bilgileri */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Sol kısım: Ürünler Tablosu */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-3">
           <div className="bg-white p-6 rounded-lg border">
             <h2 className="text-xl font-semibold mb-4">Satış Bilgileri</h2>
 
@@ -448,7 +448,7 @@ const SaleDetailPage: React.FC = () => {
         </div>
 
         {/* Sağ kısım: Durum Bilgisi, İşlem Geçmişi vb. */}
-        <div className="space-y-6">
+        <div className="space-y-3">
           {/* Durum Bilgisi */}
           <div className="bg-white p-6 rounded-lg border">
             <h2 className="text-lg font-semibold mb-4">Durum Bilgisi</h2>

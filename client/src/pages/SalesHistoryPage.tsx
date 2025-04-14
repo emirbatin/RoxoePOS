@@ -1,5 +1,14 @@
-import React, { useState, useEffect } from "react";
-import { FileText, XCircle, RotateCcw } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  FileText,
+  XCircle,
+  RotateCcw,
+  Calendar,
+  CreditCard,
+  DollarSign,
+  Percent,
+  Tag,
+} from "lucide-react";
 import { Sale, SalesFilter, SalesSummary } from "../types/sales";
 import { salesDB } from "../services/salesDB";
 import ReasonModal from "../components/modals/ReasonModal";
@@ -10,7 +19,8 @@ import { Column } from "../types/table";
 import { Pagination } from "../components/ui/Pagination";
 import { useAlert } from "../components/AlertProvider";
 import PageLayout from "../components/layout/PageLayout";
-import SearchFilterPanel from "../components/SearchFilterPanel";
+// Eski bileşeni kaldırıp, yeni birleştirilmiş bileşeni import ediyoruz
+import FilterPanel from "../components/ui/FilterPanel";
 import {
   cashRegisterService,
   CashTransactionType,
@@ -20,6 +30,7 @@ import { SalesHelper } from "../types/sales";
 const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
   const { showSuccess, showError } = useAlert();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // 1) Satış verileri ve filtreli liste
   const [sales, setSales] = useState<Sale[]>([]);
@@ -41,7 +52,6 @@ const SalesHistoryPage: React.FC = () => {
   });
   // 4) Arama ve diğer state'ler
   const [searchTerm, setSearchTerm] = useState("");
-  const [showFilter, setShowFilter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
@@ -193,6 +203,7 @@ const SalesHistoryPage: React.FC = () => {
   useEffect(() => {
     const loadSales = async () => {
       try {
+        setIsLoading(true);
         const allSales = await salesDB.getAllSales();
         setSales(allSales);
       } catch (error) {
@@ -224,10 +235,12 @@ const SalesHistoryPage: React.FC = () => {
     // Tarih aralığı
     if (filter.startDate) {
       // filter.startDate! => TypeScript'e "burada undefined değil" diyoruz
-      result = result.filter((sale) => sale.date >= filter.startDate!);
+      result = result.filter(
+        (sale) => new Date(sale.date) >= filter.startDate!
+      );
     }
     if (filter.endDate) {
-      result = result.filter((sale) => sale.date <= filter.endDate!);
+      result = result.filter((sale) => new Date(sale.date) <= filter.endDate!);
     }
 
     // Durum
@@ -473,302 +486,179 @@ const SalesHistoryPage: React.FC = () => {
     }
   };
 
+  // Veriyi yeniden yükleme
+  const handleRefresh = async () => {
+    try {
+      setIsLoading(true);
+      const allSales = await salesDB.getAllSales();
+      setSales(allSales);
+      showSuccess("Veriler yenilendi");
+    } catch (error) {
+      console.error("Satış verileri yüklenirken hata:", error);
+      showError("Veriler yenilenirken bir hata oluştu!");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // 5) Filtre reset
   const resetFilters = () => {
     setSearchTerm("");
     setFilter({});
-    setShowFilter(false);
+  };
+
+  // Tarih yardımcı fonksiyonları
+  const startOfDay = (date: Date): Date => {
+    const newDate = new Date(date);
+    newDate.setHours(0, 0, 0, 0);
+    return newDate;
+  };
+
+  const endOfDay = (date: Date): Date => {
+    const newDate = new Date(date);
+    newDate.setHours(23, 59, 59, 999);
+    return newDate;
   };
 
   return (
     <PageLayout>
-      {/* Üst Kısım - Arama, Filtre Toggle ve Sıfırlama */}
-      <SearchFilterPanel
-        searchTerm={searchTerm}
-        onSearchTermChange={setSearchTerm}
-        onReset={resetFilters}
-        showFilter={showFilter}
-        toggleFilter={() => setShowFilter((prev) => !prev)}
-      />
+      {/* Birleştirilmiş FilterPanel'i kullanıyoruz */}
+      <div className="bg-white rounded-lg shadow-sm p-3">
+        <FilterPanel
+          mode="sales"
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          filter={filter}
+          onFilterChange={setFilter}
+          onReset={resetFilters}
+          isLoading={isLoading}
+          onRefresh={handleRefresh}
+          inputRef={searchInputRef}
+          searchPlaceholder="Fiş numarası veya ID ara..."
+          startOfDay={startOfDay}
+          endOfDay={endOfDay}
+        />
+      </div>
 
-      {/* Gelişmiş Filtre Alanı */}
-      {showFilter && (
-        <div className="p-4 border rounded-lg bg-white mb-6">
-          <h3 className="font-medium mb-4">Filtreler</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Başlangıç Tarihi */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Başlangıç Tarihi
-              </label>
-              <input
-                type="date"
-                className="w-full p-2 border rounded-lg"
-                onChange={(e) =>
-                  setFilter((prev) => ({
-                    ...prev,
-                    startDate: e.target.value
-                      ? new Date(e.target.value)
-                      : undefined,
-                  }))
-                }
-              />
+      {/* Satış Özeti */}
+      <div className="my-3">
+        <div className="bg-white p-6 rounded-xl border shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Satış Özeti</h3>
+            {filteredSales.length > 0 && (
+              <div className="text-sm text-gray-600">
+                Gösterilen: {indexOfFirstItem + 1} -{" "}
+                {Math.min(indexOfLastItem, filteredSales.length)} / Toplam:{" "}
+                {filteredSales.length} satış
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Temel Metrikler */}
+            <div className="bg-indigo-50 rounded-lg p-4">
+              <div className="text-xs font-medium text-indigo-700 mb-1">
+                Toplam Satış
+              </div>
+              <div className="text-2xl font-semibold text-indigo-900">
+                {summary.totalSales}
+              </div>
+              <div className="mt-2 text-xs text-indigo-700">
+                <span className="font-medium">Tamamlanan: </span>
+                {summary.totalSales -
+                  summary.cancelledCount -
+                  summary.refundedCount}
+              </div>
             </div>
-            {/* Bitiş Tarihi */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Bitiş Tarihi
-              </label>
-              <input
-                type="date"
-                className="w-full p-2 border rounded-lg"
-                onChange={(e) =>
-                  setFilter((prev) => ({
-                    ...prev,
-                    endDate: e.target.value
-                      ? new Date(e.target.value)
-                      : undefined,
-                  }))
-                }
-              />
+
+            <div className="bg-green-50 rounded-lg p-4">
+              <div className="text-xs font-medium text-green-700 mb-1">
+                Toplam Tutar
+              </div>
+              <div className="text-2xl font-semibold text-green-900">
+                ₺{summary.totalAmount.toFixed(2)}
+              </div>
+              <div className="mt-2 text-xs text-green-700">
+                <span className="font-medium">Ortalama Satış: </span>₺
+                {summary.averageAmount.toFixed(2)}
+              </div>
             </div>
-            {/* Durum */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Durum
-              </label>
-              <select
-                className="w-full p-2 border rounded-lg"
-                onChange={(e) =>
-                  setFilter((prev) => ({
-                    ...prev,
-                    status: (e.target.value || undefined) as
-                      | "completed"
-                      | "cancelled"
-                      | "refunded"
-                      | undefined,
-                  }))
-                }
-              >
-                <option value="">Tümü</option>
-                <option value="completed">Tamamlandı</option>
-                <option value="cancelled">İptal Edildi</option>
-                <option value="refunded">İade Edildi</option>
-              </select>
+
+            <div className="bg-orange-50 rounded-lg p-4">
+              <div className="text-xs font-medium text-orange-700 mb-1">
+                Ödeme Dağılımı
+              </div>
+              <div className="text-2xl font-semibold text-orange-900">
+                {summary.cashSales} / {summary.cardSales}
+              </div>
+              <div className="mt-2 text-xs text-orange-700">
+                <span className="font-medium">Nakit / Kart</span>
+              </div>
             </div>
-            {/* Min Tutar */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Minimum Tutar
-              </label>
-              <input
-                type="number"
-                className="w-full p-2 border rounded-lg"
-                placeholder="0.00"
-                onWheel={(e) => e.currentTarget.blur()}
-                onChange={(e) =>
-                  setFilter((prev) => ({
-                    ...prev,
-                    minAmount: e.target.value
-                      ? parseFloat(e.target.value)
-                      : undefined,
-                  }))
-                }
-              />
-            </div>
-            {/* Max Tutar */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Maksimum Tutar
-              </label>
-              <input
-                type="number"
-                className="w-full p-2 border rounded-lg"
-                placeholder="0.00"
-                onWheel={(e) => e.currentTarget.blur()}
-                onChange={(e) =>
-                  setFilter((prev) => ({
-                    ...prev,
-                    maxAmount: e.target.value
-                      ? parseFloat(e.target.value)
-                      : undefined,
-                  }))
-                }
-              />
-            </div>
-            {/* Ödeme Yöntemi */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Ödeme Yöntemi
-              </label>
-              <select
-                className="w-full p-2 border rounded-lg"
-                onChange={(e) =>
-                  setFilter((prev) => ({
-                    ...prev,
-                    paymentMethod: (e.target.value || undefined) as
-                      | "nakit"
-                      | "kart"
-                      | "veresiye"
-                      | "nakitpos"
-                      | "mixed"
-                      | undefined,
-                  }))
-                }
-              >
-                <option value="">Tümü</option>
-                <option value="nakit">Nakit</option>
-                <option value="kart">Kredi Kartı</option>
-                <option value="veresiye">Veresiye</option>
-                <option value="nakitpos">POS (Nakit)</option>
-                <option value="mixed">Karışık (Split)</option>
-              </select>
-            </div>
-            {/* YENİ: İndirim Filtresi */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                İndirim Durumu
-              </label>
-              <select
-                className="w-full p-2 border rounded-lg"
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setFilter((prev) => ({
-                    ...prev,
-                    hasDiscount:
-                      value === ""
-                        ? undefined
-                        : value === "true"
-                        ? true
-                        : false,
-                  }));
-                }}
-              >
-                <option value="">Tümü</option>
-                <option value="true">İndirimli Satışlar</option>
-                <option value="false">İndirimsiz Satışlar</option>
-              </select>
+
+            <div className="bg-red-50 rounded-lg p-4">
+              <div className="text-xs font-medium text-red-700 mb-1">
+                İptal/İade
+              </div>
+              <div className="text-2xl font-semibold text-red-900">
+                {summary.cancelledCount + summary.refundedCount}
+              </div>
+              <div className="mt-2 text-xs text-red-700">
+                <span className="font-medium">İptal: </span>
+                {summary.cancelledCount}
+                <span className="font-medium ml-2">İade: </span>
+                {summary.refundedCount}
+              </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Özet Kartı */}
-      <div className="mb-6">
-        <div className="bg-white p-4 border rounded-lg">
-          <h3 className="font-medium mb-4">Satış Özeti</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span>Toplam Satış:</span>
-                <span className="font-medium">{summary.totalSales}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Toplam Tutar:</span>
-                <span className="font-medium">
-                  ₺{summary.totalAmount.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>İptal Edilen:</span>
-                <span className="font-medium text-red-500">
-                  {summary.cancelledCount}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>İade Edilen:</span>
-                <span className="font-medium text-orange-500">
-                  {summary.refundedCount}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span>Nakit / Kart:</span>
-                <span className="font-medium">
-                  {summary.cashSales} / {summary.cardSales}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Ortalama Satış:</span>
-                <span className="font-medium">
-                  ₺{summary.averageAmount.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>İndirimli Satışlar:</span>
-                <span className="font-medium text-green-600">
-                  {summary.discountedSalesCount || 0}
-                </span>
-              </div>
-              {(summary.totalDiscount || 0) > 0 && (
-                <div className="flex justify-between">
-                  <span>Toplam İndirim:</span>
-                  <span className="font-medium text-green-600">
-                    ₺{(summary.totalDiscount || 0).toFixed(2)}
-                  </span>
+          {/* İndirim Bilgileri (varsa) */}
+          {(summary.totalDiscount || 0) > 0 && (
+            <div className="mt-6 p-4 border border-green-200 bg-green-50 rounded-lg">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                <div>
+                  <div className="text-sm font-medium text-green-800">
+                    İndirim Bilgileri
+                  </div>
+                  <div className="text-xs text-green-700 mt-1">
+                    Toplam {summary.discountedSalesCount} adet indirimli satış
+                  </div>
                 </div>
-              )}
-            </div>
-
-            {(summary.originalAmount || 0) > 0 &&
-              (summary.totalDiscount || 0) > 0 && (
-                <div className="space-y-2 text-sm col-span-2">
-                  <div className="flex justify-between">
-                    <span>İndirimsiz Toplam:</span>
-                    <span className="font-medium text-gray-500">
+                <div className="flex mt-2 sm:mt-0 gap-4">
+                  <div>
+                    <div className="text-xs text-green-700">
+                      İndirimsiz Tutar
+                    </div>
+                    <div className="text-base font-semibold text-green-900">
                       ₺{(summary.originalAmount || 0).toFixed(2)}
-                    </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span>İndirimli Toplam:</span>
-                    <span className="font-medium text-green-600">
-                      ₺{summary.totalAmount.toFixed(2)}
-                    </span>
+                  <div>
+                    <div className="text-xs text-green-700">İndirim Tutarı</div>
+                    <div className="text-base font-semibold text-green-900">
+                      ₺{(summary.totalDiscount || 0).toFixed(2)}
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span>İndirim Oranı:</span>
-                    <span className="font-medium text-green-600">
+                  <div>
+                    <div className="text-xs text-green-700">İndirim Oranı</div>
+                    <div className="text-base font-semibold text-green-900">
                       %
                       {(
                         ((summary.totalDiscount || 0) /
                           (summary.originalAmount || 1)) *
                         100
                       ).toFixed(1)}
-                    </span>
+                    </div>
                   </div>
                 </div>
-              )}
-          </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Satış Listesi - Güncellenmiş Excel Benzeri Tablo */}
-      <div className="bg-white border rounded-lg overflow-hidden">
-        <div className="p-4 border-b w-full">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              {filteredSales.length > 0
-                ? `Gösterilen: ${indexOfFirstItem + 1} - ${Math.min(
-                    indexOfLastItem,
-                    filteredSales.length
-                  )} / Toplam: ${filteredSales.length} satış`
-                : "Satış kaydı bulunmuyor"}
-            </div>
-            {(searchTerm || Object.keys(filter).length > 0) && (
-              <div className="text-sm text-gray-500">
-                {searchTerm && (
-                  <span className="mr-2">Arama: "{searchTerm}"</span>
-                )}
-                {Object.keys(filter).length > 0 && (
-                  <span>Filtreler uygulandı</span>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
+      <div className="bg-white border rounded-lg overflow-hidden shadow-sm">
         <Table<Sale, string>
           data={currentSales}
           columns={columns}
@@ -784,17 +674,19 @@ const SalesHistoryPage: React.FC = () => {
           defaultSortDirection="desc"
           className="border-none rounded-none"
           showTotals={true}
-          totalColumns={{total:"sum"}}
+          totalColumns={{ total: "sum" }}
           totalData={filteredSales}
           onRowClick={(sale) => navigate(`/sales/${sale.id}`)}
         />
 
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          className="p-4 border-t"
-        />
+        {totalPages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            className="p-4 border-t"
+          />
+        )}
       </div>
 
       {/* İptal Modalı */}

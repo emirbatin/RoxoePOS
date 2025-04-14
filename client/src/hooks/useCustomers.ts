@@ -1,8 +1,9 @@
-// hooks/useCustomers.ts
+// hooks/useCustomers.ts - Yeni fonksiyon ekleyelim
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { creditService } from "../services/creditServices";
 import { Customer } from "../types/credit";
+import { normalizedSearch } from "../utils/turkishSearch"; // normalizedSearch fonksiyonunu import edin
 
 /**
  * Müşteri listesi çekme, ekleme, silme, güncelleme vs. gibi işlemleri
@@ -69,6 +70,17 @@ export function useCustomers() {
     }
   }
 
+  // Müşteri arama (Türkçe karakter desteği ile)
+  const searchCustomers = useCallback((term: string) => {
+    if (!term.trim()) return customers;
+    
+    return customers.filter(
+      customer => 
+        normalizedSearch(customer.name, term) || 
+        customer.phone.includes(term)
+    );
+  }, [customers]);
+
   return {
     customers,
     loading,
@@ -76,5 +88,6 @@ export function useCustomers() {
     addCustomer,
     updateCustomer,
     deleteCustomer,
+    searchCustomers // Yeni eklenen fonksiyon
   };
 }

@@ -1,6 +1,6 @@
 // pages/ProductsPage.tsx
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Plus,
   Tag,
@@ -33,9 +33,9 @@ import { Table } from "../components/ui/Table";
 import { Pagination } from "../components/ui/Pagination";
 import { useAlert } from "../components/AlertProvider";
 import PageLayout from "../components/layout/PageLayout";
-import SearchFilterPanel from "../components/SearchFilterPanel";
 import { Product, Category } from "../types/product";
 import { useProducts } from "../hooks/useProducts"; // <-- useProducts import
+import FilterPanel, { ActiveFilter } from "../components/ui/FilterPanel";
 
 const ProductsPage: React.FC = () => {
   const { showError, showSuccess, confirm } = useAlert();
@@ -62,6 +62,7 @@ const ProductsPage: React.FC = () => {
     useState<Product | null>(null);
   const [selectedBarcodeProduct, setSelectedBarcodeProduct] =
     useState<Product | null>(null);
+  const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
 
   // Toplu işlem seçimleri
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
@@ -70,6 +71,44 @@ const ProductsPage: React.FC = () => {
   // Sayfalama state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Kategori değişikliklerini takip edip filtreleri güncelle
+  useEffect(() => {
+    if (selectedCategory && selectedCategory !== "Tümü") {
+      // Kategori filtresini güncelle veya ekle
+      const existingFilterIndex = activeFilters.findIndex(
+        (f) => f.key === "category"
+      );
+
+      if (existingFilterIndex >= 0) {
+        // Mevcut filtreyi güncelle
+        const updatedFilters = [...activeFilters];
+        updatedFilters[existingFilterIndex] = {
+          key: "category",
+          label: "Kategori",
+          value: selectedCategory,
+          color: "blue",
+          icon: <Tag size={14} />,
+        };
+        setActiveFilters(updatedFilters);
+      } else {
+        // Yeni filtre ekle
+        setActiveFilters([
+          ...activeFilters,
+          {
+            key: "category",
+            label: "Kategori",
+            value: selectedCategory,
+            color: "blue",
+            icon: <Tag size={14} />,
+          },
+        ]);
+      }
+    } else {
+      // Kategori filtresi Tümü ise, bu filtreyi kaldır
+      setActiveFilters(activeFilters.filter((f) => f.key !== "category"));
+    }
+  }, [selectedCategory]);
 
   // Tabloda göstereceğimiz kolonlar
   const columns: Column<Product>[] = [
@@ -379,17 +418,31 @@ const ProductsPage: React.FC = () => {
   return (
     <PageLayout>
       {/* Arama & Filtre Paneli */}
-      <SearchFilterPanel
-        searchTerm={searchTerm}
-        onSearchTermChange={setSearchTerm}
-        onReset={resetFilters}
-        showFilter={showFilters}
-        toggleFilter={() => setShowFilters((prev) => !prev)}
-      />
+
+      <div className="bg-white rounded-lg shadow-sm p-3">
+        <FilterPanel
+          mode="pos"
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          onReset={resetFilters}
+          showFilter={showFilters}
+          toggleFilter={() => setShowFilters((prev) => !prev)}
+          activeFilters={activeFilters}
+          onFilterRemove={(key) => {
+            if (key === "category") {
+              setSelectedCategory("Tümü");
+            }
+          }}
+          searchPlaceholder="Ürün Adı, Barkod veya Kategori Ara..."
+          inputId="searchInput"
+          isLoading={loading}
+          onRefresh={refreshProducts}
+        />
+      </div>
 
       {/* Kategori Butonları (Filtreler) */}
       {showFilters && (
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-3">
           <div className="flex flex-wrap gap-2 items-center">
             <button
               onClick={() => setSelectedCategory("Tümü")}
@@ -429,7 +482,7 @@ const ProductsPage: React.FC = () => {
 
       {/* Toplu Fiyat Güncelleme Alanı */}
       {showBatchUpdate && (
-        <div className="mb-6">
+        <div className="mb-3">
           <BatchPriceUpdate
             products={products.filter((p) => selectedProductIds.includes(p.id))}
             onUpdate={handleBatchPriceUpdate}
@@ -438,7 +491,7 @@ const ProductsPage: React.FC = () => {
       )}
 
       {/* Toplu Import/Export Paneli */}
-      <div className="mb-6">
+      <div className="my-3">
         <BulkProductOperations
           onImport={handleBulkImport}
           products={products}
@@ -447,7 +500,7 @@ const ProductsPage: React.FC = () => {
       </div>
 
       {/* Ürün Ekle / Toplu İşlemler Paneli */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 space-y-4 md:space-y-0">
         <Button
           onClick={() => {
             setSelectedProduct(undefined);
@@ -548,18 +601,18 @@ const ProductsPage: React.FC = () => {
             showTotals={true}
             totalColumns={{
               name: "count",
-              stock: "sum", 
+              stock: "sum",
               purchasePrice: "inventory_value", // Alış değeri = Alış fiyatı × stok
-              salePrice: "inventory_value",     // Satış değeri = Satış fiyatı × stok
-              priceWithVat: "inventory_value"   // KDV'li değer = KDV'li fiyat × stok
+              salePrice: "inventory_value", // Satış değeri = Satış fiyatı × stok
+              priceWithVat: "inventory_value", // KDV'li değer = KDV'li fiyat × stok
             }}
             totalFooters={{
               purchasePrice: () => "Toplam envanter maliyeti",
-              priceWithVat: () => "Toplam satış değeri"
+              priceWithVat: () => "Toplam satış değeri",
             }}
             totalData={filteredProducts}
-            enableSorting={true}    
-            defaultSortKey="name"        
+            enableSorting={true}
+            defaultSortKey="name"
             defaultSortDirection="asc"
           />
         </div>

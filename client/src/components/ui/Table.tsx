@@ -25,6 +25,10 @@ interface TableProps<
   totalData?: T[];
   // Yeni eklenen alt bilgi desteği
   totalFooters?: Partial<Record<keyof T, (data: T[]) => React.ReactNode>>;
+  // Yeni eklenen görüntüleme seçenekleri
+  fontSize?: "sm" | "md" | "lg"; // Tablo yazı boyutu
+  density?: "compact" | "normal" | "relaxed"; // Tablo yoğunluğu
+  theme?: "light" | "striped"; // Tablo teması
 }
 
 export function Table<
@@ -50,6 +54,10 @@ export function Table<
   totalColumns = {},
   totalData,
   totalFooters = {},
+  // Yeni görüntüleme seçenekleri
+  fontSize = "md",
+  density = "normal",
+  theme = "light",
 }: TableProps<T, K>) {
   // Sütunların genişlik durumlarını izlemek için state
   const [columnWidths, setColumnWidths] = useState<Record<string, string>>({});
@@ -66,6 +74,66 @@ export function Table<
   const startX = useRef<number>(0);
   const startWidth = useRef<number>(0);
 
+  // Stil sınıflarını hesaplama 
+  const getStyleClasses = useMemo(() => {
+    // Font boyutu sınıfları
+    const fontSizeClasses = {
+      sm: {
+        header: "text-xs",
+        cell: "text-xs",
+        totals: "text-xs"
+      },
+      md: {
+        header: "text-sm",
+        cell: "text-sm",
+        totals: "text-sm"
+      },
+      lg: {
+        header: "text-base",
+        cell: "text-base",
+        totals: "text-base"
+      }
+    };
+
+    // Yoğunluk (padding) sınıfları
+    const densityClasses = {
+      compact: {
+        headerPadding: "px-3 py-1", 
+        cellPadding: "px-3 py-1"
+      },
+      normal: {
+        headerPadding: "px-4 py-2",
+        cellPadding: "px-4 py-2" 
+      },
+      relaxed: {
+        headerPadding: "px-6 py-3",
+        cellPadding: "px-6 py-3"
+      }
+    };
+
+    // Tema (arka plan) sınıfları
+    const themeClasses = {
+      light: {
+        header: "bg-gray-50",
+        row: "bg-white",
+        altRow: "bg-white", // Aynı renk - alternatif satır yok
+        totals: "bg-gray-100"
+      },
+      striped: {
+        header: "bg-gray-100",
+        row: "bg-white",
+        altRow: "bg-gray-50", // Alternatif satır - gri tonlu
+        totals: "bg-gray-200"
+      }
+    };
+
+    return {
+      font: fontSizeClasses[fontSize],
+      padding: densityClasses[density],
+      theme: themeClasses[theme]
+    };
+  }, [fontSize, density, theme]);
+  
   // Veriyi sıralama fonksiyonu
   function sortData(dataToSort: T[]): T[] {
     if (!enableSorting || !sortKey) return dataToSort;
@@ -265,19 +333,24 @@ export function Table<
   // Veri yoksa
   if (!sortedData.length) {
     return (
-      <div className="w-full p-8 text-center text-gray-500">{emptyMessage}</div>
+      <div className={`w-full p-8 text-center ${getStyleClasses.font.cell} text-gray-500`}>
+        {emptyMessage}
+      </div>
     );
   }
 
   return (
     <div className={`w-full ${className}`}>
-      <div className="overflow-auto border border-gray-200 rounded-lg">
-        <table ref={tableRef} className="w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="overflow-auto border-gray-200 shadow-sm">
+        <table 
+          ref={tableRef} 
+          className="w-full divide-y divide-gray-200"
+        >
+          <thead className={getStyleClasses.theme.header}>
             <tr>
               {selectable && (
                 <th
-                  className="w-12 px-6 py-3 text-left sticky left-0 bg-gray-50 z-10"
+                  className={`w-12 ${getStyleClasses.padding.headerPadding} text-left sticky left-0 ${getStyleClasses.theme.header} z-10`}
                   scope="col"
                 >
                   <div className="flex items-center">
@@ -298,7 +371,7 @@ export function Table<
                     key={column.key}
                     scope="col"
                     data-column-key={column.key}
-                    className={`px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase 
+                    className={`${getStyleClasses.padding.headerPadding} text-left ${getStyleClasses.font.header} font-medium tracking-wider text-gray-600 uppercase 
                       ${column.className || ""} 
                       ${enableSorting ? "cursor-pointer" : ""} 
                       relative group`}
@@ -311,11 +384,11 @@ export function Table<
                     <div className="flex items-center space-x-1">
                       <span>{column.title}</span>
                       {enableSorting && (
-                        <span className="inline-flex flex-col">
+                        <span className="inline-flex flex-col ml-1">
                           <svg
                             className={`w-2 h-2 ${
                               isSorted && sortDirection === "asc"
-                                ? "text-gray-900"
+                                ? "text-indigo-600"
                                 : "text-gray-400"
                             }`}
                             fill="currentColor"
@@ -326,7 +399,7 @@ export function Table<
                           <svg
                             className={`w-2 h-2 ${
                               isSorted && sortDirection === "desc"
-                                ? "text-gray-900"
+                                ? "text-indigo-600"
                                 : "text-gray-400"
                             }`}
                             fill="currentColor"
@@ -340,7 +413,7 @@ export function Table<
 
                     {/* Sütun yeniden boyutlandırma tutamağı */}
                     <div
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize opacity-0 group-hover:opacity-100 bg-blue-500 bg-opacity-10 hover:bg-opacity-20"
+                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize opacity-0 group-hover:opacity-100 bg-indigo-500 bg-opacity-10 hover:bg-opacity-20"
                       onMouseDown={(e) =>
                         startColumnResize(e, column.key as string)
                       }
@@ -352,17 +425,25 @@ export function Table<
             </tr>
           </thead>
 
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200">
             {sortedData.map((item, index) => (
               <tr
-                key={index}
+                key={`row-${index}`}
                 onClick={() => onRowClick?.(item)}
                 className={`${
                   onRowClick ? "cursor-pointer hover:bg-gray-50" : ""
-                } transition duration-150 ease-in-out`}
+                } transition duration-150 ease-in-out ${
+                  theme === 'striped' && index % 2 === 1 
+                    ? getStyleClasses.theme.altRow 
+                    : getStyleClasses.theme.row
+                }`}
               >
                 {selectable && (
-                  <td className="w-12 px-6 py-4 sticky left-0 bg-white whitespace-nowrap">
+                  <td className={`w-12 ${getStyleClasses.padding.cellPadding} sticky left-0 ${
+                    theme === 'striped' && index % 2 === 1 
+                      ? getStyleClasses.theme.altRow 
+                      : getStyleClasses.theme.row
+                  } whitespace-nowrap`}>
                     <div className="flex items-center">
                       <input
                         type="checkbox"
@@ -390,9 +471,9 @@ export function Table<
 
                   return (
                     <td
-                      key={column.key}
+                      key={`${index}-${column.key}`}
                       data-column-key={column.key}
-                      className={`px-6 py-4 ${
+                      className={`${getStyleClasses.padding.cellPadding} ${getStyleClasses.font.cell} ${
                         column.className || ""
                       } overflow-hidden text-ellipsis`}
                       style={{
@@ -410,11 +491,11 @@ export function Table<
               </tr>
             ))}
 
-            {/* Toplam satırı - Alt bilgi desteği ile (tamamen düzeltilmiş) */}
+            {/* Toplam satırı - Alt bilgi desteği ile */}
             {showTotals && totals && (
-              <tr className="bg-gray-100 border-t-2 border-gray-300 font-medium text-gray-700">
+              <tr className={`${getStyleClasses.theme.totals} border-t-2 border-gray-300 font-medium text-gray-700`}>
                 {selectable && (
-                  <td className="w-12 px-6 py-4 sticky left-0 bg-gray-100 whitespace-nowrap font-bold">
+                  <td className={`w-12 ${getStyleClasses.padding.cellPadding} sticky left-0 ${getStyleClasses.theme.totals} whitespace-nowrap font-bold ${getStyleClasses.font.totals}`}>
                     Toplam
                   </td>
                 )}
@@ -436,18 +517,18 @@ export function Table<
 
                   return (
                     <td
-                      key={column.key}
+                      key={`total-${column.key}`}
                       data-column-key={column.key}
-                      className={`px-6 py-3 ${
+                      className={`${getStyleClasses.padding.cellPadding} ${
                         isTotal || isFirstColumn ? "font-bold" : ""
-                      } ${column.className || ""}`}
+                      } ${column.className || ""} ${getStyleClasses.font.totals}`}
                       style={{
                         width: columnWidths[column.key as string] || "auto",
                         maxWidth: columnWidths[column.key as string] || "300px",
                       }}
                     >
                       <div className="flex flex-col">
-                        {/* Ana toplam değeri - İlk sütun veya toplam değeri olan sütunlar için */}
+                        {/* Ana toplam değeri */}
                         {isFirstColumn && (
                           <div className="font-bold">Toplam</div>
                         )}

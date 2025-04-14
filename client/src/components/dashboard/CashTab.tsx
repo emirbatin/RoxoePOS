@@ -24,7 +24,7 @@ import {
   Download,
 } from "lucide-react";
 import { CashRegisterSession } from "../../services/cashRegisterDB";
-import { Table } from "../../components/ui/Table"; // Table bileşenini import ediyoruz
+import { Table } from "../../components/ui/Table";
 import Card from "../ui/Card";
 
 interface CashTabProps {
@@ -55,6 +55,7 @@ interface CashTabProps {
     key: string;
     direction: "asc" | "desc";
   };
+  period: "day" | "week" | "month" | "year" | "custom"; // Periyot bilgisi
 }
 
 const CashTab: React.FC<CashTabProps> = ({
@@ -66,9 +67,12 @@ const CashTab: React.FC<CashTabProps> = ({
   formatDate,
   handleCashSort,
   cashSortConfig,
+  period,
 }) => {
-  // Günlük nakit artışı hesaplama
-  const dailyCashIncrease = lastClosedSession
+  // Günlük nakit artışı hesaplama - isActive durumuna göre
+  const dailyCashIncrease = cashData.isActive
+    ? cashData.currentBalance - cashData.openingBalance
+    : lastClosedSession
     ? (lastClosedSession.countingAmount ??
         lastClosedSession.openingBalance +
           (lastClosedSession.cashSalesTotal || 0) +
@@ -191,8 +195,38 @@ const CashTab: React.FC<CashTabProps> = ({
     countingDifference: "sum",
   };
 
+  // Gösterilecek oturum (aktif oturum veya son kapanan oturum)
+  const sessionToShow = cashData.isActive
+    ? {
+        openingBalance: cashData.openingBalance,
+        cashDepositTotal: cashData.totalDeposits,
+        cashWithdrawalTotal: cashData.totalWithdrawals,
+        countingAmount: null, // Aktif oturumda sayım sonucu olmaz
+      }
+    : lastClosedSession;
+
+  // Grafik için zaman formatını belirleme
+  const isSameDay = (dateStr: string) => {
+    // "00:00" formatındaki string kontrol ediliyor (saatlik görünüm)
+    return dateStr.includes(":");
+  };
+
+  // Grafik için özel eksen formatı
+  const formatXAxis = (value: string) => {
+    if (isSameDay(value)) {
+      // Saatlik görünüm için formatla: "09:00" -> "09:00"
+      return value;
+    } else {
+      // Diğer görünümler için tarih formatı kullan
+      return new Date(value).toLocaleDateString("tr-TR", {
+        day: "2-digit",
+        month: "short",
+      });
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Ana Metrikler */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card
@@ -220,7 +254,7 @@ const CashTab: React.FC<CashTabProps> = ({
           variant="summary"
           title="Toplam Satış"
           value={`₺${(
-            cashData.cashSalesTotal + cashData.cardSalesTotal
+            cashData.cashSalesTotal + cashData.cardSalesTotal - cashData.totalWithdrawals
           ).toFixed(2)}`}
           description="Tüm satışların toplamı"
           color="purple"
@@ -228,17 +262,17 @@ const CashTab: React.FC<CashTabProps> = ({
       </div>
 
       {/* Günün Artışı Kartı */}
-      {lastClosedSession && (
+      {period === "day" && sessionToShow && (
         <div className="bg-gradient-to-r from-indigo-500 to-blue-600 rounded-lg shadow text-white p-5">
           <div className="flex flex-col md:flex-row justify-between items-center mb-4">
             <div>
               <h2 className="text-xl font-bold">Günün Gerçek Artışı</h2>
               <p className="text-indigo-100 mt-1">
-                Açılış bakiyesi (₺{lastClosedSession.openingBalance.toFixed(2)})
+                Açılış bakiyesi (₺{sessionToShow.openingBalance.toFixed(2)})
                 hariç, kasadaki net değişim
               </p>
             </div>
-            <div className="bg-white px-6 py-4 rounded-lg shadow mt-4 md:mt-0">
+            <div className="bg-white px-6 py-3 rounded-lg shadow mt-4 md:mt-0">
               <div
                 className={`text-2xl font-bold ${
                   dailyCashIncrease >= 0 ? "text-green-600" : "text-red-600"
@@ -257,7 +291,7 @@ const CashTab: React.FC<CashTabProps> = ({
                 <div className="text-xs font-medium">Açılış</div>
               </div>
               <div className="text-lg font-semibold mt-1">
-                ₺{lastClosedSession.openingBalance.toFixed(2)}
+                ₺{sessionToShow.openingBalance.toFixed(2)}
               </div>
             </div>
 
@@ -267,7 +301,11 @@ const CashTab: React.FC<CashTabProps> = ({
                 <div className="text-xs font-medium">Nakit Girişler</div>
               </div>
               <div className="text-lg font-semibold text-green-600 mt-1">
-                +₺{(lastClosedSession.cashDepositTotal || 0).toFixed(2)}
+                +₺
+                {(cashData.isActive
+                  ? cashData.totalDeposits
+                  : sessionToShow.cashDepositTotal || 0
+                ).toFixed(2)}
               </div>
             </div>
 
@@ -277,7 +315,11 @@ const CashTab: React.FC<CashTabProps> = ({
                 <div className="text-xs font-medium">Nakit Çıkışlar</div>
               </div>
               <div className="text-lg font-semibold text-red-600 mt-1">
-                -₺{(lastClosedSession.cashWithdrawalTotal || 0).toFixed(2)}
+                -₺
+                {(cashData.isActive
+                  ? cashData.totalWithdrawals
+                  : sessionToShow.cashWithdrawalTotal || 0
+                ).toFixed(2)}
               </div>
             </div>
 
@@ -287,8 +329,10 @@ const CashTab: React.FC<CashTabProps> = ({
                 <div className="text-xs font-medium">Sayım Sonucu</div>
               </div>
               <div className="text-lg font-semibold mt-1">
-                {lastClosedSession.countingAmount
-                  ? `₺${lastClosedSession.countingAmount.toFixed(2)}`
+                {cashData.isActive
+                  ? "Henüz Yapılmadı"
+                  : sessionToShow.countingAmount
+                  ? `₺${sessionToShow.countingAmount.toFixed(2)}`
                   : "Yapılmadı"}
               </div>
             </div>
@@ -429,11 +473,13 @@ const CashTab: React.FC<CashTabProps> = ({
         </div>
       </div>
 
-      {/* Günlük Kasa Hareketleri Grafiği */}
+      {/* Kasa Hareketleri Grafiği - Günlük veya Saatlik */}
       <div className="bg-white rounded-lg shadow">
         <div className="p-4 border-b border-gray-100 flex justify-between items-center">
           <h3 className="text-lg font-medium text-gray-900">
-            Günlük Kasa Hareketleri
+            {period === "day"
+              ? "Saatlik Kasa Hareketleri"
+              : "Günlük Kasa Hareketleri"}
           </h3>
           <button className="p-2 text-gray-500 hover:text-indigo-500 hover:bg-gray-100 rounded-full">
             <Download size={18} />
@@ -443,10 +489,21 @@ const CashTab: React.FC<CashTabProps> = ({
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={cashData.dailyData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 12 }}
+                stroke="#94a3b8"
+                tickFormatter={formatXAxis}
+                interval={period === "day" ? 2 : 0} // Saatlik görünümde her 3. saati göster
+              />
               <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
               <Tooltip
                 formatter={(value) => [`₺${Number(value).toFixed(2)}`, ""]}
+                labelFormatter={(label) =>
+                  isSameDay(label)
+                    ? `Saat: ${label}`
+                    : `Tarih: ${new Date(label).toLocaleDateString("tr-TR")}`
+                }
                 contentStyle={{
                   borderRadius: "6px",
                   boxShadow: "0 2px 10px rgba(0,0,0,0.1)",

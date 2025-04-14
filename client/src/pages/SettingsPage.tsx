@@ -587,7 +587,7 @@ const SettingsPage: React.FC = () => {
             </div>
 
             <div
-              className={`space-y-6 ${
+              className={`space-y-3 ${
                 posConfig.manualMode && "opacity-80 pointer-events-none"
               }`}
             >
@@ -736,9 +736,10 @@ const SettingsPage: React.FC = () => {
         );
       case "barcode":
         return (
-          <div className="space-y-6">
+          <div className="space-y-3">
             <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-3
+              ">
                 <div>
                   <h3 className="font-medium text-gray-900">
                     Barkod Okuyucu Durumu
@@ -845,7 +846,7 @@ const SettingsPage: React.FC = () => {
         );
       case "receipt":
         return (
-          <div className="space-y-6">
+          <div className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <h3 className="font-medium text-gray-900 mb-4">
@@ -1069,7 +1070,7 @@ const SettingsPage: React.FC = () => {
         );
       case "backup":
         return (
-          <div className="space-y-6">
+          <div className="space-y-3">
             {/* Yedekleme İşlemleri */}
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h3 className="font-medium text-gray-900 mb-4">
@@ -1238,16 +1239,16 @@ const SettingsPage: React.FC = () => {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {backups.map((backup) => (
                         <tr key={backup.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                             {new Date(backup.createdAt).toLocaleString()}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">
                             {backup.description}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
                             {backup.databases?.join(", ")}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
                             {backup.totalRecords}
                           </td>
                         </tr>
@@ -1274,7 +1275,7 @@ const SettingsPage: React.FC = () => {
       // SettingsPage.tsx içinde "hotkeys" tab render kısmında yapılacak değişiklik
       case "hotkeys":
         return (
-          <div className="space-y-6">
+          <div className="space-y-3">
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <HotkeySettings
                 onSave={(newHotkeys, newSpecialHotkeys) => {
@@ -1305,7 +1306,7 @@ const SettingsPage: React.FC = () => {
         );
       case "license":
         return (
-          <div className="space-y-6">
+          <div className="space-y-3">
             <div className="bg-white rounded-xl shadow-sm overflow-hidden p-6">
               {licenseInfo ? (
                 <LicenseCard
@@ -1323,7 +1324,8 @@ const SettingsPage: React.FC = () => {
                 />
               ) : (
                 <div>
-                  <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+                  <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-3
+                  ">
                     <p className="text-red-700">
                       Lisans bilgisi bulunamadı. Lisansınızı aktifleştirmek için
                       aşağıdaki alana lisans anahtarınızı girin.
@@ -1381,7 +1383,7 @@ const SettingsPage: React.FC = () => {
 
       case "about":
         return (
-          <div className="space-y-6">
+          <div className="space-y-3">
             <div className="bg-white rounded-xl shadow-sm p-6">
               <div className="flex flex-col items-center justify-center text-center mb-8">
                 <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mb-4">

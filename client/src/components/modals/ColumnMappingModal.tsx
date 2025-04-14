@@ -764,7 +764,7 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex justify-between items-center mb-3">
             <h2 className="text-lg font-semibold">
               Excel Başlıklarını Eşleştir
             </h2>
@@ -802,7 +802,7 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
 
           {/* Import Summary */}
           {importSummary && (
-            <div className="mb-6 bg-blue-50 p-4 rounded-lg">
+            <div className="mb-3 bg-blue-50 p-4 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-medium text-blue-700">İçe Aktarma Özeti</h3>
@@ -845,7 +845,7 @@ const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
           )}
 
           {/* KDV Dahil Switch */}
-          <div className="mb-6 bg-blue-50 p-4 rounded-lg">
+          <div className="mb-3 bg-blue-50 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-medium text-blue-700">Satış Fiyatı Formatı</h3>
