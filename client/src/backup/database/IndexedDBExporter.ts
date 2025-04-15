@@ -105,12 +105,51 @@ export class IndexedDBExporter {
       // Tablodaki tüm verileri al
       const tx = db.transaction(tableName, 'readonly');
       const store = tx.objectStore(tableName);
-      const data = await store.getAll();
+      const rawData = await store.getAll();
       
-      return data;
+      // Date nesnelerini özel formata dönüştür
+      const processedData = rawData.map(item => this.processDateFields(item));
+      
+      return processedData;
     } catch (error) {
       console.error(`${tableName} tablosu dışa aktarılamadı:`, error);
       return [];
     }
+  }
+
+  /**
+   * Nesne içerisindeki tüm Date alanlarını işaretler
+   */
+  private processDateFields(data: any): any {
+    if (data === null || data === undefined) {
+      return data;
+    }
+    
+    // Date nesnesi kontrolü
+    if (data instanceof Date) {
+      return {
+        __isDate: true,
+        value: data.toISOString()
+      };
+    }
+    
+    // Dizi kontrolü
+    if (Array.isArray(data)) {
+      return data.map(item => this.processDateFields(item));
+    }
+    
+    // Nesne kontrolü
+    if (typeof data === 'object') {
+      const result: any = {};
+      for (const key in data) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
+          result[key] = this.processDateFields(data[key]);
+        }
+      }
+      return result;
+    }
+    
+    // Diğer tip değerleri doğrudan döndür
+    return data;
   }
 }

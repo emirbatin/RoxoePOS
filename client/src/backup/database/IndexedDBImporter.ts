@@ -122,7 +122,7 @@ export class IndexedDBImporter {
           const totalRecords = storeData.length;
           let processedRecords = 0;
           
-          // Tabloyu içe aktar
+          // Tabloyu içe aktar - upsert stratejisiyle
           const { success, importedCount } = await this.importTable(
             db, 
             storeName, 
@@ -173,7 +173,7 @@ export class IndexedDBImporter {
   }
 
   /**
-   * Belirli bir tabloyu içe aktarır
+   * Belirli bir tabloyu içe aktarır - upsert stratejisiyle
    * @param db Veritabanı bağlantısı
    * @param tableName Tablo adı
    * @param data İçe aktarılacak veri
@@ -189,43 +189,172 @@ export class IndexedDBImporter {
     onProgress?: (processedCount: number) => void
   ): Promise<{ success: boolean; importedCount: number }> {
     try {
+      // 1. Önce verileri geçerliliğini denetle
+      let validData = data.filter(item => item !== null && item !== undefined);
+      
+      // 2. Tarih alanları için ekstra dönüşüm kontrolü
+      validData = validData.map(item => this.ensureDateFields(item));
+
+      console.log(`${tableName} tablosuna ${validData.length} kayıt aktarılacak`);
+      
+      // 3. Geçerli veri yoksa
+      if (validData.length === 0) {
+        console.warn(`${tableName} için içe aktarılacak geçerli veri bulunamadı!`);
+        return { success: false, importedCount: 0 };
+      }
+      
+      // 4. İşlem başlat
       const tx = db.transaction(tableName, 'readwrite');
       const store = tx.objectStore(tableName);
       
-      // Önceki verileri temizle
-      if (clearExisting) {
-        await store.clear();
-      }
-      
-      // Verileri ekle
-      let importedCount = 0;
-      for (const item of data) {
-        try {
-          // PrimaryKey'e sahip olabileceğinden put kullan
-          await store.put(item);
-          importedCount++;
-          
-          // İlerleme bildirimi
-          if (onProgress && importedCount % 10 === 0) {
-            onProgress(importedCount);
-          }
-        } catch (error) {
-          console.error(`Veri aktarılamadı:`, error, item);
+      try {
+        // Eğer clearExisting seçeneği aktifse
+        if (clearExisting) {
+          console.log(`${tableName} tablosu temizleniyor (clearExisting=true)...`);
+          await store.clear();
         }
+        
+        // 5. Store'un keyPath bilgisini al (birincil anahtar)
+        const keyPath = store.keyPath as string;
+        console.log(`${tableName} tablosunun birincil anahtarı: ${keyPath || 'null (auto-increment)'}`);
+        
+        // 6. Verileri aktar - upsert yaklaşımı
+        let importedCount = 0;
+        let updateCount = 0;
+        let insertCount = 0;
+        let errorCount = 0;
+        
+        for (const item of validData) {
+          try {
+            // Birincil anahtar değerini kontrol et
+            const keyValue = keyPath && typeof keyPath === 'string' ? item[keyPath] : undefined;
+            
+            if (keyValue !== undefined && !clearExisting) {
+              // Kayıt zaten var mı kontrol et
+              try {
+                const existingItem = await store.get(keyValue);
+                
+                if (existingItem) {
+                  // Güncelleme
+                  await store.put(item);
+                  updateCount++;
+                } else {
+                  // Yeni kayıt
+                  await store.add(item);
+                  insertCount++;
+                }
+              } catch (getError) {
+                // Kayıt bulma hatası - normal eklemeye çalış
+                console.warn(`Var olan kayıt kontrolünde hata, normal eklemeye çalışılıyor: ${getError}`);
+                await store.put(item);
+                importedCount++;
+              }
+            } else {
+              // clearExisting true ise veya birincil anahtar yok ise
+              // Normal ekleme yap
+              if (clearExisting) {
+                // Temizleme yapıldığı için doğrudan ekle
+                await store.add(item);
+                insertCount++;
+              } else {
+                // Temizleme yapılmadı, put ile ekle/güncelle
+                await store.put(item);
+                insertCount++; // Aslında bazıları güncelleme olabilir ama ID eşleşmesi olmadığından sayamıyoruz
+              }
+            }
+            
+            importedCount++;
+            
+            // İlerleme bildirimi
+            if (onProgress && importedCount % 10 === 0) {
+              onProgress(importedCount);
+            }
+          } catch (error) {
+            errorCount++;
+            console.error(`Veri aktarılamadı (${errorCount}/${validData.length}):`, error);
+            if (errorCount <= 5) {
+              console.error('Hatalı veri:', JSON.stringify(item).substring(0, 200) + '...');
+            }
+          }
+        }
+        
+        // Son ilerleme bildirimi
+        if (onProgress) {
+          onProgress(importedCount);
+        }
+        
+        // İşlemi tamamla
+        await tx.done;
+        
+        // Sonucu bildir
+        console.log(`${tableName} için veri aktarımı tamamlandı:
+          Toplam: ${importedCount}/${validData.length}
+          Güncellenen: ${updateCount}
+          Eklenen: ${insertCount}
+          Hata: ${errorCount}`);
+        
+        return { success: true, importedCount };
+      } catch (txError) {
+        console.error(`${tableName} işlemi sırasında hata:`, txError);
+        return { success: false, importedCount: 0 };
       }
-      
-      // Son ilerleme bildirimi
-      if (onProgress) {
-        onProgress(importedCount);
-      }
-      
-      await tx.done;
-      
-      return { success: true, importedCount };
     } catch (error) {
       console.error(`${tableName} tablosu içe aktarılamadı:`, error);
       return { success: false, importedCount: 0 };
     }
+  }
+
+  /**
+   * Nesnedeki tarih alanlarını kontrol eder ve gerekirse dönüştürür
+   */
+  private ensureDateFields(item: any): any {
+    if (!item) return item;
+    
+    // Nesne değilse doğrudan döndür
+    if (typeof item !== 'object') return item;
+    
+    // Dizi kontrolü
+    if (Array.isArray(item)) {
+      return item.map(el => this.ensureDateFields(el));
+    }
+    
+    // Nesneyi işle
+    const result = {...item};
+    
+    for (const key in result) {
+      const value = result[key];
+      
+      // __isDate formatında özel işaretlenmiş alan kontrolü
+      if (value && typeof value === 'object' && value.__isDate === true && value.value) {
+        try {
+          result[key] = new Date(value.value);
+          continue; // Sonraki alana geç
+        } catch (e) {
+          console.error(`Tarih dönüştürme hatası (${key}):`, e);
+          // Hatalı tarih alanını null yap - veri bütünlüğünü korumak için
+          result[key] = null;
+          continue;
+        }
+      }
+      
+      // String tarih kontrolü (ISO formatını tespit et)
+      if (typeof value === 'string' && 
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d{3})?Z$/.test(value)) {
+        try {
+          result[key] = new Date(value);
+          continue;
+        } catch (e) {
+          // Başarısız olursa dokunma
+        }
+      }
+      
+      // İç içe nesne veya dizi kontrolü
+      if (value && typeof value === 'object') {
+        result[key] = this.ensureDateFields(value);
+      }
+    }
+    
+    return result;
   }
 
   /**

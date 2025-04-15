@@ -24,6 +24,41 @@ export interface BackupMetadata {
 
 export class BackupSerializer {
   /**
+ * Date nesnelerini özel biçimde işaretleyerek serileştirmeye hazırlar
+ */
+private prepareDataForBackup(data: any): any {
+  if (data === null || data === undefined) {
+    return data;
+  }
+  
+  // Date nesnesi kontrolü
+  if (data instanceof Date) {
+    return {
+      __isDate: true,
+      value: data.toISOString()
+    };
+  }
+  
+  // Dizi kontrolü
+  if (Array.isArray(data)) {
+    return data.map(item => this.prepareDataForBackup(item));
+  }
+  
+  // Nesne kontrolü
+  if (typeof data === 'object') {
+    const result: any = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        result[key] = this.prepareDataForBackup(data[key]);
+      }
+    }
+    return result;
+  }
+  
+  // Diğer tip değerleri doğrudan döndür
+  return data;
+}
+  /**
    * Veriyi .roxoe formatına dönüştürür
    * 
    * @param data Serileştirilecek veri
@@ -31,6 +66,7 @@ export class BackupSerializer {
    * @returns .roxoe formatında serileştirilmiş veri
    */
   serializeToRoxoeFormat(data: any, metadata: Partial<BackupMetadata>): string {
+    const preparedData = this.prepareDataForBackup(data);
     // Veriyi JSON formatına dönüştür
     const jsonData = JSON.stringify(data);
     
