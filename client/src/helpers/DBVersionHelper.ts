@@ -1,9 +1,9 @@
 // src/helpers/DBVersionHelper.ts
 const DB_VERSIONS = {
     // Ana POS veritabanı
-    posDB: 5, // 4'ten 5'e yükseltiyoruz çünkü mevcut sürüm 5 olmuş
+    posDB: 5,
     // Diğer veritabanları
-    salesDB: 3,
+    salesDB: 6,
     creditDB: 3
   };
   
