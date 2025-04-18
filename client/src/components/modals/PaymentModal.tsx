@@ -4,6 +4,8 @@ import { posService } from "../../services/posServices";
 import { PaymentModalProps, PaymentMethod } from "../../types/pos";
 import { Customer } from "../../types/credit";
 import { useAlert } from "../AlertProvider";
+import CustomerSearchModal from "./CustomerSearchModal"; // Müşteri seçim modalı import edildi
+import CustomerSelectionButton from "../CustomerSelectionButton"; // Müşteri seçim butonu import edildi
 
 // Tipler aynı kalıyor
 type PosItem = {
@@ -97,6 +99,18 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
 
   const [remainingTotal, setRemainingTotal] = useState(discountedTotal);
 
+  // Müşteri seçim modal'ları için state'ler
+  const [normalCustomerModalOpen, setNormalCustomerModalOpen] = useState(false);
+  const [productCustomerModalOpen, setProductCustomerModalOpen] =
+    useState(false);
+  const [productCustomerItemId, setProductCustomerItemId] = useState<
+    number | null
+  >(null);
+  const [equalCustomerModalOpen, setEqualCustomerModalOpen] = useState(false);
+  const [equalCustomerPersonIndex, setEqualCustomerPersonIndex] = useState<
+    number | null
+  >(null);
+
   const getPersonShare = (): number => {
     // Toplam tutarı kişi sayısına bölüyoruz - her kişinin eşit olarak ödemesi gereken miktar
     return discountedTotal / friendCount;
@@ -160,6 +174,13 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
       // Eşit
       setFriendCount(2);
       setEqualPayments([]);
+
+      // Müşteri modal durumlarını resetle
+      setNormalCustomerModalOpen(false);
+      setProductCustomerModalOpen(false);
+      setProductCustomerItemId(null);
+      setEqualCustomerModalOpen(false);
+      setEqualCustomerPersonIndex(null);
     }
   }, [isOpen, items, setSelectedCustomer, total]);
 
@@ -753,46 +774,64 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                 </div>
               )}
 
-              {/* Veresiye seçim bölümü */}
+              {/* Veresiye seçim bölümü - YENİ ARAYÜZ */}
               {paymentMethod === "veresiye" && (
                 <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
                   <label className="block text-base font-medium text-gray-700 mb-2">
                     Müşteri Seçin
                   </label>
-                  <select
-                    value={selectedCustomer?.id || ""}
-                    onChange={(e) =>
-                      setSelectedCustomer(
-                        customers.find(
-                          (c) => c.id === Number(e.target.value)
-                        ) || null
-                      )
-                    }
-                    className="w-full px-4 py-2 text-base rounded-md border border-gray-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="">Bir Müşteri Seçin</option>
-                    {customers.map((customer) => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name} (Borç:{" "}
-                        {formatCurrency(customer.currentDebt)} / Limit:{" "}
-                        {formatCurrency(customer.creditLimit)})
-                      </option>
-                    ))}
-                  </select>
+
+                  <CustomerSelectionButton
+                    selectedCustomer={selectedCustomer}
+                    onOpenModal={() => setNormalCustomerModalOpen(true)}
+                  />
 
                   {selectedCustomer && (
                     <div className="mt-3 bg-blue-50 p-3 rounded-md">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-700">Kredi Limiti:</span>
+                        <span className="font-medium">
+                          {formatCurrency(selectedCustomer.creditLimit)}
+                        </span>
+                      </div>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-gray-700">Mevcut Borç:</span>
                         <span className="font-medium">
                           {formatCurrency(selectedCustomer.currentDebt)}
                         </span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-700">Kredi Limiti:</span>
-                        <span className="font-medium">
-                          {formatCurrency(selectedCustomer.creditLimit)}
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-700">Yeni Borç:</span>
+                        <span className="font-medium ">
+                          {formatCurrency(
+                            selectedCustomer.currentDebt + discountedTotal
+                          )}
                         </span>
+                      </div>
+
+                      {/* Limit gösterge çubuğu */}
+                      <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full ${
+                            selectedCustomer.currentDebt /
+                              selectedCustomer.creditLimit >
+                            0.8
+                              ? "bg-red-500"
+                              : selectedCustomer.currentDebt /
+                                  selectedCustomer.creditLimit >
+                                0.5
+                              ? "bg-yellow-500"
+                              : "bg-green-500"
+                          }`}
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              (selectedCustomer.currentDebt /
+                                selectedCustomer.creditLimit) *
+                                100
+                            )}%`,
+                          }}
+                        ></div>
                       </div>
                     </div>
                   )}
@@ -1049,33 +1088,27 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                               )}
                             </div>
 
-                            {/* Veresiye müşteri */}
+                            {/* Veresiye müşteri - YENİ ARAYÜZ */}
                             {input.paymentMethod === "veresiye" && (
                               <div className="mb-4">
                                 <label className="block text-md font-medium text-gray-700 mb-2">
                                   Müşteri Seçin
                                 </label>
-                                <select
-                                  value={input.customerId}
-                                  onChange={(e) =>
-                                    setProductPaymentInputs((prev) => ({
-                                      ...prev,
-                                      [item.id]: {
-                                        ...getOrInit(prev, item.id),
-                                        customerId: e.target.value,
-                                      },
-                                    }))
+
+                                <CustomerSelectionButton
+                                  selectedCustomer={
+                                    input.customerId
+                                      ? customers.find(
+                                          (c) =>
+                                            c.id.toString() === input.customerId
+                                        ) || null
+                                      : null
                                   }
-                                  className="w-full px-4 py-3 text-md rounded-lg border-2 border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                >
-                                  <option value="">Müşteri Seçin</option>
-                                  {customers.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                      {c.name} ({formatCurrency(c.currentDebt)}/
-                                      {formatCurrency(c.creditLimit)})
-                                    </option>
-                                  ))}
-                                </select>
+                                  onOpenModal={() => {
+                                    setProductCustomerItemId(item.id);
+                                    setProductCustomerModalOpen(true);
+                                  }}
+                                />
                               </div>
                             )}
 
@@ -1300,30 +1333,27 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
                             )}
                         </div>
 
-                        {/* Veresiye müşteri */}
+                        {/* Veresiye müşteri - YENİ ARAYÜZ */}
                         {p.paymentMethod === "veresiye" && (
                           <div className="mb-2">
                             <label className="block text-xs font-medium text-gray-700 mb-1">
                               Müşteri Seçin
                             </label>
-                            <select
-                              value={p.customerId}
-                              onChange={(e) =>
-                                handleEqualChange(i, {
-                                  ...p,
-                                  customerId: e.target.value,
-                                })
+
+                            <CustomerSelectionButton
+                              selectedCustomer={
+                                p.customerId
+                                  ? customers.find(
+                                      (c) => c.id.toString() === p.customerId
+                                    ) || null
+                                  : null
                               }
-                              className="w-full px-3 py-2 text-xs rounded-md border border-gray-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                            >
-                              <option value="">Müşteri Seçin</option>
-                              {customers.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.name} ({formatCurrency(c.currentDebt)}/
-                                  {formatCurrency(c.creditLimit)})
-                                </option>
-                              ))}
-                            </select>
+                              onOpenModal={() => {
+                                setEqualCustomerPersonIndex(i);
+                                setEqualCustomerModalOpen(true);
+                              }}
+                              className="p-2 text-sm"
+                            />
                           </div>
                         )}
                       </div>
@@ -1402,6 +1432,65 @@ const PaymentModal: React.FC<PaymentModalProps & { items: PosItem[] }> = ({
           </button>
         </div>
       </div>
+
+      {/* MODAL BİLEŞENLERİ */}
+      {/* Normal ödeme için müşteri seçimi */}
+      <CustomerSearchModal
+        isOpen={normalCustomerModalOpen}
+        onClose={() => setNormalCustomerModalOpen(false)}
+        customers={customers}
+        selectedCustomerId={selectedCustomer?.id?.toString()}
+        onSelect={(customer) => setSelectedCustomer(customer)}
+      />
+
+      {/* Ürün bazında ödeme için müşteri seçimi */}
+      <CustomerSearchModal
+        isOpen={productCustomerModalOpen}
+        onClose={() => setProductCustomerModalOpen(false)}
+        customers={customers}
+        selectedCustomerId={
+          productCustomerItemId
+            ? productPaymentInputs[productCustomerItemId]?.customerId
+            : ""
+        }
+        onSelect={(customer) => {
+          if (productCustomerItemId !== null) {
+            setProductPaymentInputs((prev) => ({
+              ...prev,
+              [productCustomerItemId]: {
+                ...getOrInit(prev, productCustomerItemId),
+                customerId: customer.id.toString(),
+              },
+            }));
+          }
+          setProductCustomerItemId(null);
+        }}
+      />
+
+      {/* Eşit bölüşüm için müşteri seçimi */}
+      <CustomerSearchModal
+        isOpen={equalCustomerModalOpen}
+        onClose={() => setEqualCustomerModalOpen(false)}
+        customers={customers}
+        selectedCustomerId={
+          equalCustomerPersonIndex !== null &&
+          equalPayments[equalCustomerPersonIndex]
+            ? equalPayments[equalCustomerPersonIndex].customerId
+            : ""
+        }
+        onSelect={(customer) => {
+          if (equalCustomerPersonIndex !== null) {
+            handleEqualChange(equalCustomerPersonIndex, {
+              ...(equalPayments[equalCustomerPersonIndex] || {
+                paymentMethod: "veresiye",
+                received: "",
+              }),
+              customerId: customer.id.toString(),
+            });
+          }
+          setEqualCustomerPersonIndex(null);
+        }}
+      />
     </div>
   );
 };

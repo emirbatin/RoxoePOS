@@ -4,6 +4,9 @@ import { IndexedDBExporter } from '../backup/database/IndexedDBExporter';
 import { IndexedDBImporter } from '../backup/database/IndexedDBImporter';
 import type { ImportOptions } from '../backup/database/IndexedDBImporter';
 
+// Yedekleme durumunu takip etmek için değişken
+let isBackupInProgress = false;
+
 // Unicode/Türkçe karakter yardımcı fonksiyonları
 function safeJsonParse(jsonString: string): any {
   try {
@@ -65,6 +68,17 @@ export async function importDatabases(data: any, options?: ImportOptions) {
   }
 }
 
+/**
+ * Uygulama kapatılırken kapatma onayını gönderir
+ * @param {boolean} success - Yedekleme başarılı oldu mu
+ */
+export function confirmAppClose(success: boolean): void {
+  console.log(`Uygulama kapatma onayı gönderiliyor. Yedekleme ${success ? 'başarılı' : 'başarısız'}.`);
+  isBackupInProgress = false;
+  // Main process'e kapanma onayı gönder
+  (window as any).ipcRenderer.send('confirm-app-close');
+}
+
 // Backup köprüsünü başlat
 export function initBackupBridge(): void {
   // window üzerinden expose edilen API'yi kullan
@@ -76,14 +90,29 @@ export function initBackupBridge(): void {
     return;
   }
   
+  // Uygulama kapatma isteğini dinle
+  ipcRenderer.on('app-close-requested', () => {
+    console.log('Kapatma isteği alındı, yedekleme başlatılacak...');
+    // Burada doğrudan bir işlem yapmıyoruz çünkü BackupDialogManager bileşeni bu olayı dinliyor
+    // ve yedekleme işlemini o başlatıyor
+  });
+  
+  // Yedekleme durumu için bildirim
+  ipcRenderer.on('backup-in-progress-query', () => {
+    ipcRenderer.send('backup-in-progress', isBackupInProgress);
+  });
+  
   // IndexedDB işlemleri için IPC dinleyicileri
   ipcRenderer.on('db-export-request', async () => {
     try {
       console.log('Renderer: IndexedDB verisi dışa aktarılıyor...');
+      isBackupInProgress = true;
       const result = await exportDatabases();
       ipcRenderer.send('db-export-response', { success: true, data: result });
+      isBackupInProgress = false;
     } catch (error: any) {
       console.error('Renderer: Dışa aktarma hatası:', error);
+      isBackupInProgress = false;
       ipcRenderer.send('db-export-response', {
         success: false,
         error: error.message || 'Bilinmeyen hata'
@@ -112,6 +141,7 @@ export function initBackupBridge(): void {
   ipcRenderer.on('db-import-request-start', async (_event: any, dataAsString: string, options: any) => {
     try {
       console.log('Renderer: IndexedDB verisi içe aktarma hazırlığı...');
+      isBackupInProgress = true;
       
       // String'i JSON objesine dönüştür - güvenli JSON parse kullan
       const data = safeJsonParse(dataAsString);
@@ -120,8 +150,10 @@ export function initBackupBridge(): void {
       const result = await importDatabases(data, options);
       
       ipcRenderer.send('db-import-response', { success: true, data: result });
+      isBackupInProgress = false;
     } catch (error: any) {
       console.error('Renderer: İçe aktarma hatası:', error);
+      isBackupInProgress = false;
       ipcRenderer.send('db-import-response', {
         success: false,
         error: error.message || 'Bilinmeyen hata'
@@ -133,18 +165,22 @@ export function initBackupBridge(): void {
   ipcRenderer.on('trigger-backup', async (event: any, options: any) => {
     try {
       console.log('Renderer: Manuel yedekleme tetiklendi:', options);
+      isBackupInProgress = true;
       // backupAPI üzerinden yedeklemeyi başlat
       if ((window as any).backupAPI) {
         await (window as any).backupAPI.createBackup(options);
       }
+      isBackupInProgress = false;
     } catch (error: any) {
       console.error('Renderer: Manuel yedekleme hatası:', error);
+      isBackupInProgress = false;
     }
   });
 
   ipcRenderer.on('db-import-request-file', async (_event: any, tempFilePath: string, options: any) => {
     try {
       console.log('Renderer: Geçici dosyadan veri okunuyor...');
+      isBackupInProgress = true;
       
       // Dosya okuma API'sini kullanarak geçici dosyayı oku - UTF-8 olarak belirt
       const response = await fetch(`file://${tempFilePath}`);
@@ -162,8 +198,10 @@ export function initBackupBridge(): void {
       const result = await importDatabases(data, options);
       
       ipcRenderer.send('db-import-response', { success: true, data: result });
+      isBackupInProgress = false;
     } catch (error: any) {
       console.error('Renderer: İçe aktarma hatası:', error);
+      isBackupInProgress = false;
       ipcRenderer.send('db-import-response', {
         success: false,
         error: error.message || 'Bilinmeyen hata'
@@ -175,6 +213,7 @@ export function initBackupBridge(): void {
   ipcRenderer.on('db-import-request-file-simple', async (_event: unknown, tempFilePath: string) => {
     try {
       console.log('Renderer: Basit dosya oku/içe aktar işlemi başladı');
+      isBackupInProgress = true;
       
       // Dosya okuma API'sini kullanarak geçici dosyayı oku - UTF-8 olarak belirt
       const response = await fetch(`file://${tempFilePath}`);
@@ -193,8 +232,10 @@ export function initBackupBridge(): void {
       const result = await importDatabases(data, { clearExisting: true });
       
       ipcRenderer.send('db-import-response', { success: true, data: result });
+      isBackupInProgress = false;
     } catch (error: any) {
       console.error('Renderer: İçe aktarma hatası:', error);
+      isBackupInProgress = false;
       ipcRenderer.send('db-import-response', {
         success: false,
         error: error.message || 'Bilinmeyen hata'
@@ -205,6 +246,7 @@ export function initBackupBridge(): void {
   ipcRenderer.on('db-import-base64', async (_event: unknown, base64Data: string) => {
     try {
       console.log('Renderer: Base64 verisi alındı, işleniyor...');
+      isBackupInProgress = true;
       
       // Base64'ten UTF-8 string'e dönüştür - özel fonksiyon kullan
       const jsonString = base64ToUtf8String(base64Data);
@@ -217,8 +259,10 @@ export function initBackupBridge(): void {
       const result = await importDatabases(data, { clearExisting: true });
       
       ipcRenderer.send('db-import-response', { success: true, data: result });
+      isBackupInProgress = false;
     } catch (error: any) {
       console.error('Renderer: İçe aktarma hatası:', error);
+      isBackupInProgress = false;
       ipcRenderer.send('db-import-response', {
         success: false,
         error: error.message || 'Bilinmeyen hata'

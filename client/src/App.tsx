@@ -21,6 +21,8 @@ import UpdateNotification from "./components/UpdateNotification";
 import KasaYonetimi from "./pages/CashRegisterPage";
 import DynamicWindowTitle from "./components/DynamicWindowTitle";
 import { initBackupBridge } from "./utils/backup-bridge";
+// Yedekleme dialog manager bileşenini import et
+import BackupDialogManager from "./components/BackupDialogManager";
 
 function App() {
   const [isLicensed, setIsLicensed] = useState(false);
@@ -94,6 +96,8 @@ function App() {
       </Router>
       <UpdateNotification />
       <DynamicWindowTitle />
+      {/* Kapatma öncesi yedekleme yöneticisi */}
+      <BackupDialogManager />
     </>
   );
 }

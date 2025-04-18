@@ -26,33 +26,37 @@ export interface IElectronAPI {
   }>;
 }
 
+// Backup ayarları ve sonuç tiplerini güncelleyelim
+interface BackupOptions {
+  description?: string;
+  backupType?: string; // 'full' | 'incremental' olarak kısıtlanabilir
+  isAutoBackup?: boolean; // Eklenen yeni özellik
+}
+
+interface BackupResult {
+  success: boolean;
+  backupId: string;
+  metadata: any;
+  error?: string;
+  filename?: string;
+}
+
 // Yeni BackupAPI tipi
 interface BackupAPI {
-  createBackup(options: { description?: string, backupType?: string }): Promise<{
-    success: boolean;
-    backupId: string;
-    metadata: any;
-    error?: string;
-    filename?: string;
-  }>;
-  
+  createBackup(options?: BackupOptions): Promise<BackupResult>;
   restoreBackup(content: string, options?: { clearExisting?: boolean }): Promise<{
     success: boolean;
     error?: string;
     metadata?: any;
   }>;
-  
   getBackupHistory(): Promise<any[]>;
-  
   readBackupFile(): Promise<{ name: string, content: string }>;
-  
   scheduleBackup(frequency: string, hour?: number, minute?: number): Promise<boolean>;
-  
   disableScheduledBackup(): Promise<boolean>;
-  
-  onBackupProgress(callback: (data: { stage: string, percent: number }) => void): void;
-  
-  offBackupProgress(callback: (data: { stage: string, percent: number }) => void): void;
+  onBackupProgress(callback: (data: { stage: string, progress: number }) => void): void;
+  offBackupProgress(callback: (data: { stage: string, progress: number }) => void): void;
+  setBackupDirectory(directory: string): Promise<{ success: boolean }>;
+  getBackupDirectory(): Promise<string>;
 }
 
 // Updater API için tip
@@ -92,3 +96,5 @@ declare global {
     ipcRenderer: IpcRenderer;
   }
 }
+
+export {};

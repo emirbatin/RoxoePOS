@@ -26,6 +26,11 @@ let updateSplashWindow: BrowserWindow | null = null;
 let isDeltaUpdate = false; 
 let lastUpdateSize = 0; // Son güncelleme boyutu için hafıza
 
+// Kapatma öncesi yedekleme için gerekli değişkenler
+let isAppQuitting = false;
+let forceQuit = false;
+let closeConfirmed = false;
+
 // GitHub token ayarları
 const githubToken = process.env.GH_TOKEN;
 
@@ -325,6 +330,77 @@ function createUpdateSplash() {
   }
 }
 
+// Uygulamayı kapatma öncesi yedekleme işlemlerini yönet
+function setupAppCloseHandler(mainWindow: BrowserWindow) {
+  // Windows/Linux'ta kapatma düğmesine tıklamayı yakala
+  mainWindow.on('close', async (event) => {
+    // Eğer zaten kapatma süreci başlatılmışsa veya zorla kapatılıyorsa veya onay alınmışsa işlemi engelleme
+    if (isAppQuitting || forceQuit || closeConfirmed) {
+      return;
+    }
+    
+    // Kapatma işlemini engelle
+    event.preventDefault();
+    
+    // Uygulama kapatılıyor bayrağını ayarla
+    isAppQuitting = true;
+    
+    try {
+      // Renderer sürecine kapatma isteği olduğunu bildir
+      mainWindow.webContents.send('app-close-requested');
+      
+      // Konsola log düş
+      log.info('Uygulama kapatılmak üzere. Yedekleme başlatıldı...');
+    } catch (error) {
+      log.error('Kapatma sırasında hata:', error);
+      forceQuit = true;
+      app.quit();
+    }
+  });
+  
+  // IPC kanalını ayarla: Renderer sürecinden gelen onay mesajını dinle
+  ipcMain.on('confirm-app-close', () => {
+    log.info('Renderer sürecinden kapatma onayı alındı. Uygulama kapatılıyor...');
+    closeConfirmed = true;
+    forceQuit = true;
+    app.quit();
+  });
+  
+  // Bu fonksiyonu macOS için de çağır
+  app.on('before-quit', () => {
+    forceQuit = true;
+  });
+  
+  // macOS'ta dock'tan kapatma
+  app.on('quit', () => {
+    forceQuit = true;
+  });
+}
+
+// Yedekleme zamanlaması için sorun olabilecek kapatma durumlarını kontrol et
+ipcMain.on('backup-in-progress', (event, isInProgress) => {
+  if (isInProgress) {
+    // Kapatma isteklerini o anda yedekleme yapılıyorsa engelle
+    forceQuit = false;
+    closeConfirmed = false;
+  }
+});
+
+// Yedekleme hatası olursa kullanıcıya sormak için dialog
+async function showBackupErrorDialog(mainWindow: BrowserWindow, error: string): Promise<boolean> {
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    title: 'Yedekleme Hatası',
+    message: 'Uygulama kapatılmadan önce yedekleme tamamlanamadı.',
+    detail: `Hata: ${error}\n\nYine de uygulamayı kapatmak istiyor musunuz?`,
+    buttons: ['Uygulamayı Kapat', 'İptal'],
+    defaultId: 1,
+    cancelId: 1
+  });
+  
+  return result.response === 0; // 0: Kapat, 1: İptal
+}
+
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
@@ -398,6 +474,14 @@ function createWindow() {
               }
             },
           },
+          {
+            label: "Test App Close",
+            click: () => {
+              if (win) {
+                win.webContents.send("app-close-requested");
+              }
+            },
+          },
         ],
       },
     ]);
@@ -405,6 +489,9 @@ function createWindow() {
   } else {
     Menu.setApplicationMenu(null);
   }
+  
+  // Kapatma işlemlerini yönet
+  setupAppCloseHandler(win);
 }
 
 let lastProgressTime = Date.now();
@@ -873,6 +960,57 @@ ipcMain.handle("create-backup", async (event, options) => {
   }
 });
 
+// Dizin seçimi için IPC işleyicisi
+ipcMain.handle("select-directory", async () => {
+  try {
+    // Klasör seçim dialogunu göster
+    const result = await dialog.showOpenDialog({
+      properties: ["openDirectory", "createDirectory"],
+      title: "Yedekleme Dizinini Seçin",
+      buttonLabel: "Dizini Seç"
+    });
+    
+    return result; // Seçilen dosya yollarıyla sonucu döndür
+  } catch (error) {
+    log.error("Dizin seçim hatası:", error);
+    const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata';
+    throw new Error(`Dizin seçme hatası: ${errorMessage}`);
+  }
+});
+
+// Yedekleme dizinini ayarlama
+ipcMain.handle("set-backup-directory", async (event, directory) => {
+  try {
+    log.info(`Yedekleme dizini ayarlanıyor: ${directory}`);
+    
+    // Dizinin varlığını kontrol et
+    if (!fs.existsSync(directory)) {
+      log.info(`Dizin mevcut değil, oluşturuluyor: ${directory}`);
+      fs.mkdirSync(directory, { recursive: true });
+    }
+    
+    // Dizin path'ini FileUtils'e bildir
+    FileUtils.setBackupDirectory(directory);
+    
+    return { success: true };
+  } catch (error) {
+    log.error("Dizin seçim hatası:", error);
+    const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata';
+    throw new Error(`Dizin seçme hatası: ${errorMessage}`);
+  }
+});
+
+// Mevcut yedekleme dizinini alma
+ipcMain.handle("get-backup-directory", async () => {
+  try {
+    return FileUtils.getBackupDirectory();
+  } catch (error) {
+    log.error("Dizin seçim hatası:", error);
+    const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata';
+    throw new Error(`Dizin seçme hatası: ${errorMessage}`);
+  }
+});
+
 // Yedekten geri yükleme işleyicisi - ESKİ, KULLANIM DIŞI
 ipcMain.handle("restore-backup", async (event, content, options) => {
   try {
@@ -975,7 +1113,7 @@ setInterval(() => {
 
 // Uygulama kapatılmadan önce kontrol et
 app.on("before-quit", (event) => {
-  if (isUpdating && updateSplashWindow && !updateSplashWindow.isDestroyed()) {
+  if ((isUpdating && updateSplashWindow && !updateSplashWindow.isDestroyed()) || (isAppQuitting && !closeConfirmed)) {
     event.preventDefault();
   }
 });

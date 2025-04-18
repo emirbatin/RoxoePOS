@@ -50,7 +50,7 @@ interface BackupHistoryItem {
 
 interface BackupProgress {
   stage: string;
-  percent: number;
+  progress: number; // 'percent' yerine 'progress' olarak güncellendi
 }
 
 interface BackupScheduleConfig {
@@ -68,13 +68,13 @@ const SettingsPage: React.FC = () => {
     message: string;
   }>({ status: "idle", message: "" });
 
-  // Yedekleme ile ilgili stateler
+  const [backupDirectory, setBackupDirectory] = useState<string>("");
   const [backups, setBackups] = useState<BackupHistoryItem[]>([]);
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [backupProgress, setBackupProgress] = useState<BackupProgress>({
     stage: "",
-    percent: 0,
+    progress: 0,
   });
   const [backupSchedule, setBackupSchedule] = useState<BackupScheduleConfig>({
     enabled: false,
@@ -175,6 +175,9 @@ const SettingsPage: React.FC = () => {
         if (savedBackupSchedule) {
           setBackupSchedule(JSON.parse(savedBackupSchedule));
         }
+
+        // Yedekleme dizinini yükle
+        loadBackupDirectory();
       } catch (err) {
         console.error("Ayarlar yüklenirken hata:", err);
       }
@@ -206,7 +209,10 @@ const SettingsPage: React.FC = () => {
   // Yedekleme işlemleri için dinleyici ve temizleyici
   useEffect(() => {
     // Yedekleme ilerleme bildirimleri için dinleyici
-    const handleBackupProgress = (data: { stage: string; percent: number }) => {
+    const handleBackupProgress = (data: {
+      stage: string;
+      progress: number;
+    }) => {
       setBackupProgress(data);
     };
 
@@ -219,6 +225,16 @@ const SettingsPage: React.FC = () => {
     };
   }, []);
 
+  // Yedekleme dizinini yükle
+  const loadBackupDirectory = async () => {
+    try {
+      const directory = await window.backupAPI.getBackupDirectory();
+      setBackupDirectory(directory || "");
+    } catch (error) {
+      console.error("Yedekleme dizini yüklenemedi:", error);
+    }
+  };
+
   // Yedek geçmişini yükle
   const loadBackupHistory = async () => {
     try {
@@ -229,10 +245,38 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const selectBackupDirectory = async () => {
+    try {
+      // Eğer electron dialog API'si varsa, klasör seçmek için kullan
+      const result = await window.ipcRenderer.invoke("select-directory");
+
+      if (
+        result &&
+        !result.canceled &&
+        result.filePaths &&
+        result.filePaths.length > 0
+      ) {
+        const selectedPath = result.filePaths[0];
+        setBackupDirectory(selectedPath);
+
+        // Seçilen dizini kaydet
+        localStorage.setItem("backup_directory", selectedPath);
+
+        // Yedekleme sistemine de bildir (backupAPI üzerinden)
+        await window.backupAPI.setBackupDirectory(selectedPath);
+
+        showSuccess("Yedekleme dizini güncellendi: " + selectedPath);
+      }
+    } catch (error) {
+      console.error("Dizin seçme hatası:", error);
+      showError("Dizin seçilemedi: " + String(error));
+    }
+  };
+
   // Yeni yedek oluştur
   const handleCreateBackup = async () => {
     setBackupLoading(true);
-    setBackupProgress({ stage: "Yedekleme başlatılıyor", percent: 0 });
+    setBackupProgress({ stage: "Yedekleme başlatılıyor", progress: 0 });
 
     try {
       const result = await window.backupAPI.createBackup({
@@ -260,12 +304,12 @@ const SettingsPage: React.FC = () => {
   const handleRestoreBackup = async () => {
     try {
       setRestoreLoading(true);
-      setBackupProgress({ stage: "Dosya seçiliyor", percent: 0 });
+      setBackupProgress({ stage: "Dosya seçiliyor", progress: 0 });
 
       // Dosyayı oku
       const { content } = await window.backupAPI.readBackupFile();
 
-      setBackupProgress({ stage: "Geri yükleme başlatılıyor", percent: 10 });
+      setBackupProgress({ stage: "Geri yükleme başlatılıyor", progress: 10 });
 
       const result = await window.backupAPI.restoreBackup(content, {
         clearExisting: true,
@@ -738,8 +782,10 @@ const SettingsPage: React.FC = () => {
         return (
           <div className="space-y-3">
             <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between mb-3
-              ">
+              <div
+                className="flex items-center justify-between mb-3
+              "
+              >
                 <div>
                   <h3 className="font-medium text-gray-900">
                     Barkod Okuyucu Durumu
@@ -1068,9 +1114,43 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
         );
+      // Güncellenmiş yedekleme kısmı için SettingsPage'in renderTabContent fonksiyonundaki "backup" case'ini
+      // değiştirin
       case "backup":
         return (
           <div className="space-y-3">
+            {/* Yedekleme Dizini Ayarları */}
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h3 className="font-medium text-gray-900 mb-4">
+                Yedekleme Dizini
+              </h3>
+
+              <div className="flex items-center gap-4 mb-5">
+                <input
+                  type="text"
+                  className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  value={backupDirectory || "Varsayılan konum"}
+                  disabled
+                  placeholder="Yedekleme dosyalarının kaydedileceği konum"
+                />
+                <button
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                  onClick={selectBackupDirectory}
+                >
+                  <Download size={18} />
+                  Dizin Seç
+                </button>
+              </div>
+
+              <div className="text-sm text-gray-500 bg-blue-50 p-4 rounded-lg">
+                <p>
+                  ℹ️ Yedekleme dosyalarının kaydedileceği dizini
+                  belirleyebilirsiniz. Dizin seçilmediğinde varsayılan konum
+                  (Belgeler/RoxoePOS/Backups) kullanılır.
+                </p>
+              </div>
+            </div>
+
             {/* Yedekleme İşlemleri */}
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h3 className="font-medium text-gray-900 mb-4">
@@ -1103,12 +1183,13 @@ const SettingsPage: React.FC = () => {
               {(backupLoading || restoreLoading) && (
                 <div className="mb-5">
                   <p className="text-sm text-gray-700 mb-1">
-                    {backupProgress.stage} ({backupProgress.percent}%)
+                    {backupProgress.stage} (
+                    {Math.round(backupProgress.progress)}%)
                   </p>
                   <div className="w-full bg-gray-200 rounded-full h-2.5">
                     <div
                       className="bg-indigo-600 h-2.5 rounded-full"
-                      style={{ width: `${backupProgress.percent}%` }}
+                      style={{ width: `${backupProgress.progress}%` }}
                     ></div>
                   </div>
                 </div>
@@ -1324,8 +1405,10 @@ const SettingsPage: React.FC = () => {
                 />
               ) : (
                 <div>
-                  <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-3
-                  ">
+                  <div
+                    className="bg-red-50 border-l-4 border-red-500 p-4 mb-3
+                  "
+                  >
                     <p className="text-red-700">
                       Lisans bilgisi bulunamadı. Lisansınızı aktifleştirmek için
                       aşağıdaki alana lisans anahtarınızı girin.

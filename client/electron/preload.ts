@@ -2,7 +2,7 @@ import { ipcRenderer, contextBridge } from "electron";
 
 // --------- Version App Info API ---------
 contextBridge.exposeInMainWorld("appInfo", {
-  getVersion: () => ipcRenderer.invoke("get-app-version")
+  getVersion: () => ipcRenderer.invoke("get-app-version"),
 });
 
 // --------- Expose IPC Renderer API ---------
@@ -98,13 +98,36 @@ contextBridge.exposeInMainWorld("updaterAPI", {
 
 // --------- Yedekleme API'sini Renderer Sürecine Expose Edelim ---------
 contextBridge.exposeInMainWorld("backupAPI", {
-  // Mevcut metodlar...
+  // Yedekleme işlemleri
+  createBackup: (options?: any) => {
+    return ipcRenderer.invoke("create-backup-bridge", options);
+  },
+
+  restoreBackup: async (content: string, options?: any) => {
+    try {
+      return await ipcRenderer.invoke(
+        "restore-backup-bridge",
+        content,
+        options
+      );
+    } catch (error) {
+      console.error("Yedekleme geri yükleme hatası:", error);
+      throw error;
+    }
+  },
+
+  // Dosya işlemleri
   saveBackupToFile: (data: string, filename: string) => {
     return ipcRenderer.invoke("save-backup-file", data, filename);
   },
 
   readBackupFile: () => {
     return ipcRenderer.invoke("read-backup-file");
+  },
+
+  // Yedek geçmişi işlemleri
+  getBackupHistory: () => {
+    return ipcRenderer.invoke("get-backup-history");
   },
 
   // Zamanlama işlemleri
@@ -116,8 +139,9 @@ contextBridge.exposeInMainWorld("backupAPI", {
     return ipcRenderer.invoke("disable-scheduled-backup");
   },
 
-  getBackupHistory: () => {
-    return ipcRenderer.invoke("get-backup-history");
+  // Test metodu
+  testAutoBackup: () => {
+    return ipcRenderer.invoke("test-auto-backup");
   },
 
   // İlerleme bildirimi
@@ -135,22 +159,13 @@ contextBridge.exposeInMainWorld("backupAPI", {
     );
   },
 
-  // YENİ: IndexedDB işlemleri için köprü fonksiyonlar
-  createBackup: (options?: any) => {
-    return ipcRenderer.invoke("create-backup-bridge", options);
+  // Dizin yönetimi için eklenen yöntemler
+  setBackupDirectory: (directory: string) => {
+    return ipcRenderer.invoke("set-backup-directory", directory);
   },
 
-  restoreBackup: async (content: string, options?: any) => {
-    try {
-      return await ipcRenderer.invoke(
-        "restore-backup-bridge",
-        content,
-        options
-      );
-    } catch (error) {
-      console.error("Yedekleme geri yükleme hatası:", error);
-      throw error;
-    }
+  getBackupDirectory: () => {
+    return ipcRenderer.invoke("get-backup-directory");
   },
 });
 
