@@ -1,10 +1,10 @@
 // src/helpers/DBVersionHelper.ts
 const DB_VERSIONS = {
     // Ana POS veritabanı
-    posDB: 5,
+    posDB: 7,
     // Diğer veritabanları
-    salesDB: 6,
-    creditDB: 3
+    salesDB: 7,
+    creditDB: 4
   };
   
   /**

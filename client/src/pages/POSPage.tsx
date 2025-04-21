@@ -307,8 +307,8 @@ const POSPage: React.FC = () => {
     }
   };
 
-  // Barkod algılama - YENİ GÜNCELLENMİŞ VERSİYON
   // Barkod algılama - SADECE BARKOD ARAMA YAPAN VERSİYON
+  // Barkod algılama - GÜNCELLENMIŞ VERSİYON
   const handleBarcodeDetected = (barcode: string) => {
     console.log("🔍 Barkod algılandı:", barcode);
 
@@ -353,40 +353,41 @@ const POSPage: React.FC = () => {
         }))
       );
 
-      // Aktif sepette BARKOD TARAMASI ile eklenen aynı ürün var mı?
-      const existingBarcodeItem = activeTab.cart.find(
-        (item) => item.id === matchingProduct!.id && item.source === "barcode"
+      // DEĞİŞTİRİLEN KISIM: Artık sadece ürün ID'sine göre kontrol ediyoruz, source'a bakmıyoruz
+      // Aktif sepette aynı ürün var mı?
+      const existingItem = activeTab.cart.find(
+        (item) => item.id === matchingProduct!.id
       );
 
       console.log(
-        "🔍 Sepette barkodla eklenmiş aynı ürün var mı?",
-        existingBarcodeItem
-          ? `EVET - ${existingBarcodeItem.name} (${existingBarcodeItem.id}) - Miktarı: ${existingBarcodeItem.quantity}`
+        "🔍 Sepette aynı ürün var mı?",
+        existingItem
+          ? `EVET - ${existingItem.name} (${existingItem.id}) - Miktarı: ${existingItem.quantity}`
           : "HAYIR - Yeni eklenecek"
       );
 
-      if (existingBarcodeItem) {
-        // Eğer barkod ile eklenmiş aynı ürün varsa, stok kontrolü yap
-        if (existingBarcodeItem.quantity + 1 > matchingProduct.stock) {
+      if (existingItem) {
+        // Eğer aynı ürün varsa, stok kontrolü yap
+        if (existingItem.quantity + 1 > matchingProduct.stock) {
           console.log(
             "⚠️ Stok yetersiz:",
-            `Stokta ${matchingProduct.stock}, Sepette ${existingBarcodeItem.quantity}`
+            `Stokta ${matchingProduct.stock}, Sepette ${existingItem.quantity}`
           );
           showError(
-            `${matchingProduct.name} için stok yetersiz! Stokta ${matchingProduct.stock} adet var ve barkod ile eklenmiş ${existingBarcodeItem.quantity} adet mevcut.`
+            `${matchingProduct.name} için stok yetersiz! Stokta ${matchingProduct.stock} adet var.`
           );
           return;
         }
 
         console.log(
-          "📈 Barkodla eklenmiş ürünün miktarı artırılıyor:",
-          existingBarcodeItem.quantity,
+          "📈 Ürünün miktarı artırılıyor:",
+          existingItem.quantity,
           " -> ",
-          existingBarcodeItem.quantity + 1
+          existingItem.quantity + 1
         );
 
         // Miktarı 1 artır
-        const successful = updateQuantity(existingBarcodeItem.id, 1);
+        const successful = updateQuantity(existingItem.id, 1);
         console.log("Miktar güncelleme başarılı mı:", successful);
 
         if (successful) {
@@ -401,7 +402,7 @@ const POSPage: React.FC = () => {
         setTimeout(() => {
           if (activeTab) {
             const updatedItem = activeTab.cart.find(
-              (i) => i.id === existingBarcodeItem.id
+              (i) => i.id === existingItem.id
             );
             console.log(
               "🔄 Sepet güncellendi:",
@@ -476,40 +477,39 @@ const POSPage: React.FC = () => {
         return;
       }
 
-      // Aktif sepette BARKOD TARAMASI ile eklenen aynı ürün var mı?
-      const existingBarcodeItem = activeTab.cart.find(
-        (item) => item.id === match.id && item.source === "barcode"
-      );
+      // DEĞİŞTİRİLEN KISIM: Artık sadece ürün ID'sine göre kontrol ediyoruz
+      // Aktif sepette aynı ürün var mı?
+      const existingItem = activeTab.cart.find((item) => item.id === match.id);
 
       console.log(
-        "🔍 Sepette barkodla eklenmiş aynı ürün var mı?",
-        existingBarcodeItem
-          ? `EVET - ${existingBarcodeItem.name} (${existingBarcodeItem.id}) - Miktarı: ${existingBarcodeItem.quantity}`
+        "🔍 Sepette aynı ürün var mı?",
+        existingItem
+          ? `EVET - ${existingItem.name} (${existingItem.id}) - Miktarı: ${existingItem.quantity}`
           : "HAYIR - Yeni eklenecek"
       );
 
-      if (existingBarcodeItem) {
+      if (existingItem) {
         // Stok kontrolü
-        if (existingBarcodeItem.quantity + 1 > match.stock) {
+        if (existingItem.quantity + 1 > match.stock) {
           console.log(
             "⚠️ Stok yetersiz:",
-            `Stokta ${match.stock}, Sepette ${existingBarcodeItem.quantity}`
+            `Stokta ${match.stock}, Sepette ${existingItem.quantity}`
           );
           showError(
-            `${match.name} için stok yetersiz! Stokta ${match.stock} adet var ve barkod ile eklenmiş ${existingBarcodeItem.quantity} adet mevcut.`
+            `${match.name} için stok yetersiz! Stokta ${match.stock} adet var.`
           );
           return;
         }
 
         console.log(
-          "📈 Barkodla eklenmiş ürünün miktarı artırılıyor:",
-          existingBarcodeItem.quantity,
+          "📈 Ürünün miktarı artırılıyor:",
+          existingItem.quantity,
           " -> ",
-          existingBarcodeItem.quantity + 1
+          existingItem.quantity + 1
         );
 
         // Miktarı 1 artır
-        const successful = updateQuantity(existingBarcodeItem.id, 1);
+        const successful = updateQuantity(existingItem.id, 1);
         console.log("Miktar güncelleme başarılı mı:", successful);
 
         if (successful) {
@@ -524,7 +524,7 @@ const POSPage: React.FC = () => {
         setTimeout(() => {
           if (activeTab) {
             const updatedItem = activeTab.cart.find(
-              (i) => i.id === existingBarcodeItem.id
+              (i) => i.id === existingItem.id
             );
             console.log(
               "🔄 Sepet güncellendi:",
@@ -1730,7 +1730,7 @@ const POSPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Debug panel 
+      {/* Debug panel */}
       {process.env.NODE_ENV === "development" && (
         <div className="fixed bottom-4 left-4 z-50">
           <div className="bg-white p-4 rounded-lg shadow-lg border space-y-3">
@@ -1833,7 +1833,7 @@ const POSPage: React.FC = () => {
           </div>
         </div>
       )}
-*/}
+
       {/* YENİ: İyileştirilmiş Yıldız Modu Göstergesi */}
       {showQuantityModeToast && (
         <div
